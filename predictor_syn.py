@@ -4,6 +4,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import pdb
 from pprint import pprint
+np.random.seed(14)
 
 import matplotlib.pyplot as plt
 
@@ -18,7 +19,7 @@ class Synthetic1():
     def generate_dataset(self,num_examples,interv_val):
         '''
         '''
-        x_y = -10 + np.random.randn(num_examples)         #stable
+        x_y = np.random.randn(num_examples)         #stable
         x_p = np.random.randn(num_examples)         #unstable features
 
         if interv_val==None:
@@ -100,15 +101,27 @@ class Synthetic1():
         
 
         #Now lets see how good we are able to remove the spurious features
-        plt.hist(X1[:,0],edgecolor='k',alpha=0.5)
-        plt.hist(X2[:,0],edgecolor='k',alpha=0.5)
-        plt.hist(stable_X1[:,0],edgecolor='k',alpha=0.5)
+        plt.hist(X1[:,0],edgecolor='k',alpha=0.5,label="train-domain1")
+        plt.hist(X2[:,0],edgecolor='k',alpha=0.5,label="domain2")
+        plt.hist(stable_X1[:,0],edgecolor='k',alpha=0.5,label="stablized")
+        plt.legend()
         plt.show()
 
 
-        plt.hist(X1[:,1],edgecolor='k',alpha=0.5)
-        plt.hist(X2[:,1],edgecolor='k',alpha=0.5)
-        plt.hist(stable_X1[:,1],edgecolor='k',alpha=0.5)
+        plt.hist(X1[:,1],edgecolor='k',alpha=0.5,label="train-domain1")
+        plt.hist(X2[:,1],edgecolor='k',alpha=0.5,label="domain2")
+        plt.hist(stable_X1[:,1],edgecolor='k',alpha=0.5,label="stablized")
+        plt.legend()
+        plt.show()
+
+
+        #Seeing all of them in one scatter plot
+        plt.scatter(X1[:,0],X1[:,1],label="train-domain1")
+        plt.scatter(X2[:,0],X2[:,1],label="domain2")
+        plt.scatter(stable_X1[:,0],stable_X1[:,1],label="stablized")
+        plt.legend()
+        plt.xlabel("stable_dimension")
+        plt.ylabel("spurious_dimension")
         plt.show()
 
 
@@ -203,8 +216,8 @@ class Debugger(keras.Model):
 
             #Constraint 1: Prediction should remain same
             predictor_stable_pred = self.predictor(stable_X)
-            predictor_actual_pred = tf.math.argmax(self.predictor(X),axis=1)
-            gen_predictor_loss = bxentropy_loss(predictor_actual_pred,
+            # predictor_actual_pred = tf.math.argmax(self.predictor(X),axis=1)
+            gen_predictor_loss = bxentropy_loss(Y,
                                             predictor_stable_pred
                 )
             
@@ -247,8 +260,9 @@ if __name__=="__main__":
                                        interv_val=10.0,
                         )
     predictor.remove_spurious_features(X1,Y1,X2,Y2)
+    
 
-    # pdb.set_trace()
+    pdb.set_trace()
 
 
 
