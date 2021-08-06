@@ -19,7 +19,7 @@ class Synthetic1():
     def generate_dataset(self,num_examples,interv_val):
         '''
         '''
-        x_y = np.random.randn(num_examples)         #stable
+        x_y = -10+ np.random.randn(num_examples)         #stable
         x_p = np.random.randn(num_examples)         #unstable features
 
         if interv_val==None:
@@ -31,7 +31,7 @@ class Synthetic1():
         X = np.stack([x_y,x_p],axis=1)
         
         #Creating the labels
-        Y = x_y>=0
+        Y = x_y>=-10#np.mean(x_y)
 
         assert X.shape[0]==Y.shape[0]
 
@@ -42,10 +42,11 @@ class Synthetic1():
         '''
         #Creting the predictor
         x = keras.Input(shape=(2,),dtype="float64")
+        # h = layers.Dense(2, activation=tf.keras.layers.LeakyReLU(alpha=0.0))(x)
         output = layers.Dense(1, activation="sigmoid")(x)
         model = keras.Model(x, output)
         model.compile("adam", "binary_crossentropy", metrics=["accuracy"])
-        model.fit(x=X,y=Y, epochs=50, validation_split=0.2)
+        model.fit(x=X,y=Y, epochs=10, validation_split=0.2)
 
         self.predictor=model
     
@@ -80,15 +81,25 @@ class Synthetic1():
         #Now creting the Debugger model
         debugger = Debugger(generator,discriminator,self.predictor)
         debugger.compile(
-            d_optimizer=keras.optimizers.Adam(learning_rate=0.0003),
-            g_optimizer=keras.optimizers.Adam(learning_rate=0.0003),
+            d_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            g_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            p_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
         )
 
 
         #Creting the actual domain dataset 
-        X = np.concatenate([X1,X2],axis=0)
-        Y = np.concatenate([np.zeros(X1.shape[0]),np.ones(X2.shape[0])],axis=0)
-        debugger.fit(x=X,y=Y,epochs=50)
+        # X = np.concatenate([X1,X2],axis=0)
+        # Y = np.concatenate([np.zeros(X1.shape[0]),np.ones(X2.shape[0])],axis=0)
+        d1_dataset = tf.data.Dataset.from_tensor_slices((X1,Y1))
+        d1_dataset = d1_dataset.shuffle(buffer_size=1024)
+
+        d2_dataset = tf.data.Dataset.from_tensor_slices((X2,Y2))
+        d2_dataset = d2_dataset.shuffle(buffer_size=1024)
+
+        dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
+        dataset = dataset.shuffle(buffer_size=2048).batch(128)
+
+        debugger.fit(dataset,epochs=100)
 
 
         #Now using the debugger to remove the spurious features
@@ -144,33 +155,51 @@ class Debugger(keras.Model):
         #Assigning the debugging metrics
         self.gen_loss_tracker = keras.metrics.Mean(name="generator_loss")
         self.disc_loss_tracker = keras.metrics.Mean(name="discriminator_loss")
+        self.pred_loss_tracker = keras.metrics.Mean(name="predictor_loss")
 
         #Individual debuggin metrics
         self.gen_pred_loss = keras.metrics.Mean(name="gen_pred_loss")
         self.gen_disc_loss = keras.metrics.Mean(name="gen_disc_loss")
+        self.gen_sem_loss  = keras.metrics.Mean(name="gen_sem_loss")
 
         self.disc_stable_loss = keras.metrics.Mean(name="disc_stable_loss")
         self.disc_actual_loss = keras.metrics.Mean(name="disc_actual_loss")
+
+
+        self.pred_stable_loss = keras.metrics.Mean(name="pred_stable_loss")
+        self.pred_actual_loss = keras.metrics.Mean(name="pred_actual_loss")
 
     @property
     def metrics(self):
         return [self.gen_loss_tracker, self.disc_loss_tracker]
 
-    def compile(self, d_optimizer, g_optimizer):
+    def compile(self, d_optimizer, g_optimizer, p_optimizer):
         super(Debugger, self).compile()
         self.d_optimizer = d_optimizer
         self.g_optimizer = g_optimizer
+        self.p_optimizer = p_optimizer
         #self.loss_fn = loss_fn
     
     def train_step(self,data):
         '''
         '''
-        X,Y = data
+        (X1,Y1),(X2,Y2) = data
+        # pdb.set_trace()
+        #Concatenating the data for generator
+        X = tf.concat([X1,X2],axis=0)
+        Y = tf.concat(
+            [
+                tf.zeros(tf.shape(Y1)[0]),
+                tf.ones(tf.shape(Y2)[0])
+            ],
+            axis=0,
+        )
         #Generating the noise removed data from generator
-        stable_X = self.generator(X)
+        stable_X1 = self.generator(X1)
 
         #Defining the loss function
         bxentropy_loss = keras.losses.BinaryCrossentropy(from_logits=True)
+        mse = keras.losses.MeanSquaredError()
 
         def get_pred_entropy_loss(logits):
             pred_entropy = -1*tf.math.reduce_sum(
@@ -184,7 +213,7 @@ class Debugger(keras.Model):
         #Training the discriminator
         with tf.GradientTape() as tape:
             #These should be considerend as high entorpy prediction
-            stable_pred = self.discriminator(stable_X)
+            stable_pred = self.discriminator(stable_X1)
             #We want to maximize the entropy of prediction
             stable_loss = get_pred_entropy_loss(stable_pred)
 
@@ -209,24 +238,28 @@ class Debugger(keras.Model):
 
 
 
+
         #Now we want to train the generator
         with tf.GradientTape() as tape:
             #Generating the stablized data with noise removed
-            stable_X = self.generator(X)
+            stable_X1 = self.generator(X1)
 
             #Constraint 1: Prediction should remain same
-            predictor_stable_pred = self.predictor(stable_X)
-            # predictor_actual_pred = tf.math.argmax(self.predictor(X),axis=1)
-            gen_predictor_loss = bxentropy_loss(Y,
+            predictor_stable_pred = self.predictor(stable_X1)
+            predictor_actual_pred = tf.math.argmax(self.predictor(X1),axis=1)
+            gen_predictor_loss = bxentropy_loss(predictor_actual_pred,
                                             predictor_stable_pred
                 )
+            #Constarint 1a: keep them semantically similar
+            semantic_loss = mse(X1,stable_X1)
+
             
             #Constraint 2: High Entropy for Discriminator
-            disc_stable_pred = self.discriminator(stable_X)
+            disc_stable_pred = self.discriminator(stable_X1)
             gen_disc_loss = get_pred_entropy_loss(disc_stable_pred)
 
             #Getting the total generator loss
-            gen_loss = gen_predictor_loss + gen_disc_loss
+            gen_loss = gen_disc_loss + gen_predictor_loss #+semantic_loss #+10*gen_predictor_loss
         
         #Now optimizing the generator
         grads = tape.gradient(gen_loss,self.generator.trainable_weights)
@@ -237,26 +270,59 @@ class Debugger(keras.Model):
         self.gen_loss_tracker.update_state(gen_loss)
         self.gen_pred_loss.update_state(gen_predictor_loss)
         self.gen_disc_loss.update_state(gen_disc_loss)
+        self.gen_sem_loss.update_state(semantic_loss)
+
+
+
+
+
+        #Training the predictor also to update based on generated samples
+        with tf.GradientTape() as tape:
+            #Getting the predicotr loss on the actual inputs
+            pred_actual_logits = self.predictor(X1)
+            pred_actual_loss = bxentropy_loss(Y1,pred_actual_logits)
+
+            #Getting the predictor loss on stablized inputs
+            stable_X1 = self.generator(X1)
+            pred_stable_logits = self.predictor(stable_X1)
+            pred_stable_loss = bxentropy_loss(Y1,pred_stable_logits)
+
+            pred_loss = pred_actual_loss+pred_stable_loss
+        #Now optimizing the generator
+        grads = tape.gradient(pred_loss,self.predictor.trainable_weights)
+        self.p_optimizer.apply_gradients(
+            zip(grads,self.predictor.trainable_weights)
+        )
+        self.pred_loss_tracker.update_state(pred_loss)
+        self.pred_actual_loss.update_state(pred_actual_loss)
+        self.pred_stable_loss.update_state(pred_stable_loss)
+
+
+
         
         return {
             "g_loss": self.gen_loss_tracker.result(),
             "d_loss": self.disc_loss_tracker.result(),
+            "p_loss": self.pred_stable_loss.result(),
             "g_p_loss": self.gen_pred_loss.result(),
             "g_d_loss": self.gen_disc_loss.result(),
+            "g_s_loss": self.gen_sem_loss.result(),
             "d_s_loss": self.disc_stable_loss.result(),
-            "d_a_loss": self.disc_actual_loss.result()
+            "d_a_loss": self.disc_actual_loss.result(),
+            "p_a_loss":self.pred_actual_loss.result(),
+            "p_s_loss":self.pred_stable_loss.result()
         }
 
 
 if __name__=="__main__":
     predictor = Synthetic1(args=None)
-    X1,Y1 = predictor.generate_dataset(num_examples=1000,
+    X1,Y1 = predictor.generate_dataset(num_examples=10000,
                                     interv_val=None,
                         )
     predictor.get_predictor(X=X1,Y=Y1,valid_split=0.2)
 
     #Getting the dataset from other domain
-    X2,Y2 = predictor.generate_dataset(num_examples=1000,
+    X2,Y2 = predictor.generate_dataset(num_examples=10000,
                                        interv_val=10.0,
                         )
     predictor.remove_spurious_features(X1,Y1,X2,Y2)
