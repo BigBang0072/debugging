@@ -186,13 +186,22 @@ class MNISTTransform():
         predictor = keras.Sequential(
             [
                 layers.InputLayer((28,28,1)),
-                layers.Conv2D(32, (3, 3), activation='relu'),
+
+                layers.Conv2D(32, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
-                layers.Conv2D(64, (3, 3), activation='relu'),
+
+                layers.Conv2D(64, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
-                layers.Conv2D(64, (3, 3), activation='relu'),
+
+                layers.Conv2D(64, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+
                 layers.Flatten(),
-                layers.Dense(64, activation='relu'),
+                layers.Dense(64),
+                layers.LeakyReLU(alpha=0.2),
+
                 layers.Dense(len(class_list),activation="softmax")
             ],
             name="predictor",
@@ -224,13 +233,22 @@ class MNISTTransform():
         discriminator = keras.Sequential(
             [
                 layers.InputLayer((28,28,1)),
-                layers.Conv2D(32, (3, 3), activation='relu'),
+
+                layers.Conv2D(32, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
-                layers.Conv2D(64, (3, 3), activation='relu'),
+
+                layers.Conv2D(64, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
-                layers.Conv2D(64, (3, 3), activation='relu'),
+
+                layers.Conv2D(64, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+
                 layers.Flatten(),
-                layers.Dense(64, activation='relu'),
+                layers.Dense(64),
+                layers.LeakyReLU(alpha=0.2),
+                
                 layers.Dense(1,activation="sigmoid")
             ],
             name="discriminator",
@@ -258,19 +276,71 @@ class MNISTTransform():
         
 
         #Creating the generator
-        # generator = keras.Sequential(
-        #     [
-        #         layers.InputLayer((2,)),
-        #         layers.Dense(2),
-        #         layers.LeakyReLU(alpha=0.2),
-        #     ],
-        #     name="generator",
-        # )
-        # self.generator = generator
+        gen_compressed_dim=1
+        generator = keras.Sequential(
+            [
+                layers.InputLayer((28,28,1)),
+
+                layers.Conv2D(32, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+                layers.MaxPooling2D((2, 2)),
+
+                layers.Conv2D(64, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+                layers.MaxPooling2D((2, 2)),
+
+                layers.Conv2D(64, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Flatten(),
+                layers.Dense(7*7*gen_compressed_dim),
+                layers.LeakyReLU(alpha=0.2),
 
 
 
+                layers.Reshape((7, 7, gen_compressed_dim)),
+                layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
 
+                layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+
+                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
+
+            ],
+            name="generator",
+        )
+        self.generator = generator
+        print("###########################################")
+        print("########  TRAINING THE DEBUGGER  #########")
+        print("###########################################")
+        print(generator.summary())
+
+        debugger = Debugger(generator,discriminator,self.predictor)
+        debugger.compile(
+            d_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            g_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            p_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+        )
+
+
+        #Creting the actual domain dataset 
+        # X = np.concatenate([X1,X2],axis=0)
+        # Y = np.concatenate([np.zeros(X1.shape[0]),np.ones(X2.shape[0])],axis=0)
+        d1_dataset = tf.data.Dataset.from_tensor_slices((X1,Y1))
+        d1_dataset = d1_dataset.shuffle(buffer_size=1024)
+
+        d2_dataset = tf.data.Dataset.from_tensor_slices((X2,Y2))
+        d2_dataset = d2_dataset.shuffle(buffer_size=1024)
+
+        #Fitting the debugger first
+        dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
+        dataset = dataset.shuffle(buffer_size=2048).batch(64)
+
+        debugger.fit(dataset,epochs=20)
+
+        pdb.set_trace()
 
 
 class Debugger(keras.Model):
@@ -333,7 +403,8 @@ class Debugger(keras.Model):
         stable_X1 = self.generator(X1)
 
         #Defining the loss function
-        bxentropy_loss = keras.losses.BinaryCrossentropy(from_logits=True)
+        bxentropy_loss = keras.losses.BinaryCrossentropy(from_logits=False)
+        scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
         mse = keras.losses.MeanSquaredError()
 
         def get_pred_entropy_loss(logits):
@@ -382,7 +453,7 @@ class Debugger(keras.Model):
             #Constraint 1: Prediction should remain same
             predictor_stable_pred = self.predictor(stable_X1)
             predictor_actual_pred = tf.math.argmax(self.predictor(X1),axis=1)
-            gen_predictor_loss = bxentropy_loss(Y1,
+            gen_predictor_loss = scxentropy_loss(Y1,
                                             predictor_stable_pred
                 )
             #Constarint 1a: keep them semantically similar
@@ -419,12 +490,12 @@ class Debugger(keras.Model):
         with tf.GradientTape() as tape:
             #Getting the predicotr loss on the actual inputs
             pred_actual_logits = self.predictor(X1)
-            pred_actual_loss = bxentropy_loss(Y1,pred_actual_logits)
+            pred_actual_loss = scxentropy_loss(Y1,pred_actual_logits)
 
             #Getting the predictor loss on stablized inputs
             stable_X1 = self.generator(X1)
             pred_stable_logits = self.predictor(stable_X1)
-            pred_stable_loss = bxentropy_loss(Y1,pred_stable_logits)
+            pred_stable_loss = scxentropy_loss(Y1,pred_stable_logits)
 
             pred_loss = pred_actual_loss+pred_stable_loss
         #Now optimizing the generator
@@ -473,7 +544,7 @@ if __name__=="__main__":
     X1,Y1 = predictor.generate_dataset(num_examples=1000,
                                 class_list=class_list,
                                 transformation="rotation",
-                                angle = 0,#np.pi/4,
+                                angle = np.pi/8,
     )
     predictor.get_predictor(X1,Y1,class_list)
 
