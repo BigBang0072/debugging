@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow import keras
 from tensorflow.keras import layers
 import pdb
@@ -46,7 +47,7 @@ class Synthetic1():
         output = layers.Dense(1, activation="sigmoid")(x)
         model = keras.Model(x, output)
         model.compile("adam", "binary_crossentropy", metrics=["accuracy"])
-        model.fit(x=X,y=Y, epochs=100, validation_split=0.2)
+        model.fit(x=X,y=Y, epochs=100, validation_split=valid_split)
 
         self.predictor=model
     
@@ -135,6 +136,138 @@ class Synthetic1():
         plt.xlabel("stable_dimension")
         plt.ylabel("spurious_dimension")
         plt.show()
+
+
+class MNISTTransform():
+    '''
+    This class will generate the MNIST dataset from different domain, where
+    different domains contains different transformation on the inout images.
+    '''
+    def __init__(self,args):
+        self.args=args
+    
+    def generate_dataset(self,num_examples,class_list,transformation,angle):
+        (X_all,Y_all),_ = tf.keras.datasets.mnist.load_data()
+        print("Total Number of examples in dataset: {}".format(X_all.shape[0]))
+
+
+        #Now we will only retreive the class which is needed
+        X, Y = [], []
+        class2label_dict = {}
+        for lidx,class_label in enumerate(class_list):
+            #relabelling the images-class for logits
+            class2label_dict[class_label] = lidx 
+
+            #Filtering the images
+            filter_arr = (Y_all == class_label)
+            X_class = X_all[filter_arr][0:num_examples]
+            Y_class = np.ones(X_class.shape[0])*lidx 
+
+            X.append(X_class)
+            Y.append(Y_class)
+        #Concatenating all the images
+        X = np.concatenate(X,axis=0)
+        Y = np.concatenate(Y,axis=0)
+
+        #Now filtering the whole array
+        X = np.expand_dims(X,axis=-1).astype("float32")/255.0
+        print("Number of Example after Subset: {}".format(X.shape))
+
+        #Now creating the domain2 examples
+        if transformation=="rotation":
+            X = tfa.image.rotate(X,[angle]*X.shape[0]).numpy()
+        
+        # pdb.set_trace()
+        return X,Y
+    
+    def get_predictor(self,X,Y,class_list,valid_split=0.2):
+        '''
+        '''
+        predictor = keras.Sequential(
+            [
+                layers.InputLayer((28,28,1)),
+                layers.Conv2D(32, (3, 3), activation='relu'),
+                layers.MaxPooling2D((2, 2)),
+                layers.Conv2D(64, (3, 3), activation='relu'),
+                layers.MaxPooling2D((2, 2)),
+                layers.Conv2D(64, (3, 3), activation='relu'),
+                layers.Flatten(),
+                layers.Dense(64, activation='relu'),
+                layers.Dense(len(class_list),activation="softmax")
+            ],
+            name="predictor",
+        )
+        self.predictor = predictor
+        print("###########################################")
+        print("#########  TRAINING THE PREDICTOR  ########")
+        print("###########################################")
+        print(predictor.summary())
+
+        #Training the model
+        predictor.compile(
+            optimizer='adam',
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            metrics=['accuracy']
+        )
+
+        predictor.fit(
+                X,Y,epochs=10,validation_split=valid_split,
+        )
+    
+    def remove_spurious_features(self,X1,Y1,X2,Y2,class_list,valid_split=0.2):
+        '''
+        '''
+        print("#################################################")
+        print("###########  Training the Debugger ##############")
+        print("#################################################")
+        #Creating the discriminator
+        discriminator = keras.Sequential(
+            [
+                layers.InputLayer((28,28,1)),
+                layers.Conv2D(32, (3, 3), activation='relu'),
+                layers.MaxPooling2D((2, 2)),
+                layers.Conv2D(64, (3, 3), activation='relu'),
+                layers.MaxPooling2D((2, 2)),
+                layers.Conv2D(64, (3, 3), activation='relu'),
+                layers.Flatten(),
+                layers.Dense(64, activation='relu'),
+                layers.Dense(1,activation="sigmoid")
+            ],
+            name="discriminator",
+        )
+        self.discriminator = discriminator
+        print("###########################################")
+        print("#######  TRAINING THE DISCRIMINATOR  ######")
+        print("###########################################")
+        print(discriminator.summary())
+
+        #Training the discriminator first
+        discriminator.compile(
+            optimizer='adam',
+            loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
+            metrics=['accuracy']
+        )
+
+        #Creating the dataset for discriminator
+        X_disc = np.concatenate([X1,X2],axis=0)
+        Y_disc = np.concatenate([np.zeros(X1.shape[0]),np.ones(X2.shape[0])],axis=0)
+
+        discriminator.fit(
+                X_disc,Y_disc,epochs=10,validation_split=valid_split,
+        )
+        
+
+        #Creating the generator
+        # generator = keras.Sequential(
+        #     [
+        #         layers.InputLayer((2,)),
+        #         layers.Dense(2),
+        #         layers.LeakyReLU(alpha=0.2),
+        #     ],
+        #     name="generator",
+        # )
+        # self.generator = generator
+
 
 
 
@@ -322,18 +455,37 @@ class Debugger(keras.Model):
 
 
 if __name__=="__main__":
-    predictor = Synthetic1(args=None)
-    X1,Y1 = predictor.generate_dataset(num_examples=10000,
-                                    interv_val=None,
-                        )
-    predictor.get_predictor(X=X1,Y=Y1,valid_split=0.2)
+    # predictor = Synthetic1(args=None)
+    # X1,Y1 = predictor.generate_dataset(num_examples=10000,
+    #                                 interv_val=None,
+    #                     )
+    # predictor.get_predictor(X=X1,Y=Y1,valid_split=0.2)
 
-    #Getting the dataset from other domain
-    X2,Y2 = predictor.generate_dataset(num_examples=10000,
-                                       interv_val=10.0,
-                        )
-    predictor.remove_spurious_features(X1,Y1,X2,Y2)
+    # #Getting the dataset from other domain
+    # X2,Y2 = predictor.generate_dataset(num_examples=10000,
+    #                                    interv_val=10.0,
+    #                     )
+    # predictor.remove_spurious_features(X1,Y1,X2,Y2)
     
+
+    predictor = MNISTTransform(args=None)
+    class_list = [0,1]  #for large number of class we need more complex model
+    X1,Y1 = predictor.generate_dataset(num_examples=1000,
+                                class_list=class_list,
+                                transformation="rotation",
+                                angle = 0,#np.pi/4,
+    )
+    predictor.get_predictor(X1,Y1,class_list)
+
+    #Now getting the data from other domain
+    X2,Y2 = predictor.generate_dataset(num_examples=1000,
+                                class_list=class_list,
+                                transformation="rotation",
+                                angle = np.pi/4,
+    )
+    #Now training the debugger
+    predictor.remove_spurious_features(X1,Y1,X2,Y2,class_list)
+
 
     pdb.set_trace()
 
