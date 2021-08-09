@@ -220,7 +220,7 @@ class MNISTTransform():
         )
 
         predictor.fit(
-                X,Y,epochs=10,validation_split=valid_split,
+                X,Y,epochs=5,validation_split=valid_split,
         )
     
     def remove_spurious_features(self,X1,Y1,X2,Y2,class_list,valid_split=0.2):
@@ -271,7 +271,7 @@ class MNISTTransform():
         Y_disc = np.concatenate([np.zeros(X1.shape[0]),np.ones(X2.shape[0])],axis=0)
 
         discriminator.fit(
-                X_disc,Y_disc,epochs=10,validation_split=valid_split,
+                X_disc,Y_disc,epochs=5,validation_split=valid_split,
         )
         
 
@@ -338,7 +338,25 @@ class MNISTTransform():
         dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
         dataset = dataset.shuffle(buffer_size=2048).batch(64)
 
-        debugger.fit(dataset,epochs=20)
+        debugger.fit(dataset,epochs=10)
+
+        #Plotting some sample example
+        stable_X1 = self.generator(X1).numpy()
+        
+        
+        figure, axes = plt.subplots(2,2)
+
+        idx0 = 123
+        axes[0,0].imshow(X1[idx0,:,:,0],cmap="gray")
+        axes[0,1].imshow(stable_X1[idx0,:,:,0],cmap="gray")
+
+        idx1 = 6564
+        axes[1,0].imshow(X1[idx1,:,:,0],cmap="gray")
+        axes[1,1].imshow(stable_X1[idx1,:,:,0],cmap="gray")
+
+        plt.show()
+        
+        
 
         pdb.set_trace()
 
@@ -364,15 +382,18 @@ class Debugger(keras.Model):
         #Individual debuggin metrics
         self.gen_pred_loss = keras.metrics.Mean(name="gen_pred_loss")
         self.gen_disc_loss = keras.metrics.Mean(name="gen_disc_loss")
-        # self.gen_sem_loss  = keras.metrics.Mean(name="gen_sem_loss")
+        self.gen_sem_loss  = keras.metrics.Mean(name="gen_sem_loss")
         # self.gen_norm_loss = keras.metrics.Mean(name="gen_norm_loss")
 
         # self.disc_stable_loss = keras.metrics.Mean(name="disc_stable_loss")
         self.disc_actual_loss = keras.metrics.Mean(name="disc_actual_loss")
+        self.disc_actual_acc  = keras.metrics.BinaryAccuracy(name="disc_stable_acc",threshold=0.5)
 
 
         self.pred_stable_loss = keras.metrics.Mean(name="pred_stable_loss")
         self.pred_actual_loss = keras.metrics.Mean(name="pred_actual_loss")
+        self.pred_stable_acc  = keras.metrics.SparseCategoricalAccuracy(name="pred_stable_acc")
+        self.pred_actual_acc  = keras.metrics.SparseCategoricalAccuracy(name="pred_actual_acc")
 
     @property
     def metrics(self):
@@ -439,6 +460,7 @@ class Debugger(keras.Model):
         #Updating all the lossses for discriminator
         self.disc_loss_tracker.update_state(disc_loss)
         self.disc_actual_loss.update_state(actual_loss)
+        self.disc_actual_acc.update_state(Y,actual_pred)
         # self.disc_stable_loss.update_state(stable_loss)
 
 
@@ -457,7 +479,7 @@ class Debugger(keras.Model):
                                             predictor_stable_pred
                 )
             #Constarint 1a: keep them semantically similar
-            # semantic_loss = mse(X1,stable_X1)
+            semantic_loss = mse(X1,stable_X1)
 
             # #Adding the norm loss, to encourage deletion
             # norm_loss = mse(0,stable_X1)
@@ -468,7 +490,7 @@ class Debugger(keras.Model):
             gen_disc_loss = get_pred_entropy_loss(disc_stable_pred)
 
             #Getting the total generator loss
-            gen_loss = gen_disc_loss + 10*gen_predictor_loss #+ 0.01*norm_loss  #+semantic_loss #+10*gen_predictor_loss
+            gen_loss = 5*gen_disc_loss + 5*gen_predictor_loss + semantic_loss #+ 0.01*norm_loss  #+semantic_loss #+10*gen_predictor_loss
         
         #Now optimizing the generator
         grads = tape.gradient(gen_loss,self.generator.trainable_weights)
@@ -479,7 +501,7 @@ class Debugger(keras.Model):
         self.gen_loss_tracker.update_state(gen_loss)
         self.gen_pred_loss.update_state(gen_predictor_loss)
         self.gen_disc_loss.update_state(gen_disc_loss)
-        # self.gen_sem_loss.update_state(semantic_loss)
+        self.gen_sem_loss.update_state(semantic_loss)
         # self.gen_norm_loss.update_state(norm_loss)
 
 
@@ -506,6 +528,8 @@ class Debugger(keras.Model):
         self.pred_loss_tracker.update_state(pred_loss)
         self.pred_actual_loss.update_state(pred_actual_loss)
         self.pred_stable_loss.update_state(pred_stable_loss)
+        self.pred_actual_acc.update_state(Y1,pred_actual_logits)
+        self.pred_stable_acc.update_state(Y1,pred_stable_logits)
 
 
 
@@ -516,12 +540,15 @@ class Debugger(keras.Model):
             "p_loss": self.pred_stable_loss.result(),
             "g_p_loss": self.gen_pred_loss.result(),
             "g_d_loss": self.gen_disc_loss.result(),
-            #"g_s_loss": self.gen_sem_loss.result(),
+            "g_s_loss": self.gen_sem_loss.result(),
             #"g_n_loss": self.gen_norm_loss.result(),
             #"d_s_loss": self.disc_stable_loss.result(),
-            "d_a_loss": self.disc_actual_loss.result(),
-            "p_a_loss":self.pred_actual_loss.result(),
-            "p_s_loss":self.pred_stable_loss.result()
+            #"d_a_loss": self.disc_actual_loss.result(),
+            "d_a_acc": self.disc_actual_acc.result(),
+            #"p_a_loss":self.pred_actual_loss.result(),
+            #"p_s_loss":self.pred_stable_loss.result(),
+            "p_a_acc":self.pred_actual_acc.result(),
+            "p_s_acc":self.pred_stable_acc.result()
         }
 
 
@@ -540,19 +567,19 @@ if __name__=="__main__":
     
 
     predictor = MNISTTransform(args=None)
-    class_list = [0,1]  #for large number of class we need more complex model
-    X1,Y1 = predictor.generate_dataset(num_examples=1000,
+    class_list = [1,2]  #for large number of class we need more complex model
+    X1,Y1 = predictor.generate_dataset(num_examples=5000,
                                 class_list=class_list,
                                 transformation="rotation",
-                                angle = np.pi/8,
+                                angle = np.pi/2,
     )
     predictor.get_predictor(X1,Y1,class_list)
 
     #Now getting the data from other domain
-    X2,Y2 = predictor.generate_dataset(num_examples=1000,
+    X2,Y2 = predictor.generate_dataset(num_examples=5000,
                                 class_list=class_list,
                                 transformation="rotation",
-                                angle = np.pi/4,
+                                angle = 0,
     )
     #Now training the debugger
     predictor.remove_spurious_features(X1,Y1,X2,Y2,class_list)
@@ -564,6 +591,18 @@ if __name__=="__main__":
 
 
 
+# stable_X1 = self.generator(X1).numpy()
+        
+        
+# figure, axes = plt.subplots(2,2)
 
+# idx0 = 1235
+# axes[0,0].imshow(X1[idx0,:,:,0],cmap="gray")
+# axes[0,1].imshow(stable_X1[idx0,:,:,0],cmap="gray")
 
+# idx1 = 8564
+# axes[1,0].imshow(X1[idx1,:,:,0],cmap="gray")
+# axes[1,1].imshow(stable_X1[idx1,:,:,0],cmap="gray")
+
+# plt.show()
 
