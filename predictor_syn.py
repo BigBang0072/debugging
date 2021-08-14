@@ -359,8 +359,253 @@ class MNISTTransform():
         
 
         pdb.set_trace()
+    
+    def remove_spurious_features_unsup(self,X1,Y1,X2,Y2):
+        '''
+        '''
+        print("#################################################")
+        print("###########  Training the Debugger ##############")
+        print("#################################################")
 
 
+        #Encoder will encode the image into concept space
+        gen_compressed_dim=2
+        last_layer_width = 7
+        encoder = keras.Sequential(
+            [
+                layers.InputLayer((28,28,1)),
+
+                layers.Conv2D(32, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+                layers.MaxPooling2D((2, 2)),
+
+                layers.Conv2D(64, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+                layers.MaxPooling2D((2, 2)),
+
+                layers.Conv2D(16, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Flatten(),
+                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim),
+                layers.LeakyReLU(alpha=0.2),
+            ],
+            name="encoder",
+        )
+        self.encoder = encoder
+        print(encoder.summary())
+
+        #Defining the decoder for image
+        latent_space_dim = last_layer_width*last_layer_width*gen_compressed_dim
+        decoder = keras.Sequential(
+            [
+                layers.InputLayer((latent_space_dim)),
+
+                layers.Reshape((last_layer_width, last_layer_width, gen_compressed_dim)),
+                layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+
+                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
+            ],
+            name="decoder"
+        )
+        self.decoder = decoder
+        print(decoder.summary())
+
+        #Defining the discriminator 
+        discriminator = keras.Sequential(
+            [
+                layers.InputLayer((latent_space_dim//2)),
+
+                layers.Dense(latent_space_dim//4),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Dense(latent_space_dim//4),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Dense(2,activation="softmax")
+            ],
+            name="discriminator"
+        )
+        self.discriminator = discriminator
+        print(discriminator.summary())
+
+        #Now we can train the whole setup
+        debugger = DebuggerUnsup(encoder,decoder,discriminator,latent_space_dim)
+        debugger.compile(
+            en_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            de_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            di_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+        )
+
+
+        #Creting the actual domain dataset
+        d1_dataset = tf.data.Dataset.from_tensor_slices((X1,Y1))
+        d1_dataset = d1_dataset.shuffle(buffer_size=1024)
+
+        d2_dataset = tf.data.Dataset.from_tensor_slices((X2,Y2))
+        d2_dataset = d2_dataset.shuffle(buffer_size=1024)
+
+        #Fitting the debugger first
+        dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
+        dataset = dataset.shuffle(buffer_size=2048).batch(64)
+
+        debugger.fit(dataset,epochs=10)
+
+
+
+        rec_X1 = self.decoder(self.encoder(X1)).numpy()
+        figure, axes = plt.subplots(2,2)
+
+        idx0 = 123
+        axes[0,0].imshow(X1[idx0,:,:,0],cmap="gray")
+        axes[0,1].imshow(rec_X1[idx0,:,:,0],cmap="gray")
+
+        idx1 = 1564
+        axes[1,0].imshow(X1[idx1,:,:,0],cmap="gray")
+        axes[1,1].imshow(rec_X1[idx1,:,:,0],cmap="gray")
+
+        plt.show()
+
+
+
+        pdb.set_trace()
+
+
+class DebuggerUnsup(keras.Model):
+
+    def __init__(self,encoder,decoder,discriminator,latent_space_dimension):
+        '''
+        '''
+        super(DebuggerUnsup,self).__init__()
+
+        self.latent_space_dimension = latent_space_dimension
+        #Assigning the transformers
+        self.encoder = encoder
+        self.decoder = decoder 
+        self.discriminator = discriminator
+
+        #Starting the trackers to track the losses
+        self.en_de_mse_tracker = keras.metrics.Mean(name="en_de_mse")
+        self.disc_loss_tracker = keras.metrics.Mean(name="disc_x")
+        self.disc_causal_tracker = keras.metrics.Mean(name="disc_causal_x")
+        self.disc_spurious_tracker = keras.metrics.Mean(name="disc_spurious_x")
+
+    def compile(self, en_optimizer, de_optimizer, di_optimizer):
+        super(DebuggerUnsup, self).compile()
+        self.en_optimizer = en_optimizer
+        self.de_optimizer = de_optimizer
+        self.di_optimizer = di_optimizer
+    
+
+    def train_step(self,data):
+
+        (X1,Y1),(X2,Y2) = data
+
+        #Creating the domain labels
+        X = tf.concat([X1,X2],axis=0)
+        Y = tf.concat(
+            [
+                tf.zeros(tf.shape(Y1)[0]),
+                tf.ones(tf.shape(Y2)[0])
+            ],
+            axis=0,
+        )
+
+
+        #Defining the losses
+        mse = keras.losses.MeanSquaredError()
+        scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+
+
+        #Training the encoder and decoder
+        with tf.GradientTape() as tape:
+            #Now, first of all we will encode the data into latent space
+            encoded_X = self.encoder(X)
+
+            #Now decoding the output
+            decoded_X = self.decoder(encoded_X)
+
+            #Getting the generation loss
+            reconstruction_loss = mse(X,decoded_X)
+        #Updating the weights of decoder
+        decoder_grads,encoder_grads = tape.gradient(reconstruction_loss, 
+                                                    [
+                                                        self.decoder.trainable_weights,
+                                                        self.encoder.trainable_weights
+                                                    ]
+        )
+        self.de_optimizer.apply_gradients(
+            zip(decoder_grads, self.decoder.trainable_weights)
+        )
+        #Updating the weights of encoder
+        self.en_optimizer.apply_gradients(
+            zip(encoder_grads,self.encoder.trainable_weights)
+        )
+        #Updating the mse tracker
+        self.en_de_mse_tracker.update_state(reconstruction_loss)
+
+
+
+
+
+
+
+        #Now training the discriminator
+        with tf.GradientTape(persistent=True) as tape:
+            #Getting the encoded inputs
+            encoded_X = self.encoder(X)
+
+            #Getting the causal and spurious factors
+            encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
+            encoded_X_spurious  = encoded_X[:,self.latent_space_dimension//2:]
+
+            #Now passing the examples through discriminator
+            causal_pred = self.discriminator(encoded_X_causal)
+            spurious_pred = self.discriminator(encoded_X_spurious)
+
+            #Getting the loss
+            causal_loss = scxentropy_loss(Y,causal_pred)
+            neg_causal_loss = -1*causal_loss
+            spurious_loss = scxentropy_loss(Y,spurious_pred)
+            total_disc_loss = causal_loss + 10*spurious_loss
+        #Updating the parameters of the discriminator
+        disc_grads = tape.gradient(total_disc_loss,self.discriminator.trainable_weights)
+        self.di_optimizer.apply_gradients(
+            zip(disc_grads,self.discriminator.trainable_weights)
+        )
+        #Updating the encoder with spurious dimensions
+        encoder_disc_spurious_grads = tape.gradient(spurious_loss,self.encoder.trainable_weights)
+        self.en_optimizer.apply_gradients(
+            zip(encoder_disc_spurious_grads,self.encoder.trainable_weights)
+        )
+        #Updating the encoder with causal dimension
+        encoder_disc_causal_grads = tape.gradient(neg_causal_loss,self.encoder.trainable_weights)
+        self.en_optimizer.apply_gradients(
+            zip(encoder_disc_causal_grads,self.encoder.trainable_weights)
+        )
+        #Updating the trackers
+        self.disc_loss_tracker.update_state(total_disc_loss)
+        self.disc_causal_tracker.update_state(causal_loss)
+        self.disc_spurious_tracker.update_state(spurious_loss)
+
+
+
+
+
+
+        return {
+            "en_de_mse":self.en_de_mse_tracker.result(),
+            "disc_loss":self.disc_loss_tracker.result(),
+            "disc_causal":self.disc_causal_tracker.result(),
+            "disc_spurious":self.disc_spurious_tracker.result()
+        }
+
+    
 class Debugger(keras.Model):
     '''
     '''
@@ -568,41 +813,21 @@ if __name__=="__main__":
 
     predictor = MNISTTransform(args=None)
     class_list = [1,2]  #for large number of class we need more complex model
-    X1,Y1 = predictor.generate_dataset(num_examples=5000,
+    X1,Y1 = predictor.generate_dataset(num_examples=1000,
                                 class_list=class_list,
                                 transformation="rotation",
-                                angle = np.pi/2,
+                                angle = np.pi*3.0/2.0,
     )
-    predictor.get_predictor(X1,Y1,class_list)
+    # predictor.get_predictor(X1,Y1,class_list)
 
     #Now getting the data from other domain
-    X2,Y2 = predictor.generate_dataset(num_examples=5000,
+    X2,Y2 = predictor.generate_dataset(num_examples=1000,
                                 class_list=class_list,
                                 transformation="rotation",
                                 angle = 0,
     )
     #Now training the debugger
-    predictor.remove_spurious_features(X1,Y1,X2,Y2,class_list)
+    predictor.remove_spurious_features_unsup(X1,Y1,X2,Y2)
 
 
     pdb.set_trace()
-
-
-
-
-
-# stable_X1 = self.generator(X1).numpy()
-        
-        
-# figure, axes = plt.subplots(2,2)
-
-# idx0 = 1235
-# axes[0,0].imshow(X1[idx0,:,:,0],cmap="gray")
-# axes[0,1].imshow(stable_X1[idx0,:,:,0],cmap="gray")
-
-# idx1 = 8564
-# axes[1,0].imshow(X1[idx1,:,:,0],cmap="gray")
-# axes[1,1].imshow(stable_X1[idx1,:,:,0],cmap="gray")
-
-# plt.show()
-
