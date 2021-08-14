@@ -383,7 +383,13 @@ class MNISTTransform():
                 layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
 
-                layers.Conv2D(16, (3, 3)),
+                layers.Conv2D(64, (3, 3),padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Conv2D(64, (3, 3),padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Conv2D(64, (3, 3),padding="same"),
                 layers.LeakyReLU(alpha=0.2),
 
                 layers.Flatten(),
@@ -405,11 +411,19 @@ class MNISTTransform():
                 layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
                 layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
+                layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
                 layers.LeakyReLU(alpha=0.2),
 
+                layers.Conv2D(128, (3, 3), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
+                layers.Conv2D(128, (3, 3), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Conv2D(64, (3, 3), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Conv2D(1, (3, 3), padding="same", activation="sigmoid"),
             ],
             name="decoder"
         )
@@ -421,10 +435,16 @@ class MNISTTransform():
             [
                 layers.InputLayer((latent_space_dim//2)),
 
-                layers.Dense(latent_space_dim//4),
+                layers.Dense(latent_space_dim),
                 layers.LeakyReLU(alpha=0.2),
 
-                layers.Dense(latent_space_dim//4),
+                layers.Dense(latent_space_dim),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Dense(latent_space_dim//2),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Dense(latent_space_dim//2),
                 layers.LeakyReLU(alpha=0.2),
 
                 layers.Dense(2,activation="softmax")
