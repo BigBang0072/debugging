@@ -452,9 +452,9 @@ class MNISTTransform():
 
         #Fitting the debugger first
         dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
-        dataset = dataset.shuffle(buffer_size=2048).batch(64)
+        dataset = dataset.shuffle(buffer_size=2048).batch(256)
 
-        debugger.fit(dataset,epochs=10)
+        debugger.fit(dataset,epochs=100)
 
 
 
@@ -813,7 +813,7 @@ if __name__=="__main__":
 
     predictor = MNISTTransform(args=None)
     class_list = [1,2]  #for large number of class we need more complex model
-    X1,Y1 = predictor.generate_dataset(num_examples=1000,
+    X1,Y1 = predictor.generate_dataset(num_examples=10000,
                                 class_list=class_list,
                                 transformation="rotation",
                                 angle = np.pi*3.0/2.0,
@@ -821,7 +821,7 @@ if __name__=="__main__":
     # predictor.get_predictor(X1,Y1,class_list)
 
     #Now getting the data from other domain
-    X2,Y2 = predictor.generate_dataset(num_examples=1000,
+    X2,Y2 = predictor.generate_dataset(num_examples=10000,
                                 class_list=class_list,
                                 transformation="rotation",
                                 angle = 0,
