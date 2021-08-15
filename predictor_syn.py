@@ -595,47 +595,47 @@ class DebuggerUnsup(keras.Model):
 
 
         #Now training the discriminator
-        # with tf.GradientTape(persistent=True) as tape:
-        #     #Getting the encoded inputs
-        #     encoded_X = self.encoder(X)
+        with tf.GradientTape(persistent=True) as tape:
+            #Getting the encoded inputs
+            encoded_X = self.encoder(X)
 
-        #     #Getting the causal and spurious factors
-        #     encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
-        #     encoded_X_spurious  = encoded_X[:,self.latent_space_dimension//2:]
+            #Getting the causal and spurious factors
+            encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
+            encoded_X_spurious  = encoded_X[:,self.latent_space_dimension//2:]
 
-        #     #Appending the class label with the latent variable ((X_c,Y) perp D)
-        #     encoded_X_causal = tf.concat([encoded_X_causal,Y_label],axis=1)
-        #     encoded_X_spurious = tf.concat([encoded_X_spurious,Y_label],axis=1)
+            #Appending the class label with the latent variable ((X_c,Y) perp D)
+            encoded_X_causal = tf.concat([encoded_X_causal,Y_label],axis=1)
+            encoded_X_spurious = tf.concat([encoded_X_spurious,Y_label],axis=1)
 
-        #     #Now passing the examples through discriminator
-        #     causal_pred = self.discriminator(encoded_X_causal)
-        #     spurious_pred = self.discriminator(encoded_X_spurious)
+            #Now passing the examples through discriminator
+            causal_pred = self.discriminator(encoded_X_causal)
+            spurious_pred = self.discriminator(encoded_X_spurious)
 
-        #     #Getting the loss
-        #     # causal_loss = scxentropy_loss(Y,causal_pred)
-        #     # neg_causal_loss = -1*causal_loss
-        #     causal_loss = get_pred_entropy_loss(causal_pred)
-        #     spurious_loss = scxentropy_loss(Y,spurious_pred)
-        #     total_disc_loss = causal_loss + spurious_loss
-        # #Updating the parameters of the discriminator
-        # disc_grads = tape.gradient(total_disc_loss,self.discriminator.trainable_weights)
-        # self.di_optimizer.apply_gradients(
-        #     zip(disc_grads,self.discriminator.trainable_weights)
-        # )
-        # #Updating the encoder with spurious dimensions
-        # encoder_disc_spurious_grads = tape.gradient(spurious_loss,self.encoder.trainable_weights)
-        # self.en_optimizer.apply_gradients(
-        #     zip(encoder_disc_spurious_grads,self.encoder.trainable_weights)
-        # )
-        # #Updating the encoder with causal dimension
-        # encoder_disc_causal_grads = tape.gradient(causal_loss,self.encoder.trainable_weights)
-        # self.en_optimizer.apply_gradients(
-        #     zip(encoder_disc_causal_grads,self.encoder.trainable_weights)
-        # )
-        # #Updating the trackers
-        # self.disc_loss_tracker.update_state(total_disc_loss)
-        # self.disc_causal_tracker.update_state(causal_loss)
-        # self.disc_spurious_tracker.update_state(spurious_loss)
+            #Getting the loss
+            # causal_loss = scxentropy_loss(Y,causal_pred)
+            # neg_causal_loss = -1*causal_loss
+            causal_loss = get_pred_entropy_loss(causal_pred)
+            spurious_loss = scxentropy_loss(Y,spurious_pred)
+            total_disc_loss = causal_loss + spurious_loss
+        #Updating the parameters of the discriminator
+        disc_grads = tape.gradient(total_disc_loss,self.discriminator.trainable_weights)
+        self.di_optimizer.apply_gradients(
+            zip(disc_grads,self.discriminator.trainable_weights)
+        )
+        #Updating the encoder with spurious dimensions
+        encoder_disc_spurious_grads = tape.gradient(spurious_loss,self.encoder.trainable_weights)
+        self.en_optimizer.apply_gradients(
+            zip(encoder_disc_spurious_grads,self.encoder.trainable_weights)
+        )
+        #Updating the encoder with causal dimension
+        encoder_disc_causal_grads = tape.gradient(causal_loss,self.encoder.trainable_weights)
+        self.en_optimizer.apply_gradients(
+            zip(encoder_disc_causal_grads,self.encoder.trainable_weights)
+        )
+        #Updating the trackers
+        self.disc_loss_tracker.update_state(total_disc_loss)
+        self.disc_causal_tracker.update_state(causal_loss)
+        self.disc_spurious_tracker.update_state(spurious_loss)
 
 
 
