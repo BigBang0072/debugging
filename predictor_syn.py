@@ -387,20 +387,20 @@ class MNISTTransform():
                 layers.LeakyReLU(alpha=0.2),
 
                 layers.Flatten(),
-                layers.Dense(7*7*gen_compressed_dim),
+                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim),
                 layers.LeakyReLU(alpha=0.2),
 
 
 
-                layers.Reshape((7, 7, gen_compressed_dim)),
-                layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Reshape((7, 7, gen_compressed_dim)),
+                # layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
+                # layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
+                # layers.LeakyReLU(alpha=0.2),
 
 
-                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
+                # layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
             ],
             name="encoder",
         )
@@ -420,16 +420,16 @@ class MNISTTransform():
                 layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
                 layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2D(128, (3, 3), padding="same"),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Conv2D(128, (3, 3), padding="same"),
+                # layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2D(128, (3, 3), padding="same"),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Conv2D(128, (3, 3), padding="same"),
+                # layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2D(64, (3, 3), padding="same"),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Conv2D(64, (3, 3), padding="same"),
+                # layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2D(1, (3, 3), padding="same", activation="sigmoid"),
+                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
             ],
             name="decoder"
         )
@@ -480,7 +480,7 @@ class MNISTTransform():
         dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
         dataset = dataset.shuffle(buffer_size=2048).batch(256)
 
-        debugger.fit(dataset,epochs=20)
+        debugger.fit(dataset,epochs=100)
 
 
 
@@ -569,22 +569,23 @@ class DebuggerUnsup(keras.Model):
         #Training the encoder and decoder
         with tf.GradientTape() as tape:
             #Now, first of all we will encode the data into latent space
-            encoded_X = self.encoder(X)
+            encoded_X = self.encoder(X1)
 
             #Now decoding the output
-            # decoded_X = self.decoder(encoded_X)
+            decoded_X = self.decoder(encoded_X)
 
             #Getting the generation loss
-            reconstruction_loss = mse(X,encoded_X)
+            reconstruction_loss = mse(X1,decoded_X)
         #Updating the weights of decoder
-        encoder_grads = tape.gradient(reconstruction_loss, 
-                                                    
+        decoder_grads,encoder_grads = tape.gradient(reconstruction_loss, 
+                                                    [
+                                                        self.decoder.trainable_weights,
                                                         self.encoder.trainable_weights
-                                                    
+                                                    ]                 
         )
-        # self.de_optimizer.apply_gradients(
-        #     zip(decoder_grads, self.decoder.trainable_weights)
-        # )
+        self.de_optimizer.apply_gradients(
+            zip(decoder_grads, self.decoder.trainable_weights)
+        )
         #Updating the weights of encoder
         self.en_optimizer.apply_gradients(
             zip(encoder_grads,self.encoder.trainable_weights)
