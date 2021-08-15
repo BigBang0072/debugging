@@ -386,10 +386,11 @@ class MNISTTransform():
         #Encoder will encode the image into concept space
         gen_compressed_dim=2
         last_layer_width = 7
+        num_channels = 3
         self.latent_layer = layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim)
         encoder = keras.Sequential(
             [
-                layers.InputLayer((28,28,1)),
+                layers.InputLayer((28,28,num_channels)),
 
                 layers.Conv2D(16, (3, 3),activation="relu"),
                 # layers.LeakyReLU(alpha=0.2),
@@ -439,7 +440,7 @@ class MNISTTransform():
                 layers.LeakyReLU(alpha=0.2),
 
 
-                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
+                layers.Conv2D(num_channels, (7, 7), padding="same", activation="sigmoid"),
             ],
             name="decoder"
         )
