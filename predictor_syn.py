@@ -338,7 +338,7 @@ class MNISTTransform():
         dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
         dataset = dataset.shuffle(buffer_size=2048).batch(64)
 
-        debugger.fit(dataset,epochs=10)
+        debugger.fit(dataset,epochs=100)
 
         #Plotting some sample example
         stable_X1 = self.generator(X1).numpy()
@@ -383,18 +383,24 @@ class MNISTTransform():
                 layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
 
-                layers.Conv2D(64, (3, 3),padding="same"),
-                layers.LeakyReLU(alpha=0.2),
-
-                layers.Conv2D(64, (3, 3),padding="same"),
-                layers.LeakyReLU(alpha=0.2),
-
-                layers.Conv2D(64, (3, 3),padding="same"),
+                layers.Conv2D(64, (3, 3)),
                 layers.LeakyReLU(alpha=0.2),
 
                 layers.Flatten(),
-                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim),
+                layers.Dense(7*7*gen_compressed_dim),
                 layers.LeakyReLU(alpha=0.2),
+
+
+
+                layers.Reshape((7, 7, gen_compressed_dim)),
+                layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
+
+
+                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
             ],
             name="encoder",
         )
@@ -474,26 +480,26 @@ class MNISTTransform():
         dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
         dataset = dataset.shuffle(buffer_size=2048).batch(256)
 
-        debugger.fit(dataset,epochs=100)
+        debugger.fit(dataset,epochs=20)
 
 
 
-        rec_X1 = self.decoder(self.encoder(X1)).numpy()
-        figure, axes = plt.subplots(2,2)
+        # rec_X1 = self.encoder(X1).numpy()
+        # figure, axes = plt.subplots(2,2)
 
-        idx0 = 123
-        axes[0,0].imshow(X1[idx0,:,:,0],cmap="gray")
-        axes[0,1].imshow(rec_X1[idx0,:,:,0],cmap="gray")
+        # idx0 = 123
+        # axes[0,0].imshow(X1[idx0,:,:,0],cmap="gray")
+        # axes[0,1].imshow(rec_X1[idx0,:,:,0],cmap="gray")
 
-        idx1 = 1564
-        axes[1,0].imshow(X1[idx1,:,:,0],cmap="gray")
-        axes[1,1].imshow(rec_X1[idx1,:,:,0],cmap="gray")
+        # idx1 = 2564
+        # axes[1,0].imshow(X1[idx1,:,:,0],cmap="gray")
+        # axes[1,1].imshow(rec_X1[idx1,:,:,0],cmap="gray")
 
-        plt.show()
+        # plt.show()
 
 
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
 
 class DebuggerUnsup(keras.Model):
@@ -563,23 +569,22 @@ class DebuggerUnsup(keras.Model):
         #Training the encoder and decoder
         with tf.GradientTape() as tape:
             #Now, first of all we will encode the data into latent space
-            encoded_X = self.encoder(X1)
+            encoded_X = self.encoder(X)
 
             #Now decoding the output
-            decoded_X = self.decoder(encoded_X)
+            # decoded_X = self.decoder(encoded_X)
 
             #Getting the generation loss
-            reconstruction_loss = mse(X1,decoded_X)
+            reconstruction_loss = mse(X,encoded_X)
         #Updating the weights of decoder
-        decoder_grads,encoder_grads = tape.gradient(reconstruction_loss, 
-                                                    [
-                                                        self.decoder.trainable_weights,
+        encoder_grads = tape.gradient(reconstruction_loss, 
+                                                    
                                                         self.encoder.trainable_weights
-                                                    ]
+                                                    
         )
-        self.de_optimizer.apply_gradients(
-            zip(decoder_grads, self.decoder.trainable_weights)
-        )
+        # self.de_optimizer.apply_gradients(
+        #     zip(decoder_grads, self.decoder.trainable_weights)
+        # )
         #Updating the weights of encoder
         self.en_optimizer.apply_gradients(
             zip(encoder_grads,self.encoder.trainable_weights)
