@@ -371,6 +371,7 @@ class MNISTTransform():
         #Encoder will encode the image into concept space
         gen_compressed_dim=2
         last_layer_width = 7
+        self.latent_layer = layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim)
         encoder = keras.Sequential(
             [
                 layers.InputLayer((28,28,1)),
@@ -387,20 +388,20 @@ class MNISTTransform():
                 layers.LeakyReLU(alpha=0.2),
 
                 layers.Flatten(),
-                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim),
+                self.latent_layer,
                 layers.LeakyReLU(alpha=0.2),
 
 
 
-                # layers.Reshape((7, 7, gen_compressed_dim)),
-                # layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
-                # layers.LeakyReLU(alpha=0.2),
+                layers.Reshape((7, 7, gen_compressed_dim)),
+                layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
 
-                # layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
-                # layers.LeakyReLU(alpha=0.2),
+                layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
+                layers.LeakyReLU(alpha=0.2),
 
 
-                # layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
+                layers.Conv2D(1, (7, 7), padding="same", activation="sigmoid"),
             ],
             name="encoder",
         )
@@ -572,20 +573,19 @@ class DebuggerUnsup(keras.Model):
             encoded_X = self.encoder(X1)
 
             #Now decoding the output
-            decoded_X = self.decoder(encoded_X)
+            # decoded_X = self.decoder(encoded_X)
 
             #Getting the generation loss
-            reconstruction_loss = mse(X1,decoded_X)
+            reconstruction_loss = mse(X1,encoded_X)
         #Updating the weights of decoder
-        decoder_grads,encoder_grads = tape.gradient(reconstruction_loss, 
-                                                    [
-                                                        self.decoder.trainable_weights,
+        encoder_grads = tape.gradient(reconstruction_loss, 
+                                    
                                                         self.encoder.trainable_weights
-                                                    ]                 
+                                                                   
         )
-        self.de_optimizer.apply_gradients(
-            zip(decoder_grads, self.decoder.trainable_weights)
-        )
+        # self.de_optimizer.apply_gradients(
+        #     zip(decoder_grads, self.decoder.trainable_weights)
+        # )
         #Updating the weights of encoder
         self.en_optimizer.apply_gradients(
             zip(encoder_grads,self.encoder.trainable_weights)
