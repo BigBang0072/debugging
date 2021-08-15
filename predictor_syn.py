@@ -433,7 +433,7 @@ class MNISTTransform():
         #Defining the discriminator 
         discriminator = keras.Sequential(
             [
-                layers.InputLayer((latent_space_dim//2)),
+                layers.InputLayer((latent_space_dim//2+1)),
 
                 layers.Dense(latent_space_dim),
                 layers.LeakyReLU(alpha=0.2),
@@ -525,6 +525,8 @@ class DebuggerUnsup(keras.Model):
     def train_step(self,data):
 
         (X1,Y1),(X2,Y2) = data
+        Y1 = tf.expand_dims(tf.cast(Y1,tf.float32),axis=-1)
+        Y2 = tf.expand_dims(tf.cast(Y2,tf.float32),axis=-1)
 
         #Creating the domain labels
         X = tf.concat([X1,X2],axis=0)
@@ -532,6 +534,13 @@ class DebuggerUnsup(keras.Model):
             [
                 tf.zeros(tf.shape(Y1)[0]),
                 tf.ones(tf.shape(Y2)[0])
+            ],
+            axis=0,
+        )
+        Y_label = tf.concat(
+            [
+                Y1,
+                Y2,
             ],
             axis=0,
         )
@@ -583,6 +592,10 @@ class DebuggerUnsup(keras.Model):
             #Getting the causal and spurious factors
             encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
             encoded_X_spurious  = encoded_X[:,self.latent_space_dimension//2:]
+
+            #Appending the class label with the latent variable ((X_c,Y) perp D)
+            encoded_X_causal = tf.concat([encoded_X_causal,Y_label],axis=1)
+            encoded_X_spurious = tf.concat([encoded_X_spurious,Y_label],axis=1)
 
             #Now passing the examples through discriminator
             causal_pred = self.discriminator(encoded_X_causal)
