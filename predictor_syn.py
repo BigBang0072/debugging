@@ -549,6 +549,15 @@ class DebuggerUnsup(keras.Model):
         #Defining the losses
         mse = keras.losses.MeanSquaredError()
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        def get_pred_entropy_loss(probs):
+            #These are softmax passed logits
+            pred_entropy = -1*tf.math.reduce_sum(
+                                        probs*tf.math.log(probs),
+                                        axis=1,
+            )
+            entropy_loss = -1* tf.math.reduce_mean(pred_entropy,axis=0)
+
+            return entropy_loss
 
 
         #Training the encoder and decoder
@@ -602,10 +611,11 @@ class DebuggerUnsup(keras.Model):
             spurious_pred = self.discriminator(encoded_X_spurious)
 
             #Getting the loss
-            causal_loss = scxentropy_loss(Y,causal_pred)
-            neg_causal_loss = -1*causal_loss
+            # causal_loss = scxentropy_loss(Y,causal_pred)
+            # neg_causal_loss = -1*causal_loss
+            causal_loss = get_pred_entropy_loss(causal_pred)
             spurious_loss = scxentropy_loss(Y,spurious_pred)
-            total_disc_loss = causal_loss + 10*spurious_loss
+            total_disc_loss = causal_loss + spurious_loss
         #Updating the parameters of the discriminator
         disc_grads = tape.gradient(total_disc_loss,self.discriminator.trainable_weights)
         self.di_optimizer.apply_gradients(
@@ -617,7 +627,7 @@ class DebuggerUnsup(keras.Model):
             zip(encoder_disc_spurious_grads,self.encoder.trainable_weights)
         )
         #Updating the encoder with causal dimension
-        encoder_disc_causal_grads = tape.gradient(neg_causal_loss,self.encoder.trainable_weights)
+        encoder_disc_causal_grads = tape.gradient(causal_loss,self.encoder.trainable_weights)
         self.en_optimizer.apply_gradients(
             zip(encoder_disc_causal_grads,self.encoder.trainable_weights)
         )
