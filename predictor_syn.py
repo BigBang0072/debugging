@@ -563,13 +563,13 @@ class DebuggerUnsup(keras.Model):
         #Training the encoder and decoder
         with tf.GradientTape() as tape:
             #Now, first of all we will encode the data into latent space
-            encoded_X = self.encoder(X)
+            encoded_X = self.encoder(X1)
 
             #Now decoding the output
             decoded_X = self.decoder(encoded_X)
 
             #Getting the generation loss
-            reconstruction_loss = mse(X,decoded_X)
+            reconstruction_loss = mse(X1,decoded_X)
         #Updating the weights of decoder
         decoder_grads,encoder_grads = tape.gradient(reconstruction_loss, 
                                                     [
