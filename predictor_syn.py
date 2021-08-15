@@ -146,7 +146,7 @@ class MNISTTransform():
     def __init__(self,args):
         self.args=args
     
-    def generate_dataset(self,num_examples,class_list,transformation,angle):
+    def generate_dataset(self,num_examples,class_list,transformation,transformation_param):
         (X_all,Y_all),_ = tf.keras.datasets.mnist.load_data()
         print("Total Number of examples in dataset: {}".format(X_all.shape[0]))
 
@@ -175,8 +175,23 @@ class MNISTTransform():
 
         #Now creating the domain2 examples
         if transformation=="rotation":
-            X = tfa.image.rotate(X,[angle]*X.shape[0]).numpy()
-        
+            X = tfa.image.rotate(X,[transformation_param]*X.shape[0]).numpy()
+        elif transformation=="color":
+            X = np.concatenate([X,X,X],axis=-1)
+            #Now we will make the background colorful
+            red,_,_ = X.T
+            background = red<0.1
+
+            #Now put the color of background
+           
+            if(transformation_param=="red"):
+                X[...,:][background.T] = [0.5,0,0]
+            elif(transformation_param=="green"):
+                X[...,:][background.T]= [0,0.5,0]
+            else:
+                X[...,:][background.T]= [0,0,0.5]
+
+
         # pdb.set_trace()
         return X,Y
     
@@ -411,6 +426,7 @@ class MNISTTransform():
 
         #Defining the decoder for image
         latent_space_dim = last_layer_width*last_layer_width*gen_compressed_dim
+        self.latent_space_dim = latent_space_dim
         decoder = keras.Sequential(
             [
                 layers.InputLayer((latent_space_dim)),
@@ -859,17 +875,18 @@ if __name__=="__main__":
     class_list = [1,2]  #for large number of class we need more complex model
     X1,Y1 = predictor.generate_dataset(num_examples=1000,
                                 class_list=class_list,
-                                transformation="rotation",
-                                angle = np.pi*3.0/2.0,
+                                transformation="color",
+                                transformation_param = "red",
     )
     # predictor.get_predictor(X1,Y1,class_list)
 
     #Now getting the data from other domain
     X2,Y2 = predictor.generate_dataset(num_examples=1000,
                                 class_list=class_list,
-                                transformation="rotation",
-                                angle = 0,
+                                transformation="color",
+                                transformation_param = "green",
     )
+    # pdb.set_trace()
     #Now training the debugger
     predictor.remove_spurious_features_unsup(X1,Y1,X2,Y2)
 
