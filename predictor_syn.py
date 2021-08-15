@@ -376,28 +376,29 @@ class MNISTTransform():
             [
                 layers.InputLayer((28,28,1)),
 
-                layers.Conv2D(32, (3, 3)),
-                layers.LeakyReLU(alpha=0.2),
+                layers.Conv2D(16, (3, 3),activation="relu"),
+                # layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
 
-                layers.Conv2D(64, (3, 3)),
-                layers.LeakyReLU(alpha=0.2),
+                layers.Conv2D(8, (3, 3),activation="relu"),
+                # layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
 
-                layers.Conv2D(64, (3, 3)),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Conv2D(64, (3, 3)),
+                # layers.LeakyReLU(alpha=0.2),
 
                 layers.Flatten(),
                 self.latent_layer,
+                # layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim),
                 layers.LeakyReLU(alpha=0.2),
 
 
 
                 layers.Reshape((7, 7, gen_compressed_dim)),
-                layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding="same"),
+                layers.Conv2DTranspose(8, (4, 4), strides=(2, 2), padding="same"),
                 layers.LeakyReLU(alpha=0.2),
 
-                layers.Conv2DTranspose(32, (4, 4), strides=(2, 2), padding="same"),
+                layers.Conv2DTranspose(16, (4, 4), strides=(2, 2), padding="same"),
                 layers.LeakyReLU(alpha=0.2),
 
 
@@ -862,7 +863,7 @@ if __name__=="__main__":
 
     predictor = MNISTTransform(args=None)
     class_list = [1,2]  #for large number of class we need more complex model
-    X1,Y1 = predictor.generate_dataset(num_examples=10000,
+    X1,Y1 = predictor.generate_dataset(num_examples=1000,
                                 class_list=class_list,
                                 transformation="rotation",
                                 angle = np.pi*3.0/2.0,
@@ -870,7 +871,7 @@ if __name__=="__main__":
     # predictor.get_predictor(X1,Y1,class_list)
 
     #Now getting the data from other domain
-    X2,Y2 = predictor.generate_dataset(num_examples=10000,
+    X2,Y2 = predictor.generate_dataset(num_examples=1000,
                                 class_list=class_list,
                                 transformation="rotation",
                                 angle = 0,
