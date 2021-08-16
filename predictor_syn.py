@@ -434,6 +434,7 @@ class MNISTTransform():
         decoder = keras.Sequential(
             [
                 layers.InputLayer((latent_space_dim)),
+                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
 
                 layers.Reshape((7, 7, gen_compressed_dim)),
                 layers.Conv2DTranspose(8, (4, 4), strides=(2, 2), padding="same"),
