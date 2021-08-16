@@ -375,7 +375,7 @@ class MNISTTransform():
 
         pdb.set_trace()
     
-    def remove_spurious_features_unsup(self,X1,Y1,X2,Y2):
+    def remove_spurious_features_unsup(self,X1,Y1,X2,Y2,class_list):
         '''
         '''
         print("#################################################")
@@ -396,9 +396,9 @@ class MNISTTransform():
                 # layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
 
-                layers.Conv2D(8, (3, 3),activation="relu"),
-                # layers.LeakyReLU(alpha=0.2),
-                layers.MaxPooling2D((2, 2)),
+                # layers.Conv2D(8, (3, 3),activation="relu"),
+                # # layers.LeakyReLU(alpha=0.2),
+                # layers.MaxPooling2D((2, 2)),
 
                 # layers.Conv2D(64, (3, 3)),
                 # layers.LeakyReLU(alpha=0.2),
@@ -408,7 +408,7 @@ class MNISTTransform():
                 layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
                 # layers.LeakyReLU(alpha=0.2),
 
-                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
+                # layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
                 # layers.LeakyReLU(alpha=0.2),
 
 
@@ -456,17 +456,17 @@ class MNISTTransform():
             [
                 layers.InputLayer((latent_space_dim//2+1)),
 
-                layers.Dense(latent_space_dim),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Dense(latent_space_dim),
+                # layers.LeakyReLU(alpha=0.2),
 
-                layers.Dense(latent_space_dim),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Dense(latent_space_dim),
+                # layers.LeakyReLU(alpha=0.2),
 
-                layers.Dense(latent_space_dim//2),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Dense(latent_space_dim//2),
+                # layers.LeakyReLU(alpha=0.2),
 
-                layers.Dense(latent_space_dim//2),
-                layers.LeakyReLU(alpha=0.2),
+                # layers.Dense(latent_space_dim//2),
+                # layers.LeakyReLU(alpha=0.2),
 
                 layers.Dense(2,activation="softmax")
             ],
@@ -475,12 +475,24 @@ class MNISTTransform():
         self.discriminator = discriminator
         print(discriminator.summary())
 
+        #Initializing the predictor for ERM
+        predictor = keras.Sequential(
+            [
+                layers.InputLayer((latent_space_dim//2)),
+                layers.Dense(len(class_list),activation="softmax")
+            ],
+            name="predictor"
+        )
+        self.predictor = predictor 
+        print(predictor.summary())
+
         #Now we can train the whole setup
-        debugger = DebuggerUnsup(encoder,decoder,discriminator,latent_space_dim)
+        debugger = DebuggerUnsup(encoder,decoder,discriminator,predictor,latent_space_dim)
         debugger.compile(
             en_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
             de_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
             di_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            pr_optimizer=keras.optimizers.Adam(learning_rate=0.0009)
         )
 
 
@@ -519,7 +531,7 @@ class MNISTTransform():
 
 class DebuggerUnsup(keras.Model):
 
-    def __init__(self,encoder,decoder,discriminator,latent_space_dimension):
+    def __init__(self,encoder,decoder,discriminator,predictor,latent_space_dimension):
         '''
         '''
         super(DebuggerUnsup,self).__init__()
@@ -529,18 +541,21 @@ class DebuggerUnsup(keras.Model):
         self.encoder = encoder
         self.decoder = decoder 
         self.discriminator = discriminator
+        self.predictor = predictor
 
         #Starting the trackers to track the losses
         self.en_de_mse_tracker = keras.metrics.Mean(name="en_de_mse")
         self.disc_loss_tracker = keras.metrics.Mean(name="disc_x")
         self.disc_causal_tracker = keras.metrics.Mean(name="disc_causal_x")
         self.disc_spurious_tracker = keras.metrics.Mean(name="disc_spurious_x")
+        self.pred_xentropy_tracker = keras.metrics.Mean(name="pred_x")
 
-    def compile(self, en_optimizer, de_optimizer, di_optimizer):
+    def compile(self, en_optimizer, de_optimizer, di_optimizer, pr_optimizer):
         super(DebuggerUnsup, self).compile()
         self.en_optimizer = en_optimizer
         self.de_optimizer = de_optimizer
         self.di_optimizer = di_optimizer
+        self.pr_optimizer = pr_optimizer
     
 
     def train_step(self,data):
@@ -582,7 +597,7 @@ class DebuggerUnsup(keras.Model):
 
 
         #Training the encoder and decoder
-        with tf.GradientTape() as tape:
+        with tf.GradientTape(persistent=True) as tape:
             #Now, first of all we will encode the data into latent space
             encoded_X = self.encoder(X)
 
@@ -591,14 +606,25 @@ class DebuggerUnsup(keras.Model):
 
             #Getting the generation loss
             reconstruction_loss = mse(X,decoded_X)
+
+            #Getting the prediction loss
+            encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
+            en_pred_prob = self.predictor(encoded_X_causal)
+            en_pred_loss = scxentropy_loss(Y_label,en_pred_prob)
+
+            #Total encoder loss
+            en_representation_loss = reconstruction_loss + en_pred_loss
+
         #Updating the weights of decoder
-        decoder_grads,encoder_grads = tape.gradient(reconstruction_loss, 
-                                                    [
-                                                        self.decoder.trainable_weights,
-                                                        self.encoder.trainable_weights,
-                                                    ]
+        decoder_grads = tape.gradient(reconstruction_loss, 
+                                                    self.decoder.trainable_weights,
                                                                    
         )
+        encoder_grads = tape.gradient(en_representation_loss,
+                                        self.encoder.trainable_weights
+        )
+
+        #Updating the weight of decoder
         self.de_optimizer.apply_gradients(
             zip(decoder_grads, self.decoder.trainable_weights)
         )
@@ -609,6 +635,30 @@ class DebuggerUnsup(keras.Model):
         #Updating the mse tracker
         self.en_de_mse_tracker.update_state(reconstruction_loss)
 
+
+
+
+
+
+        #Training the predictor
+        with tf.GradientTape(persistent=True) as tape:
+            #Now, first of all we will encode the data into latent space
+            encoded_X = self.encoder(X)
+            encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
+
+
+            pred_prob = self.predictor(encoded_X_causal)
+            pred_loss = scxentropy_loss(Y_label,pred_prob)
+        #Calculating the gradient
+        pred_grads = tape.gradient(pred_loss,
+                                    self.predictor.trainable_weights
+        )
+        #Updating hte gradients of predictor
+        self.pr_optimizer.apply_gradients(
+            zip(pred_grads,self.predictor.trainable_weights)
+        )
+        #Updating the cross entropy tracker
+        self.pred_xentropy_tracker.update_state(pred_loss)
 
 
 
@@ -667,7 +717,8 @@ class DebuggerUnsup(keras.Model):
             "en_de_mse":self.en_de_mse_tracker.result(),
             "disc_loss":self.disc_loss_tracker.result(),
             "disc_causal":self.disc_causal_tracker.result(),
-            "disc_spurious":self.disc_spurious_tracker.result()
+            "disc_spurious":self.disc_spurious_tracker.result(),
+            "pred_x":self.pred_xentropy_tracker.result()
         }
 
     
@@ -893,7 +944,7 @@ if __name__=="__main__":
     )
     # pdb.set_trace()
     #Now training the debugger
-    predictor.remove_spurious_features_unsup(X1,Y1,X2,Y2)
+    predictor.remove_spurious_features_unsup(X1,Y1,X2,Y2,class_list)
 
 
     pdb.set_trace()
