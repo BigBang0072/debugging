@@ -1,0 +1,35 @@
+====================================================
+Experiment1
+====================================================
+    Encoder has low capacity
+    Decoder has Dense begining so that intervnetion dont remove half of the image
+
+    Result: It seems, the causal part is removing every information 
+            (was a valid solution based on current obj)
+            since we just wanted the causal part to be non-discriminative of domain.
+
+            Prolly: putting the ERM constraint on causal part will help here.
+
+====================================================
+
+====================================================
+Experiment2
+====================================================
+    Encoder has low capacity
+    Decoder has Dense begining so that intervnetion dont remove half of the image
+    Even Discriminator is very low capacity
+            This is better choice since then the representation
+            will be at max high level, which will make intervnetion
+            more meaningful.
+
+    Result: It seems, the causal part is removing every information 
+            (was a valid solution based on current obj)
+            since we just wanted the causal part to be non-discriminative of domain.
+
+            Yes, now the effect of constant value is even more pronounced
+            Atleast they know how to remove everythin.
+
+
+            Prolly: putting the ERM constraint on causal part will help here.
+
+====================================================
