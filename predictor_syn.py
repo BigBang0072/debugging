@@ -507,10 +507,10 @@ class MNISTTransform():
         #Now we can train the whole setup
         debugger = DebuggerUnsup(encoder,decoder,discriminator,predictor,latent_space_dim)
         debugger.compile(
-            en_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
+            en_optimizer=keras.optimizers.Adam(learning_rate=0.0001),
             de_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
-            di_optimizer=keras.optimizers.SGD(learning_rate=0.001),
-            pr_optimizer=keras.optimizers.SGD(learning_rate=0.001)
+            di_optimizer=keras.optimizers.SGD(learning_rate=0.0009),
+            pr_optimizer=keras.optimizers.SGD(learning_rate=0.0009)
         )
 
 
@@ -623,10 +623,10 @@ class DebuggerUnsup(keras.Model):
             encoded_X = self.encoder(X)
 
             #Now decoding the output
-            # decoded_X = self.decoder(encoded_X)
+            decoded_X = self.decoder(encoded_X)
 
             # #Getting the generation loss
-            # reconstruction_loss = mse(X,decoded_X)
+            reconstruction_loss = mse(X,decoded_X)
 
             #Getting the prediction loss from causal part
             encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
@@ -639,6 +639,8 @@ class DebuggerUnsup(keras.Model):
             en_spurious_pred_loss = -1*scxentropy_loss(Y_label,en_spurious_pred_prob)
 
             en_total_pred_loss = en_causal_pred_loss + en_spurious_pred_loss
+            #Getting the total encoder loss
+            en_total_loss = en_total_pred_loss + reconstruction_loss
 
 
             #Intervening on the latent layer (input is image for predictor)
@@ -661,24 +663,24 @@ class DebuggerUnsup(keras.Model):
             # ende_representation_loss = reconstruction_loss + ende_pred_loss
 
         #Updating the weights of decoder
-        # decoder_grads = tape.gradient(reconstruction_loss, 
-        #                                             self.decoder.trainable_weights,
+        decoder_grads = tape.gradient(reconstruction_loss, 
+                                                    self.decoder.trainable_weights,
                                                                    
-        # )
-        encoder_grads = tape.gradient(en_total_pred_loss,
+        )
+        encoder_grads = tape.gradient(en_total_loss,
                                         self.encoder.trainable_weights
         )
 
         #Updating the weight of decoder
-        # self.de_optimizer.apply_gradients(
-        #     zip(decoder_grads, self.decoder.trainable_weights)
-        # )
+        self.de_optimizer.apply_gradients(
+            zip(decoder_grads, self.decoder.trainable_weights)
+        )
         #Updating the weights of encoder
         self.en_optimizer.apply_gradients(
             zip(encoder_grads,self.encoder.trainable_weights)
         )
         #Updating the mse tracker
-        # self.en_de_mse_tracker.update_state(reconstruction_loss)
+        self.en_de_mse_tracker.update_state(reconstruction_loss)
 
 
 
@@ -790,7 +792,7 @@ class DebuggerUnsup(keras.Model):
 
 
         return {
-            # "en_de_mse":self.en_de_mse_tracker.result(),
+            "en_de_mse":self.en_de_mse_tracker.result(),
             # "disc_loss":self.disc_loss_tracker.result(),
             # "disc_causal":self.disc_causal_tracker.result(),
             # "disc_spurious":self.disc_spurious_tracker.result(),
@@ -1023,7 +1025,7 @@ if __name__=="__main__":
     )
     # pdb.set_trace()
     #Now training the debugger
-    predictor.remove_spurious_features_unsup(X1,Y1,X2,Y2,class_list)
+    predictor.remove_spurious_features_unsup(X1,Y1,X2,Y2,class_list,epochs=10)
 
 
     pdb.set_trace()
