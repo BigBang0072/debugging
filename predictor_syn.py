@@ -628,30 +628,30 @@ class DebuggerUnsup(keras.Model):
             # en_pred_loss = scxentropy_loss(Y_label,en_pred_prob)
 
             #Intervening on the latent layer (input is image for predictor)
-            encoded_X_causal = encoded_X[:,0:self.latent_space_dimension//2]
-            encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
+            # encoded_X_causal = encoded_X[:,0:self.latent_space_dimension//2]
+            # encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
 
-            intervenend_encoded_X = tf.concat(
-                                        [
-                                            encoded_X_causal,
-                                            encoded_X_spurious*0.0,
-                                        ],
-                                        axis=1,
-            )
-            intervened_decoded_X = self.decoder(intervenend_encoded_X)
-            #Getting the prediction loss
-            ende_pred_prob = self.predictor(intervened_decoded_X)
-            ende_pred_loss = scxentropy_loss(Y_label,ende_pred_prob)
+            # intervenend_encoded_X = tf.concat(
+            #                             [
+            #                                 encoded_X_causal,
+            #                                 encoded_X_spurious*0.0,
+            #                             ],
+            #                             axis=1,
+            # )
+            # intervened_decoded_X = self.decoder(intervenend_encoded_X)
+            # #Getting the prediction loss
+            # ende_pred_prob = self.predictor(intervened_decoded_X)
+            # ende_pred_loss = scxentropy_loss(Y_label,ende_pred_prob)
 
-            #Total encoder loss
-            ende_representation_loss = reconstruction_loss + ende_pred_loss
+            # #Total encoder loss
+            # ende_representation_loss = reconstruction_loss + ende_pred_loss
 
         #Updating the weights of decoder
-        decoder_grads = tape.gradient(ende_representation_loss, 
+        decoder_grads = tape.gradient(reconstruction_loss, 
                                                     self.decoder.trainable_weights,
                                                                    
         )
-        encoder_grads = tape.gradient(ende_representation_loss,
+        encoder_grads = tape.gradient(reconstruction_loss,
                                         self.encoder.trainable_weights
         )
 
@@ -672,42 +672,42 @@ class DebuggerUnsup(keras.Model):
 
 
         #Training the predictor
-        with tf.GradientTape(persistent=True) as tape:
-            #Now, first of all we will encode the data into latent space
-            encoded_X = self.encoder(X)
-            encoded_X_causal = encoded_X[:,0:self.latent_space_dimension//2]
-            encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
+        # with tf.GradientTape(persistent=True) as tape:
+        #     #Now, first of all we will encode the data into latent space
+        #     encoded_X = self.encoder(X)
+        #     encoded_X_causal = encoded_X[:,0:self.latent_space_dimension//2]
+        #     encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
 
-            intervenend_encoded_X = tf.concat(
-                                        [
-                                            encoded_X_causal,
-                                            encoded_X_spurious*0.0,
-                                        ],
-                                        axis=1,
-            )
-            intervened_decoded_X = self.decoder(intervenend_encoded_X)
-            #Getting the prediction loss
-            ende_pred_prob = self.predictor(intervened_decoded_X)
-            ende_pred_loss = scxentropy_loss(Y_label,ende_pred_prob)
+        #     intervenend_encoded_X = tf.concat(
+        #                                 [
+        #                                     encoded_X_causal,
+        #                                     encoded_X_spurious*0.0,
+        #                                 ],
+        #                                 axis=1,
+        #     )
+        #     intervened_decoded_X = self.decoder(intervenend_encoded_X)
+        #     #Getting the prediction loss
+        #     ende_pred_prob = self.predictor(intervened_decoded_X)
+        #     ende_pred_loss = scxentropy_loss(Y_label,ende_pred_prob)
 
-            #Getting the prediction loss directly from actual image
-            direct_pred_prob = self.predictor(X)
-            direct_pred_loss = scxentropy_loss(Y_label,direct_pred_prob)
+        #     #Getting the prediction loss directly from actual image
+        #     direct_pred_prob = self.predictor(X)
+        #     direct_pred_loss = scxentropy_loss(Y_label,direct_pred_prob)
 
-            #Getting the total prediction loss
-            total_pred_loss = ende_pred_loss + direct_pred_loss
+        #     #Getting the total prediction loss
+        #     total_pred_loss = ende_pred_loss + direct_pred_loss
 
-        #Calculating the gradient
-        pred_grads = tape.gradient(total_pred_loss,
-                                    self.predictor.trainable_weights
-        )
-        #Updating hte gradients of predictor
-        self.pr_optimizer.apply_gradients(
-            zip(pred_grads,self.predictor.trainable_weights)
-        )
-        #Updating the cross entropy tracker
-        self.pred_xentropy_tracker.update_state(total_pred_loss)
-        self.pred_ende_xentropy_tracker.update_state(ende_pred_loss)
+        # #Calculating the gradient
+        # pred_grads = tape.gradient(total_pred_loss,
+        #                             self.predictor.trainable_weights
+        # )
+        # #Updating hte gradients of predictor
+        # self.pr_optimizer.apply_gradients(
+        #     zip(pred_grads,self.predictor.trainable_weights)
+        # )
+        # #Updating the cross entropy tracker
+        # self.pred_xentropy_tracker.update_state(total_pred_loss)
+        # self.pred_ende_xentropy_tracker.update_state(ende_pred_loss)
 
 
 
@@ -767,8 +767,8 @@ class DebuggerUnsup(keras.Model):
             "disc_loss":self.disc_loss_tracker.result(),
             "disc_causal":self.disc_causal_tracker.result(),
             "disc_spurious":self.disc_spurious_tracker.result(),
-            "pred_x":self.pred_xentropy_tracker.result(),
-            "pred_ende_x":self.pred_ende_xentropy_tracker.result(),
+            #"pred_x":self.pred_xentropy_tracker.result(),
+            #"pred_ende_x":self.pred_ende_xentropy_tracker.result(),
         }
 
     
