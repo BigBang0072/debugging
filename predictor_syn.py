@@ -477,7 +477,7 @@ class MNISTTransform():
         print(discriminator.summary())
 
         #Initializing the predictor for ERM
-        predictor = keras.Sequential(
+        predictor1 = keras.Sequential(
             [
                 layers.InputLayer((latent_space_dim//2)),
                 # layers.InputLayer((28,28,num_channels)),
@@ -501,11 +501,38 @@ class MNISTTransform():
             ],
             name="predictor"
         )
-        self.predictor = predictor 
-        print(predictor.summary())
+        self.predictor1 = predictor1
+        print(predictor1.summary())
+
+        predictor2 = keras.Sequential(
+            [
+                layers.InputLayer((latent_space_dim//2)),
+                # layers.InputLayer((28,28,num_channels)),
+
+                # layers.Conv2D(16, (3, 3),activation="relu"),
+                # layers.LeakyReLU(alpha=0.2),
+                # layers.MaxPooling2D((2, 2)),
+
+                # layers.Conv2D(8, (3, 3),activation="relu"),
+                # # layers.LeakyReLU(alpha=0.2),
+                # layers.MaxPooling2D((2, 2)),
+
+                # layers.Conv2D(64, (3, 3)),
+                # layers.LeakyReLU(alpha=0.2),
+
+                # layers.Flatten(),
+                layers.Dense(latent_space_dim//2),
+                layers.LeakyReLU(alpha=0.2),
+
+                layers.Dense(len(class_list),activation="softmax")
+            ],
+            name="predictor"
+        )
+        self.predictor2 = predictor2 
+        print(predictor2.summary())
 
         #Now we can train the whole setup
-        debugger = DebuggerUnsup(encoder,decoder,discriminator,predictor,latent_space_dim)
+        debugger = DebuggerUnsup(encoder,decoder,discriminator,predictor1,predictor2,latent_space_dim)
         debugger.compile(
             en_optimizer=keras.optimizers.Adam(learning_rate=0.0001),
             de_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
@@ -549,7 +576,7 @@ class MNISTTransform():
 
 class DebuggerUnsup(keras.Model):
 
-    def __init__(self,encoder,decoder,discriminator,predictor,latent_space_dimension):
+    def __init__(self,encoder,decoder,discriminator,predictor1,predictor2,latent_space_dimension):
         '''
         '''
         super(DebuggerUnsup,self).__init__()
@@ -559,7 +586,8 @@ class DebuggerUnsup(keras.Model):
         self.encoder = encoder
         self.decoder = decoder 
         self.discriminator = discriminator
-        self.predictor = predictor
+        self.predictor_causal = predictor1
+        self.predictor_spurious = predictor2
 
         #Starting the trackers to track the losses
         self.en_de_mse_tracker = keras.metrics.Mean(name="en_de_mse")
@@ -633,12 +661,12 @@ class DebuggerUnsup(keras.Model):
 
             #Getting the prediction loss from causal part
             encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
-            en_causal_pred_prob = self.predictor(encoded_X_causal)
+            en_causal_pred_prob = self.predictor_causal(encoded_X_causal)
             en_causal_pred_loss = scxentropy_loss(Y_label,en_causal_pred_prob)
 
             #Getting the prediction from the non-causal part (making it adversarial)
             encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
-            en_spurious_pred_prob = self.predictor(encoded_X_spurious)
+            en_spurious_pred_prob = self.predictor_spurious(encoded_X_spurious)
             en_spurious_pred_loss = -1*scxentropy_loss(Y_label,en_spurious_pred_prob)
 
             en_total_pred_loss = en_causal_pred_loss + en_spurious_pred_loss
@@ -698,11 +726,11 @@ class DebuggerUnsup(keras.Model):
             encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
 
             #Getting the prediction loss from both of them (discriminator want to classify)
-            causal_pred_prob = self.predictor(encoded_X_causal)
+            causal_pred_prob = self.predictor_causal(encoded_X_causal)
             causal_pred_loss = scxentropy_loss(Y_label,causal_pred_prob)
 
             #Getting the pred loss from spurious side
-            spurious_pred_prob = self.predictor(encoded_X_spurious)
+            spurious_pred_prob = self.predictor_spurious(encoded_X_spurious)
             spurious_pred_loss = scxentropy_loss(Y_label,spurious_pred_prob)
 
             total_pred_loss = causal_pred_loss + spurious_pred_loss
@@ -727,13 +755,22 @@ class DebuggerUnsup(keras.Model):
             # total_pred_loss = ende_pred_loss + direct_pred_loss
 
         #Calculating the gradient
-        pred_grads = tape.gradient(total_pred_loss,
-                                    self.predictor.trainable_weights
+        pred_causal_grads = tape.gradient(causal_pred_loss,
+                                    self.predictor_causal.trainable_weights
         )
         #Updating hte gradients of predictor
         self.pr_optimizer.apply_gradients(
-            zip(pred_grads,self.predictor.trainable_weights)
+            zip(pred_causal_grads,self.predictor_causal.trainable_weights)
         )
+
+        pred_spurious_grads = tape.gradient(spurious_pred_loss,
+                                    self.predictor_spurious.trainable_weights
+        )
+        #Updating hte gradients of predictor
+        self.pr_optimizer.apply_gradients(
+            zip(pred_spurious_grads,self.predictor_spurious.trainable_weights)
+        )
+
         #Updating the cross entropy tracker
         self.pred_xentropy_tracker.update_state(total_pred_loss)
         # self.pred_ende_xentropy_tracker.update_state(ende_pred_loss)
