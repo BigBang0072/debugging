@@ -571,6 +571,9 @@ class DebuggerUnsup(keras.Model):
         self.causal_pred_xentropy_tracker = keras.metrics.Mean(name="causal_pred_x")
         self.spurious_pred_xentropy_tracker = keras.metrics.Mean(name="spurious_pred_x")
 
+        self.causal_prec_acc = tf.keras.metrics.SparseCategoricalAccuracy(name="causal_pred_acc")
+        self.spurious_pred_acc = tf.keras.metrics.SparseCategoricalAccuracy(name="spurious_pred_acc")
+
     def compile(self, en_optimizer, de_optimizer, di_optimizer, pr_optimizer):
         super(DebuggerUnsup, self).compile()
         self.en_optimizer = en_optimizer
@@ -734,8 +737,11 @@ class DebuggerUnsup(keras.Model):
         #Updating the cross entropy tracker
         self.pred_xentropy_tracker.update_state(total_pred_loss)
         # self.pred_ende_xentropy_tracker.update_state(ende_pred_loss)
-        self.causal_pred_xentropy_tracker(causal_pred_loss)
-        self.spurious_pred_xentropy_tracker(spurious_pred_loss)
+        self.causal_pred_xentropy_tracker.update_state(causal_pred_loss)
+        self.spurious_pred_xentropy_tracker.update_state(spurious_pred_loss)
+
+        self.causal_prec_acc.update_state(Y_label,causal_pred_prob)
+        self.spurious_pred_acc.update_state(Y_label,spurious_pred_prob)
 
 
 
@@ -799,7 +805,9 @@ class DebuggerUnsup(keras.Model):
             "pred_x":self.pred_xentropy_tracker.result(),
             #"pred_ende_x":self.pred_ende_xentropy_tracker.result(),
             "causal_x":self.causal_pred_xentropy_tracker.result(),
-            "spurious_x":self.spurious_pred_xentropy_tracker.result()
+            "spurious_x":self.spurious_pred_xentropy_tracker.result(),
+            "causal_acc":self.causal_prec_acc.result(),
+            "spurious_acc":self.spurious_pred_acc.result()
         }
 
     
