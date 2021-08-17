@@ -407,6 +407,7 @@ class MNISTTransform():
                 # self.latent_layer,
                 layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
                 # layers.LeakyReLU(alpha=0.2),
+                layers.Dropout(0.3)
 
                 # layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
                 # layers.LeakyReLU(alpha=0.2),
