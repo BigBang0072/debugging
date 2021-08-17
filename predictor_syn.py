@@ -375,7 +375,7 @@ class MNISTTransform():
 
         pdb.set_trace()
     
-    def remove_spurious_features_unsup(self,X1,Y1,X2,Y2,class_list):
+    def remove_spurious_features_unsup(self,X1,Y1,X2,Y2,class_list,epochs):
         '''
         '''
         print("#################################################")
@@ -392,8 +392,8 @@ class MNISTTransform():
             [
                 layers.InputLayer((28,28,num_channels)),
 
-                layers.Conv2D(16, (3, 3),activation="relu"),
-                # layers.LeakyReLU(alpha=0.2),
+                layers.Conv2D(16, (3, 3)),
+                layers.LeakyReLU(alpha=0.2),
                 layers.MaxPooling2D((2, 2)),
 
                 # layers.Conv2D(8, (3, 3),activation="relu"),
@@ -405,9 +405,9 @@ class MNISTTransform():
 
                 layers.Flatten(),
                 # self.latent_layer,
-                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
-                # layers.LeakyReLU(alpha=0.2),
-                layers.Dropout(0.3)
+                layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim),
+                layers.LeakyReLU(alpha=0.2),
+                # layers.Dropout(0.3)
 
                 # layers.Dense(last_layer_width*last_layer_width*gen_compressed_dim,activation="relu"),
                 # layers.LeakyReLU(alpha=0.2),
@@ -479,12 +479,12 @@ class MNISTTransform():
         #Initializing the predictor for ERM
         predictor = keras.Sequential(
             [
-                # layers.InputLayer((latent_space_dim//2)),
-                layers.InputLayer((28,28,num_channels)),
+                layers.InputLayer((latent_space_dim//2)),
+                # layers.InputLayer((28,28,num_channels)),
 
-                layers.Conv2D(16, (3, 3),activation="relu"),
+                # layers.Conv2D(16, (3, 3),activation="relu"),
                 # layers.LeakyReLU(alpha=0.2),
-                layers.MaxPooling2D((2, 2)),
+                # layers.MaxPooling2D((2, 2)),
 
                 # layers.Conv2D(8, (3, 3),activation="relu"),
                 # # layers.LeakyReLU(alpha=0.2),
@@ -493,7 +493,10 @@ class MNISTTransform():
                 # layers.Conv2D(64, (3, 3)),
                 # layers.LeakyReLU(alpha=0.2),
 
-                layers.Flatten(),
+                # layers.Flatten(),
+                layers.Dense(latent_space_dim//2),
+                layers.LeakyReLU(alpha=0.2),
+
                 layers.Dense(len(class_list),activation="softmax")
             ],
             name="predictor"
@@ -506,8 +509,8 @@ class MNISTTransform():
         debugger.compile(
             en_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
             de_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
-            di_optimizer=keras.optimizers.Adam(learning_rate=0.0009),
-            pr_optimizer=keras.optimizers.Adam(learning_rate=0.0009)
+            di_optimizer=keras.optimizers.SGD(learning_rate=0.001),
+            pr_optimizer=keras.optimizers.SGD(learning_rate=0.001)
         )
 
 
@@ -522,7 +525,7 @@ class MNISTTransform():
         dataset = tf.data.Dataset.zip((d1_dataset,d2_dataset))
         dataset = dataset.shuffle(buffer_size=2048).batch(256)
 
-        debugger.fit(dataset,epochs=100)
+        debugger.fit(dataset,epochs=epochs)
 
 
 
@@ -565,6 +568,8 @@ class DebuggerUnsup(keras.Model):
         self.disc_spurious_tracker = keras.metrics.Mean(name="disc_spurious_x")
         self.pred_xentropy_tracker = keras.metrics.Mean(name="pred_x")
         self.pred_ende_xentropy_tracker = keras.metrics.Mean(name="pred_ende_x")
+        self.causal_pred_xentropy_tracker = keras.metrics.Mean(name="causal_pred_x")
+        self.spurious_pred_xentropy_tracker = keras.metrics.Mean(name="spurious_pred_x")
 
     def compile(self, en_optimizer, de_optimizer, di_optimizer, pr_optimizer):
         super(DebuggerUnsup, self).compile()
@@ -618,15 +623,23 @@ class DebuggerUnsup(keras.Model):
             encoded_X = self.encoder(X)
 
             #Now decoding the output
-            decoded_X = self.decoder(encoded_X)
+            # decoded_X = self.decoder(encoded_X)
 
-            #Getting the generation loss
-            reconstruction_loss = mse(X,decoded_X)
+            # #Getting the generation loss
+            # reconstruction_loss = mse(X,decoded_X)
 
-            #Getting the prediction loss
-            # encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
-            # en_pred_prob = self.predictor(encoded_X_causal)
-            # en_pred_loss = scxentropy_loss(Y_label,en_pred_prob)
+            #Getting the prediction loss from causal part
+            encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
+            en_causal_pred_prob = self.predictor(encoded_X_causal)
+            en_causal_pred_loss = scxentropy_loss(Y_label,en_causal_pred_prob)
+
+            #Getting the prediction from the non-causal part (making it adversarial)
+            encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
+            en_spurious_pred_prob = self.predictor(encoded_X_spurious)
+            en_spurious_pred_loss = -1*scxentropy_loss(Y_label,en_spurious_pred_prob)
+
+            en_total_pred_loss = en_causal_pred_loss + en_spurious_pred_loss
+
 
             #Intervening on the latent layer (input is image for predictor)
             # encoded_X_causal = encoded_X[:,0:self.latent_space_dimension//2]
@@ -648,24 +661,24 @@ class DebuggerUnsup(keras.Model):
             # ende_representation_loss = reconstruction_loss + ende_pred_loss
 
         #Updating the weights of decoder
-        decoder_grads = tape.gradient(reconstruction_loss, 
-                                                    self.decoder.trainable_weights,
+        # decoder_grads = tape.gradient(reconstruction_loss, 
+        #                                             self.decoder.trainable_weights,
                                                                    
-        )
-        encoder_grads = tape.gradient(reconstruction_loss,
+        # )
+        encoder_grads = tape.gradient(en_total_pred_loss,
                                         self.encoder.trainable_weights
         )
 
         #Updating the weight of decoder
-        self.de_optimizer.apply_gradients(
-            zip(decoder_grads, self.decoder.trainable_weights)
-        )
+        # self.de_optimizer.apply_gradients(
+        #     zip(decoder_grads, self.decoder.trainable_weights)
+        # )
         #Updating the weights of encoder
         self.en_optimizer.apply_gradients(
             zip(encoder_grads,self.encoder.trainable_weights)
         )
         #Updating the mse tracker
-        self.en_de_mse_tracker.update_state(reconstruction_loss)
+        # self.en_de_mse_tracker.update_state(reconstruction_loss)
 
 
 
@@ -673,42 +686,55 @@ class DebuggerUnsup(keras.Model):
 
 
         #Training the predictor
-        # with tf.GradientTape(persistent=True) as tape:
-        #     #Now, first of all we will encode the data into latent space
-        #     encoded_X = self.encoder(X)
-        #     encoded_X_causal = encoded_X[:,0:self.latent_space_dimension//2]
-        #     encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
+        with tf.GradientTape(persistent=True) as tape:
+            #Now, first of all we will encode the data into latent space
+            encoded_X = self.encoder(X)
+            encoded_X_causal = encoded_X[:,0:self.latent_space_dimension//2]
+            encoded_X_spurious = encoded_X[:,self.latent_space_dimension//2:]
 
-        #     intervenend_encoded_X = tf.concat(
-        #                                 [
-        #                                     encoded_X_causal,
-        #                                     encoded_X_spurious*0.0,
-        #                                 ],
-        #                                 axis=1,
-        #     )
-        #     intervened_decoded_X = self.decoder(intervenend_encoded_X)
-        #     #Getting the prediction loss
-        #     ende_pred_prob = self.predictor(intervened_decoded_X)
-        #     ende_pred_loss = scxentropy_loss(Y_label,ende_pred_prob)
+            #Getting the prediction loss from both of them (discriminator want to classify)
+            causal_pred_prob = self.predictor(encoded_X_causal)
+            causal_pred_loss = scxentropy_loss(Y_label,causal_pred_prob)
 
-        #     #Getting the prediction loss directly from actual image
-        #     direct_pred_prob = self.predictor(X)
-        #     direct_pred_loss = scxentropy_loss(Y_label,direct_pred_prob)
+            #Getting the pred loss from spurious side
+            spurious_pred_prob = self.predictor(encoded_X_spurious)
+            spurious_pred_loss = scxentropy_loss(Y_label,spurious_pred_prob)
 
-        #     #Getting the total prediction loss
-        #     total_pred_loss = ende_pred_loss + direct_pred_loss
+            total_pred_loss = causal_pred_loss + spurious_pred_loss
 
-        # #Calculating the gradient
-        # pred_grads = tape.gradient(total_pred_loss,
-        #                             self.predictor.trainable_weights
-        # )
-        # #Updating hte gradients of predictor
-        # self.pr_optimizer.apply_gradients(
-        #     zip(pred_grads,self.predictor.trainable_weights)
-        # )
-        # #Updating the cross entropy tracker
-        # self.pred_xentropy_tracker.update_state(total_pred_loss)
+            # intervenend_encoded_X = tf.concat(
+            #                             [
+            #                                 encoded_X_causal,
+            #                                 encoded_X_spurious*0.0,
+            #                             ],
+            #                             axis=1,
+            # )
+            # intervened_decoded_X = self.decoder(intervenend_encoded_X)
+            # #Getting the prediction loss
+            # ende_pred_prob = self.predictor(intervened_decoded_X)
+            # ende_pred_loss = scxentropy_loss(Y_label,ende_pred_prob)
+
+            # #Getting the prediction loss directly from actual image
+            # direct_pred_prob = self.predictor(X)
+            # direct_pred_loss = scxentropy_loss(Y_label,direct_pred_prob)
+
+            # #Getting the total prediction loss
+            # total_pred_loss = ende_pred_loss + direct_pred_loss
+
+        #Calculating the gradient
+        pred_grads = tape.gradient(total_pred_loss,
+                                    self.predictor.trainable_weights
+        )
+        #Updating hte gradients of predictor
+        self.pr_optimizer.apply_gradients(
+            zip(pred_grads,self.predictor.trainable_weights)
+        )
+        #Updating the cross entropy tracker
+        self.pred_xentropy_tracker.update_state(total_pred_loss)
         # self.pred_ende_xentropy_tracker.update_state(ende_pred_loss)
+        self.causal_pred_xentropy_tracker(causal_pred_loss)
+        self.spurious_pred_xentropy_tracker(spurious_pred_loss)
+
 
 
 
@@ -716,47 +742,47 @@ class DebuggerUnsup(keras.Model):
 
 
         #Now training the discriminator
-        with tf.GradientTape(persistent=True) as tape:
-            #Getting the encoded inputs
-            encoded_X = self.encoder(X)
+        # with tf.GradientTape(persistent=True) as tape:
+        #     #Getting the encoded inputs
+        #     encoded_X = self.encoder(X)
 
-            #Getting the causal and spurious factors
-            encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
-            encoded_X_spurious  = encoded_X[:,self.latent_space_dimension//2:]
+        #     #Getting the causal and spurious factors
+        #     encoded_X_causal    = encoded_X[:,0:self.latent_space_dimension//2]
+        #     encoded_X_spurious  = encoded_X[:,self.latent_space_dimension//2:]
 
-            #Appending the class label with the latent variable ((X_c,Y) perp D)
-            encoded_X_causal = tf.concat([encoded_X_causal,Y_label],axis=1)
-            encoded_X_spurious = tf.concat([encoded_X_spurious,Y_label],axis=1)
+        #     #Appending the class label with the latent variable ((X_c,Y) perp D)
+        #     encoded_X_causal = tf.concat([encoded_X_causal,Y_label],axis=1)
+        #     encoded_X_spurious = tf.concat([encoded_X_spurious,Y_label],axis=1)
 
-            #Now passing the examples through discriminator
-            causal_pred = self.discriminator(encoded_X_causal)
-            spurious_pred = self.discriminator(encoded_X_spurious)
+        #     #Now passing the examples through discriminator
+        #     causal_pred = self.discriminator(encoded_X_causal)
+        #     spurious_pred = self.discriminator(encoded_X_spurious)
 
-            #Getting the loss
-            # causal_loss = scxentropy_loss(Y,causal_pred)
-            # neg_causal_loss = -1*causal_loss
-            causal_loss = get_pred_entropy_loss(causal_pred)
-            spurious_loss = scxentropy_loss(Y,spurious_pred)
-            total_disc_loss = causal_loss + spurious_loss
-        #Updating the parameters of the discriminator
-        disc_grads = tape.gradient(total_disc_loss,self.discriminator.trainable_weights)
-        self.di_optimizer.apply_gradients(
-            zip(disc_grads,self.discriminator.trainable_weights)
-        )
-        #Updating the encoder with spurious dimensions
-        encoder_disc_spurious_grads = tape.gradient(spurious_loss,self.encoder.trainable_weights)
-        self.en_optimizer.apply_gradients(
-            zip(encoder_disc_spurious_grads,self.encoder.trainable_weights)
-        )
-        #Updating the encoder with causal dimension
-        encoder_disc_causal_grads = tape.gradient(causal_loss,self.encoder.trainable_weights)
-        self.en_optimizer.apply_gradients(
-            zip(encoder_disc_causal_grads,self.encoder.trainable_weights)
-        )
-        #Updating the trackers
-        self.disc_loss_tracker.update_state(total_disc_loss)
-        self.disc_causal_tracker.update_state(causal_loss)
-        self.disc_spurious_tracker.update_state(spurious_loss)
+        #     #Getting the loss
+        #     # causal_loss = scxentropy_loss(Y,causal_pred)
+        #     # neg_causal_loss = -1*causal_loss
+        #     causal_loss = get_pred_entropy_loss(causal_pred)
+        #     spurious_loss = scxentropy_loss(Y,spurious_pred)
+        #     total_disc_loss = causal_loss + spurious_loss
+        # #Updating the parameters of the discriminator
+        # disc_grads = tape.gradient(total_disc_loss,self.discriminator.trainable_weights)
+        # self.di_optimizer.apply_gradients(
+        #     zip(disc_grads,self.discriminator.trainable_weights)
+        # )
+        # #Updating the encoder with spurious dimensions
+        # encoder_disc_spurious_grads = tape.gradient(spurious_loss,self.encoder.trainable_weights)
+        # self.en_optimizer.apply_gradients(
+        #     zip(encoder_disc_spurious_grads,self.encoder.trainable_weights)
+        # )
+        # #Updating the encoder with causal dimension
+        # encoder_disc_causal_grads = tape.gradient(causal_loss,self.encoder.trainable_weights)
+        # self.en_optimizer.apply_gradients(
+        #     zip(encoder_disc_causal_grads,self.encoder.trainable_weights)
+        # )
+        # #Updating the trackers
+        # self.disc_loss_tracker.update_state(total_disc_loss)
+        # self.disc_causal_tracker.update_state(causal_loss)
+        # self.disc_spurious_tracker.update_state(spurious_loss)
 
 
 
@@ -764,12 +790,14 @@ class DebuggerUnsup(keras.Model):
 
 
         return {
-            "en_de_mse":self.en_de_mse_tracker.result(),
-            "disc_loss":self.disc_loss_tracker.result(),
-            "disc_causal":self.disc_causal_tracker.result(),
-            "disc_spurious":self.disc_spurious_tracker.result(),
-            #"pred_x":self.pred_xentropy_tracker.result(),
+            # "en_de_mse":self.en_de_mse_tracker.result(),
+            # "disc_loss":self.disc_loss_tracker.result(),
+            # "disc_causal":self.disc_causal_tracker.result(),
+            # "disc_spurious":self.disc_spurious_tracker.result(),
+            "pred_x":self.pred_xentropy_tracker.result(),
             #"pred_ende_x":self.pred_ende_xentropy_tracker.result(),
+            "causal_x":self.causal_pred_xentropy_tracker.result(),
+            "spurious_x":self.spurious_pred_xentropy_tracker.result()
         }
 
     
