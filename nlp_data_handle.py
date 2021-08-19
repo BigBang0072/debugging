@@ -41,6 +41,8 @@ class DataHandler():
         #We will initialize the embedding matrix randomly and learn on go
         if self.data_args["emb_path"]=="random":
             self.emb_matrix = np.random.randn(len(self.dict_w2i),self.data_args["emb_dim"])
+            self.emb_matrix[0,:]=0
+            self.emb_matrix[1,:]=0
         else:
             raise NotImplementedError()
     
@@ -66,6 +68,8 @@ class DataHandler():
         for token in tokens:
             if(len(token)==0):
                 continue
+            token = token.lower()
+            
             #Adding the token to vocab
             if token not in self.dict_w2i:
                 self._add_word_to_vocab(token)
