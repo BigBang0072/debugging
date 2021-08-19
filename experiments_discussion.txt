@@ -93,4 +93,17 @@ keep learning rate slower for generator
 and also keep learning rate slow for discriminator 
 if nan is coming 
 
+==================================================
+Experiment 8:
+Using two different predictor for causal and spurious ones
+Accucary ffrom the spurious side remain same, but generation
+look better atleast for causal side.
+(result seems unstable --> sometime good sometime slightly bad)
+
+Exp 8.1 : Multiply 10* to the -neg spurious loss 
+(Bad result)
+
+Exp 8.4: for encoder: 30*enc_pred_loss + reconstruction_loss
+8.5 : 80*
+
 
