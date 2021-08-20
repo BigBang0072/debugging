@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd 
 import tensorflow as tf
+import gensim.downloader as gensim_api
 
 import re 
 import pprint
@@ -29,7 +30,7 @@ class DataHandler():
 
         #Initializing the word2index dict (unknown word at first)
         self.vocab_len = 0
-        self._add_word_to_vocab("<unk>")
+        self._add_word_to_vocab("unk")
         self._add_word_to_vocab("<pad>")
 
         #Initializing the delimiters
@@ -44,7 +45,28 @@ class DataHandler():
             self.emb_matrix[0,:]=0
             self.emb_matrix[1,:]=0
         else:
-            raise NotImplementedError()
+            #Loading the embedding from the gensim repo
+            print("Loading the WordVectors via Gensim! Hold Tight!")
+            emb_model = gensim_api.load(self.data_args["emb_path"])
+
+            #Getting the unk vector to be used in place when nothing is there
+            unk_vektor = emb_model.get_vector("unk")
+
+            #Now filtering out the required embeddings
+            emb_matrix = []
+            for widx in range(self.vocab_len):
+                word = self.dict_i2w[widx]
+                try:
+                    word_vec = emb_model.get_vector(word)
+                    emb_matrix.append(word_vec)
+                except:
+                    print("Missed Word: ",word)
+                    emb_matrix.append(unk_vektor)
+            #Now we will assign this matrix to the class
+            self.emb_matrix = np.stack(emb_matrix,axis=0)
+
+            #Updating the embeddig dimension
+            self.data_args["emb_dim"]=self.emb_matrix.shape[-1]
     
     def _add_word_to_vocab(self,word):
         '''
@@ -69,7 +91,7 @@ class DataHandler():
             if(len(token)==0):
                 continue
             token = token.lower()
-            
+
             #Adding the token to vocab
             if token not in self.dict_w2i:
                 self._add_word_to_vocab(token)

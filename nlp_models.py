@@ -36,7 +36,7 @@ class SimpleBOW():
 
         return embedding_layer
     
-    def get_bow_predictor(self,train,epochs):
+    def get_bow_predictor(self,emb_train,train,epochs):
         '''
         This class will implement the bag of words model for classification
         '''
@@ -56,7 +56,7 @@ class SimpleBOW():
                 self.embeddingLayerMain = model_self._get_embedding_layer(
                                                 embedding_matrix=model_self.data_handle.emb_matrix,
                                                 max_len=model_self.data_handle.data_args["max_len"],
-                                                trainable=True,
+                                                trainable=emb_train,
                 )
 
                 #Getting the weight layer ofr each word
@@ -127,23 +127,34 @@ class SimpleBOW():
 
         
         #Now we will get the list of top important words.
-        vocab_weights = np.squeeze(tf.sigmoid(bowAvgLayer.get_weights()[1]).numpy())
-        sorted_idx = np.argsort(vocab_weights).tolist()
-        sorted_weights = vocab_weights[sorted_idx].tolist()
-        sorted_words = [self.data_handle.dict_i2w[sidx].encode('utf-8') for sidx in sorted_idx]
-        combined_importance = list(zip(sorted_words,sorted_weights))
-        self._save_word_embedding(combined_importance,"importance_domain_both.tsv",fmt=("%s %s"))
+        if self.model_args["save_imp"]:
+            print("Saving the importance weights!")
+            imp_weight_idx= 1 if emb_train else 0
+            vocab_weights = np.squeeze(tf.sigmoid(bowAvgLayer.get_weights()[imp_weight_idx]).numpy())
+
+            sorted_idx = np.argsort(vocab_weights).tolist()
+            sorted_weights = vocab_weights[sorted_idx].tolist()
+            # pdb.set_trace()
+
+            sorted_words = [self.data_handle.dict_i2w[sidx].encode('utf-8') for sidx in sorted_idx]
+            combined_importance = list(zip(sorted_words,sorted_weights))
+            self._save_word_embedding(
+                                        combined_importance,
+                                        "importance_{}.tsv".format(self.model_args["expt_num"]),
+                                        fmt=("%s %s"),
+            )
         # pdb.set_trace()
 
         #Saving the embeddings for analysis
-        vocab_weights = np.squeeze(bowAvgLayer.get_weights()[1])
-        emb_matrix = bowAvgLayer.get_weights()[0]
-        word_name = [self.data_handle.dict_i2w[idx].encode('utf-8') for idx in range(len(self.data_handle.dict_i2w))]
-        self._save_word_embedding(emb_matrix,"emb_matrix.tsv")
-        self._save_word_embedding(vocab_weights,"weight.tsv")
-        self._save_word_embedding(word_name,"name.tsv",fmt="%s")
-
-    
+        if self.model_args["save_emb"]:
+            print("Saving the learnt embedding")
+            vocab_weights = np.squeeze(bowAvgLayer.get_weights()[1])
+            emb_matrix = bowAvgLayer.get_weights()[0]
+            word_name = [self.data_handle.dict_i2w[idx].encode('utf-8') for idx in range(len(self.data_handle.dict_i2w))]
+            self._save_word_embedding(emb_matrix,"emb_matrix_{}.tsv".format(self.model_args["expt_num"]))
+            self._save_word_embedding(vocab_weights,"weight_{}.tsv".format(self.model_args["expt_num"]))
+            self._save_word_embedding(word_name,"name_{}.tsv".format(self.model_args["expt_num"]),fmt="%s")
+  
     def _save_word_embedding(self,matrix,fname,fmt="%.6e"):
         '''
         '''
@@ -153,15 +164,12 @@ class SimpleBOW():
 
 
 
-
-
-
 if __name__=="__main__":
     #Creating the data handler
     data_args={}
-    data_args["max_len"]=100        
-    data_args["emb_path"]="random"
-    data_args["emb_dim"]=64
+    data_args["max_len"]=200        
+    data_args["emb_path"]="glove-wiki-gigaword-100" #random  or glove-wiki-gigaword-100
+    data_args["emb_dim"]=100
     data_handle = DataHandler(data_args)
 
     #Now creating our dataset from domain1 (original sentiment)
@@ -170,16 +178,34 @@ if __name__=="__main__":
     # pdb.set_trace()
 
     #Getting the data from both the domain
-    both_path = "counterfactually-augmented-data-master/sentiment/combined/"
-    X_D,Y_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
+    # both_path = "counterfactually-augmented-data-master/sentiment/combined/"
+    # X_D,Y_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
 
-    #Initialize the embedding matrix
-    data_handle.load_embedding_mat()
+    # #Initialize the embedding matrix
+    # data_handle.load_embedding_mat()
 
     #Now we will start the training of basic model
     model_args={}
     model_args["data_handle"]=data_handle
+    model_args["expt_num"] = "1.both"  #single or both
+    model_args["save_emb"] = False 
+    model_args["save_imp"] = True
+
+
+    if "single" in model_args["expt_num"]:
+        domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
+        X_D1,Y_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+    elif "both" in model_args["expt_num"]:
+        both_path = "counterfactually-augmented-data-master/sentiment/combined/"
+        X_D,Y_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
+    else:
+        raise NotImplementedError()
+    
+    #Initialize the embedding matrix
+    data_handle.load_embedding_mat()
+
+
     simpleBOW = SimpleBOW(model_args)
-    simpleBOW.get_bow_predictor(train=True,epochs=30)
+    simpleBOW.get_bow_predictor(emb_train=False,train=True,epochs=30)
 
 

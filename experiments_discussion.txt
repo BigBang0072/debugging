@@ -107,3 +107,48 @@ Exp 8.4: for encoder: 30*enc_pred_loss + reconstruction_loss
 8.5 : 80*
 
 
+
+=============================================================
+====================== NLP DISCUSSION =======================
+=============================================================
+
+=============================================
+EXPERIMENT 0:
+
+simple BOW. maxlen=100, embedding trainable
+
+result:
+trends were good in all the three category
+(self selected)
+
+positive ==> ++
+negative ==> ++ (importance increased)
+neutral ==> --
+
+=============================================
+
+=============================================
+EXPERIMENT 1:
+
+maxlen =200
+embedding = glove 100 wikipedia
+
+result: 
+
+
+=============================================
+
+=============================================
+EXPERIMENT 2:
+
+maxlen =200
+embedding = random, trainable
+
+result: 
+
+
+=============================================
+
+
+
+

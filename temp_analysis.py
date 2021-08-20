@@ -26,8 +26,9 @@ def read_file(path):
 
 
 if __name__=="__main__":
-    imp1_dict = read_file("embeddings/importance_domain1.tsv")
-    imp2_dict = read_file("embeddings/importance_domain_both.tsv")
+    expt_name = "1"
+    imp1_dict = read_file("embeddings/importance_{}.single.tsv".format(expt_name))
+    imp2_dict = read_file("embeddings/importance_{}.both.tsv".format(expt_name))
 
     word1_list = set(imp1_dict.keys())
     word2_list = set(imp2_dict.keys())
