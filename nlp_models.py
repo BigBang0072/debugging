@@ -85,7 +85,7 @@ class SimpleBOW():
                 X_emb = self.embeddingLayerMain(X_input)
                 X_weight = self.embeddingLayerWeight(X_input)
 
-                X_emb_weighted = X_emb * X_weight
+                X_emb_weighted = X_emb * tf.sigmoid(X_weight)
 
                 #Now we need to take average of the embedding (zero vec non-train)
                 X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),num_words)
@@ -127,7 +127,15 @@ class SimpleBOW():
 
         
         #Now we will get the list of top important words.
+        vocab_weights = np.squeeze(tf.sigmoid(bowAvgLayer.get_weights()[1]).numpy())
+        sorted_idx = np.argsort(vocab_weights).tolist()
+        sorted_weights = vocab_weights[sorted_idx].tolist()
+        sorted_words = [self.data_handle.dict_i2w[sidx].encode('utf-8') for sidx in sorted_idx]
+        combined_importance = list(zip(sorted_words,sorted_weights))
+        self._save_word_embedding(combined_importance,"importance_domain_both.tsv",fmt=("%s %s"))
         # pdb.set_trace()
+
+        #Saving the embeddings for analysis
         vocab_weights = np.squeeze(bowAvgLayer.get_weights()[1])
         emb_matrix = bowAvgLayer.get_weights()[0]
         word_name = [self.data_handle.dict_i2w[idx].encode('utf-8') for idx in range(len(self.data_handle.dict_i2w))]
@@ -157,9 +165,13 @@ if __name__=="__main__":
     data_handle = DataHandler(data_args)
 
     #Now creating our dataset from domain1 (original sentiment)
-    domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
-    data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+    # domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
+    # X_D1,Y_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
     # pdb.set_trace()
+
+    #Getting the data from both the domain
+    both_path = "counterfactually-augmented-data-master/sentiment/combined/"
+    X_D,Y_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
 
     #Initialize the embedding matrix
     data_handle.load_embedding_mat()
@@ -168,6 +180,6 @@ if __name__=="__main__":
     model_args={}
     model_args["data_handle"]=data_handle
     simpleBOW = SimpleBOW(model_args)
-    simpleBOW.get_bow_predictor(train=True,epochs=25)
+    simpleBOW.get_bow_predictor(train=True,epochs=30)
 
 
