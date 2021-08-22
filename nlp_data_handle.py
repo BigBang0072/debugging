@@ -20,8 +20,9 @@ class DataHandler():
 
     train_data = None       #List of (label,doc)
     valid_data = None       
-    test_data = None        
+    test_data = None
 
+    sample_weight = None        
 
     def __init__(self,data_args):
         '''

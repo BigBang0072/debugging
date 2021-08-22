@@ -124,9 +124,14 @@ class SimpleBOW():
 
         train_Y,train_X = zip(*self.data_handle.train_data)
         valid_Y,valid_X = zip(*self.data_handle.valid_data)
+        print("NUmber of Training Instance:\t", len(train_Y))
+        print("Number of Validation Instance:\t",len(valid_Y))
         # pdb.set_trace()
         self.predictor.fit(
-                train_X,train_Y,epochs=epochs,validation_data=(valid_X,valid_Y),
+                train_X,train_Y,
+                epochs=epochs,
+                validation_data=(valid_X,valid_Y),
+                sample_weight=self.data_handle.sample_weight
         )
 
         
@@ -191,19 +196,63 @@ if __name__=="__main__":
     #Now we will start the training of basic model
     model_args={}
     model_args["data_handle"]=data_handle
-    model_args["expt_num"] = "4.both"  #single or both
+    model_args["expt_num"] = "5.fd1.single"  #single or both
     model_args["save_emb"] = False 
     model_args["save_imp"] = True
     model_args["emb_train"] = True
+    model_args["train_prop"] = 0.80     #80-20 split in the all dataset
 
 
 
-    if "single" in model_args["expt_num"]:
+    if "fd1" in model_args["expt_num"]:
+        #Getting the data from domain 1
+        domain1_path = "counterfactually-augmented-data-master/sentiment/orig/eighty_percent/"
+        Xtrain_D1,Xvalid_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+
+        if "both" in model_args["expt_num"]:
+            #Getting the data from domain 2
+            domain2_path = "counterfactually-augmented-data-master/sentiment/new/"
+            Xtrain_D2,Xvalid_D2 = data_handle.data_handler_ltdiff_paper_sentiment(domain2_path)
+
+            #Combining the dataset into one
+            extra_prop = int((model_args["train_prop"] - 0.5) * len(Xvalid_D1))
+            Xtrain_all_D1 = Xtrain_D1 + Xvalid_D1[0:extra_prop]
+
+            Xtrain_all =  Xtrain_all_D1 + Xtrain_D2
+            Xvalid_all = Xvalid_D1[extra_prop:] + Xvalid_D2
+
+            print("Num of train from D1:\t",len(Xtrain_all_D1))
+            print("Num of train from D2:\t",len(Xtrain_D2))
+            print("Num of valid from D1:\t",len(Xvalid_D1[extra_prop:]))
+            print("Num of valid from D2:\t",len(Xvalid_D2))
+            
+
+            #Now creating the sample weight
+            D1_by_D2 = len(Xtrain_all_D1)/len(Xtrain_D2) 
+            sample_weight = [1]*len(Xtrain_all_D1) + [D1_by_D2]*len(Xtrain_D2)
+            print("sample weight for D1:\t",1)
+            print("sample weight for D2:\t",D1_by_D2)
+
+            data_handle.train_data = Xtrain_all
+            data_handle.valid_data = Xvalid_all
+            data_handle.sample_weight = sample_weight
+        else:
+            extra_prop = int((model_args["train_prop"] - 0.5) * len(Xvalid_D1))
+            Xtrain_all_D1 = Xtrain_D1 + Xvalid_D1[0:extra_prop]
+
+            Xtrain_all =  Xtrain_all_D1
+            Xvalid_all = Xvalid_D1[extra_prop:]
+
+            data_handle.train_data = Xtrain_all
+            data_handle.valid_data = Xvalid_all
+
+
+    elif "single" in model_args["expt_num"]:
         domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
-        X_D1,Y_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+        Xtrain_D1,Xvalid_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
     elif "both" in model_args["expt_num"]:
         both_path = "counterfactually-augmented-data-master/sentiment/combined/"
-        X_D,Y_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
+        Xtrain_D,Xvalid_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
     else:
         raise NotImplementedError()
     
