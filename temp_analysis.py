@@ -26,7 +26,7 @@ def read_file(path):
 
 
 if __name__=="__main__":
-    expt_name = "1"
+    expt_name = "4"
     imp1_dict = read_file("embeddings/importance_{}.single.tsv".format(expt_name))
     imp2_dict = read_file("embeddings/importance_{}.both.tsv".format(expt_name))
 

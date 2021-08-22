@@ -36,7 +36,7 @@ class SimpleBOW():
 
         return embedding_layer
     
-    def get_bow_predictor(self,emb_train,train,epochs):
+    def get_bow_predictor(self,train,epochs):
         '''
         This class will implement the bag of words model for classification
         '''
@@ -56,7 +56,7 @@ class SimpleBOW():
                 self.embeddingLayerMain = model_self._get_embedding_layer(
                                                 embedding_matrix=model_self.data_handle.emb_matrix,
                                                 max_len=model_self.data_handle.data_args["max_len"],
-                                                trainable=emb_train,
+                                                trainable=model_self.model_args["emb_train"],
                 )
 
                 #Getting the weight layer ofr each word
@@ -83,9 +83,13 @@ class SimpleBOW():
 
                 #Now we will get the embedding of the inputs
                 X_emb = self.embeddingLayerMain(X_input)
+                #Normalizing the inputs
+                X_emb_norm = tf.math.l2_normalize(X_emb,axis=-1)
+
+                #Getting the weights of the individual words
                 X_weight = self.embeddingLayerWeight(X_input)
 
-                X_emb_weighted = X_emb * tf.sigmoid(X_weight)
+                X_emb_weighted = X_emb_norm * tf.sigmoid(X_weight)
 
                 #Now we need to take average of the embedding (zero vec non-train)
                 X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),num_words)
@@ -129,7 +133,7 @@ class SimpleBOW():
         #Now we will get the list of top important words.
         if self.model_args["save_imp"]:
             print("Saving the importance weights!")
-            imp_weight_idx= 1 if emb_train else 0
+            imp_weight_idx= 1 if model_args["emb_train"] else 0
             vocab_weights = np.squeeze(tf.sigmoid(bowAvgLayer.get_weights()[imp_weight_idx]).numpy())
 
             sorted_idx = np.argsort(vocab_weights).tolist()
@@ -168,7 +172,7 @@ if __name__=="__main__":
     #Creating the data handler
     data_args={}
     data_args["max_len"]=200        
-    data_args["emb_path"]="glove-wiki-gigaword-100" #random  or glove-wiki-gigaword-100
+    data_args["emb_path"]="random"#"glove-wiki-gigaword-100" #random  or glove-wiki-gigaword-100
     data_args["emb_dim"]=100
     data_handle = DataHandler(data_args)
 
@@ -187,9 +191,11 @@ if __name__=="__main__":
     #Now we will start the training of basic model
     model_args={}
     model_args["data_handle"]=data_handle
-    model_args["expt_num"] = "1.both"  #single or both
+    model_args["expt_num"] = "4.both"  #single or both
     model_args["save_emb"] = False 
     model_args["save_imp"] = True
+    model_args["emb_train"] = True
+
 
 
     if "single" in model_args["expt_num"]:
@@ -206,6 +212,6 @@ if __name__=="__main__":
 
 
     simpleBOW = SimpleBOW(model_args)
-    simpleBOW.get_bow_predictor(emb_train=False,train=True,epochs=30)
+    simpleBOW.get_bow_predictor(train=True,epochs=30)
 
 

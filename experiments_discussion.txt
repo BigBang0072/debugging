@@ -131,10 +131,11 @@ neutral ==> --
 EXPERIMENT 1:
 
 maxlen =200
-embedding = glove 100 wikipedia
+emb_dim = 100
+embedding = glove 100 wikipedia -->freezed
 
 result: 
-
+70-71% validation on both single and both
 
 =============================================
 
@@ -142,10 +143,36 @@ result:
 EXPERIMENT 2:
 
 maxlen =200
+emb_dim = 100
 embedding = random, trainable
 
-result: 
+result:
+86% validation on both single and both
 
+
+=============================================
+
+=============================================
+EXPERIMENT 3:
+
+maxlen =200
+emb_dim = 100
+embedding = glove 100 wikipedia --> trainable
+
+result: 
+84.9/87(both) validation on both single and both
+
+
+Looks like Random Train > Glove Train > Glove Freeze
+=============================================
+
+Experiment 4:
+
+random, trainable but unit norm.
+
+rest same
+
+Result: 80/82
 
 =============================================
 
