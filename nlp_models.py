@@ -52,7 +52,7 @@ class SimpleBOW():
             def __init__(self,model_self):
                 super(BOWAvgLayer,self).__init__()
 
-                self.normalize_emb = model_self["normalize_emb"]
+                self.normalize_emb = model_self.model_args["normalize_emb"]
 
                 #Getting the embedding layer
                 self.embeddingLayerMain = model_self._get_embedding_layer(
@@ -186,6 +186,7 @@ if __name__=="__main__":
     parser.add_argument('-emb_train',dest="emb_train",type=bool)
     parser.add_argument('-normalize_emb',dest="normalize_emb",type=bool)
     args=parser.parse_args()
+    print(args)
 
 
     #Creating the data handler
