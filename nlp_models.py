@@ -52,6 +52,8 @@ class SimpleBOW():
             def __init__(self,model_self):
                 super(BOWAvgLayer,self).__init__()
 
+                self.normalize_emb = model_self["normalize_emb"]
+
                 #Getting the embedding layer
                 self.embeddingLayerMain = model_self._get_embedding_layer(
                                                 embedding_matrix=model_self.data_handle.emb_matrix,
@@ -84,7 +86,10 @@ class SimpleBOW():
                 #Now we will get the embedding of the inputs
                 X_emb = self.embeddingLayerMain(X_input)
                 #Normalizing the inputs
-                X_emb_norm = tf.math.l2_normalize(X_emb,axis=-1)
+                if self.normalize_emb:
+                    X_emb_norm = tf.math.l2_normalize(X_emb,axis=-1)
+                else:
+                    X_emb_norm = X_emb
 
                 #Getting the weights of the individual words
                 X_weight = self.embeddingLayerWeight(X_input)
@@ -174,10 +179,19 @@ class SimpleBOW():
 
 
 if __name__=="__main__":
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('-expt_num',dest="expt_num",type=str)
+    parser.add_argument('-emb_path',dest="emb_path",type=str)
+    parser.add_argument('-emb_train',dest="emb_train",type=bool)
+    parser.add_argument('-normalize_emb',dest="normalize_emb",type=bool)
+    args=parser.parse_args()
+
+
     #Creating the data handler
     data_args={}
     data_args["max_len"]=200        
-    data_args["emb_path"]="random"#"glove-wiki-gigaword-100" #random  or glove-wiki-gigaword-100
+    data_args["emb_path"]=args.emb_path#"glove-wiki-gigaword-100" #random  or glove-wiki-gigaword-100
     data_args["emb_dim"]=100
     data_handle = DataHandler(data_args)
 
@@ -196,11 +210,12 @@ if __name__=="__main__":
     #Now we will start the training of basic model
     model_args={}
     model_args["data_handle"]=data_handle
-    model_args["expt_num"] = "5.fd1.single"  #single or both
+    model_args["expt_num"] = args.expt_num  #single or both
     model_args["save_emb"] = False 
     model_args["save_imp"] = True
-    model_args["emb_train"] = True
+    model_args["emb_train"] = args.emb_train
     model_args["train_prop"] = 0.80     #80-20 split in the all dataset
+    model_args["normalize_emb"] = args.normalize_emb
 
 
 
