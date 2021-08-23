@@ -201,7 +201,7 @@ if __name__=="__main__":
     data_args["emb_dim"]=100
     data_args["train_split"]=0.8
     data_args["epsilon"] = 1e-3         #for numerical stability in sample weights
-    data_args["num_samples"]=int(args.num_samples)#/args.num_domains)
+    data_args["num_samples"]=int(args.num_samples/args.num_domains)
     data_args["num_domains"] = args.num_domains
     data_handle = DataHandler(data_args)
 
