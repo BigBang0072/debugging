@@ -3,6 +3,8 @@ import pandas as pd
 import tensorflow as tf
 import gensim.downloader as gensim_api
 
+import gzip
+import json
 import re 
 import pprint
 import pdb
@@ -144,19 +146,118 @@ class DataHandler():
         self.valid_data = parse_dataset(valid_df)
 
         return self.train_data,self.valid_data
+    
+    def data_handler_amazon_reviews(self,path,cat_list,num_sample):
+        '''
+        cat_list    : list of categories/domain we want to include
+        num_sample  : the number of samples from each domain
+        '''
+        #Parser for the zipped file
+        def parse(path):
+            g = gzip.open(path,"rb")
+            for l in g:
+                yield json.loads(l)
+
+        def get_category_df(path,cat,num_sample):
+            pos_list = []
+            neg_list = []
+            pos_doclen = []
+            neg_doclen = []
+            skip_count = 0
+            path = "{}{}.json.gz".format(path,cat)
+            for d in parse(path):
+                # pdb.set_trace()
+                #first of all see if this is relavant (>3: pos ; <3:neg)
+                if (d["overall"]==3):
+                    continue
+                elif (len(pos_list)>=num_sample and len(neg_list)>=num_sample):
+                    break
+                
+                #Now cleaning the text
+                if("reviewText" not in d):
+                    skip_count  +=1
+                    continue 
+                doc2idx,doclen = self._clean_the_document(d["reviewText"])
+                sentiment = 1 if d["overall"]>3 else 0
+                
+                if(len(neg_list)<num_sample and sentiment==0):
+                    neg_list.append((sentiment,doc2idx))
+                    neg_doclen.append(doclen)
+                elif (len(pos_list)<num_sample and sentiment==1):
+                    pos_list.append((sentiment,doc2idx))
+                    pos_doclen.append(doclen)
+                
+            
+            #Getting the stats from this category
+            print("cat:{}\tpos:{}\tneg:{}\tpos_avlen:{}\tneg_avlen:{}\tskips:{}".format(
+                                        cat,
+                                        len(pos_list),
+                                        len(neg_list),
+                                        np.mean(pos_doclen),
+                                        np.mean(neg_doclen),
+                                        skip_count,
+            ))
+            
+            #Getting the train and validation dataset
+            train_pos_list = pos_list[0:int(self.data_args["train_split"]*len(pos_list))]
+            valid_pos_list = pos_list[int(self.data_args["train_split"]*len(pos_list)):]
+
+            train_neg_list = neg_list[0:int(self.data_args["train_split"]*len(neg_list))]
+            valid_neg_list = neg_list[int(self.data_args["train_split"]*len(neg_list)):]
+
+            train_list = train_pos_list + train_neg_list 
+            valid_list = valid_pos_list + valid_neg_list
+
+            return train_list, valid_list
+        
+        #Getting the dataframe for each categories
+        self.train_data=[]
+        self.valid_data=[]
+        cat_wise_ssize = []
+        for cat in cat_list:
+            cat_train_list,cat_valid_list  = get_category_df(path,cat,num_sample)
+            
+            #Adding the data to the appropriate list
+            self.train_data += cat_train_list
+            self.valid_data += cat_valid_list
+
+            #Number of samples in each category for weight
+            cat_wise_ssize.append(len(cat_train_list))
+        
+        print("Total Number of training examples:",len(self.train_data))
+        print("Total number of validation examples:",len(self.valid_data))
+
+        #Now we will caulcalate the weights for each sample
+        total_examples = len(self.train_data)*1.0
+        sample_weight = [[cat_ssize/total_examples]*cat_ssize for cat_ssize in cat_wise_ssize]
+        self.sample_weight = 1.0/(np.concatenate(sample_weight,axis=0)+self.data_args["epsilon"])
+
+        print("sample weights for each category:\n",
+                [
+                    [1.0/((cat_ssize/total_examples)+(self.data_args["epsilon"]))] 
+                        for cat_ssize in cat_wise_ssize
+                ]
+        )
+
 
 if __name__=="__main__":
     #Creating the data handler
     data_args={}
     data_args["max_len"]=100        
     data_args["emb_path"]="random"
+    data_args["train_split"]=0.8
+    data_args["epsilon"] = 1e-3         #for numerical stability in sample weights
     data_handle = DataHandler(data_args)
 
     #Now creating our dataset from domain1 (original sentiment)
-    domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
-    data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+    # domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
+    # data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
 
-    pdb.set_trace()
+    #Getting the dataset from amaon reviews 
+    cat_list = ["beauty","software","appliance","faishon","giftcard","magazine"]
+    path = "dataset/amazon/"
+    data_handle.data_handler_amazon_reviews(path,cat_list,1000)
+    # pdb.set_trace()
 
 
 

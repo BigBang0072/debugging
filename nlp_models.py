@@ -4,6 +4,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 import pdb
+import sys
 from pprint import pprint
 
 
@@ -185,6 +186,8 @@ if __name__=="__main__":
     parser.add_argument('-emb_path',dest="emb_path",type=str)
     parser.add_argument('-emb_train',dest="emb_train",type=bool)
     parser.add_argument('-normalize_emb',dest="normalize_emb",type=bool)
+    parser.add_argument('-num_samples',dest="num_samples",type=int)
+    parser.add_argument('-num_domains',dest="num_domains",type=int)
     args=parser.parse_args()
     print(args)
 
@@ -194,6 +197,10 @@ if __name__=="__main__":
     data_args["max_len"]=200        
     data_args["emb_path"]=args.emb_path#"glove-wiki-gigaword-100" #random  or glove-wiki-gigaword-100
     data_args["emb_dim"]=100
+    data_args["train_split"]=0.8
+    data_args["epsilon"] = 1e-3         #for numerical stability in sample weights
+    data_args["num_samples"]=args.num_samples
+    data_args["num_domains"] = args.num_domains
     data_handle = DataHandler(data_args)
 
     #Now creating our dataset from domain1 (original sentiment)
@@ -211,7 +218,7 @@ if __name__=="__main__":
     #Now we will start the training of basic model
     model_args={}
     model_args["data_handle"]=data_handle
-    model_args["expt_num"] = args.expt_num  #single or both
+    model_args["expt_num"] = args.expt_num + "."+ str(args.num_domains)  #single or both
     model_args["save_emb"] = False 
     model_args["save_imp"] = True
     model_args["emb_train"] = args.emb_train
@@ -219,64 +226,80 @@ if __name__=="__main__":
     model_args["normalize_emb"] = args.normalize_emb
 
 
+    sysout = sys.stdout
+    syserr = sys.stderr
+    log_fname = "logs/{}.txt".format(model_args["expt_num"])
+    with open(log_fname,"w") as log_port:
+        #Conneting the print pipe to log port
+        sys.stdout = log_port
+        sys.stderr = log_port
 
-    if "fd1" in model_args["expt_num"]:
-        #Getting the data from domain 1
-        domain1_path = "counterfactually-augmented-data-master/sentiment/orig/eighty_percent/"
-        Xtrain_D1,Xvalid_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+        if "amzn" in model_args["expt_num"]:
+            #Defining the possible domains
+            all_domain_list = ["arts","books","phones","clothes","groceries","movies","pets","tools"]
+            # all_domain_list = ["beauty","software","appliance","faishon","giftcard","magazine"]
+            domain_list = all_domain_list[0:args.num_domains]
 
-        if "both" in model_args["expt_num"]:
-            #Getting the data from domain 2
-            domain2_path = "counterfactually-augmented-data-master/sentiment/new/"
-            Xtrain_D2,Xvalid_D2 = data_handle.data_handler_ltdiff_paper_sentiment(domain2_path)
+            #Now generating the dataset according to the 
+            path = "dataset/amazon/"
+            data_handle.data_handler_amazon_reviews(path,domain_list,args.num_samples)
 
-            #Combining the dataset into one
-            extra_prop = int((model_args["train_prop"] - 0.5) * len(Xvalid_D1))
-            Xtrain_all_D1 = Xtrain_D1 + Xvalid_D1[0:extra_prop]
+        elif "fd1" in model_args["expt_num"]:
+            #Getting the data from domain 1
+            domain1_path = "counterfactually-augmented-data-master/sentiment/orig/eighty_percent/"
+            Xtrain_D1,Xvalid_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
 
-            Xtrain_all =  Xtrain_all_D1 + Xtrain_D2
-            Xvalid_all = Xvalid_D1[extra_prop:] + Xvalid_D2
+            if "both" in model_args["expt_num"]:
+                #Getting the data from domain 2
+                domain2_path = "counterfactually-augmented-data-master/sentiment/new/"
+                Xtrain_D2,Xvalid_D2 = data_handle.data_handler_ltdiff_paper_sentiment(domain2_path)
 
-            print("Num of train from D1:\t",len(Xtrain_all_D1))
-            print("Num of train from D2:\t",len(Xtrain_D2))
-            print("Num of valid from D1:\t",len(Xvalid_D1[extra_prop:]))
-            print("Num of valid from D2:\t",len(Xvalid_D2))
-            
+                #Combining the dataset into one
+                extra_prop = int((model_args["train_prop"] - 0.5) * len(Xvalid_D1))
+                Xtrain_all_D1 = Xtrain_D1 + Xvalid_D1[0:extra_prop]
 
-            #Now creating the sample weight
-            D1_by_D2 = len(Xtrain_all_D1)/len(Xtrain_D2) 
-            sample_weight = [1]*len(Xtrain_all_D1) + [D1_by_D2]*len(Xtrain_D2)
-            print("sample weight for D1:\t",1)
-            print("sample weight for D2:\t",D1_by_D2)
+                Xtrain_all =  Xtrain_all_D1 + Xtrain_D2
+                Xvalid_all = Xvalid_D1[extra_prop:] + Xvalid_D2
 
-            data_handle.train_data = Xtrain_all
-            data_handle.valid_data = Xvalid_all
-            data_handle.sample_weight = sample_weight
+                print("Num of train from D1:\t",len(Xtrain_all_D1))
+                print("Num of train from D2:\t",len(Xtrain_D2))
+                print("Num of valid from D1:\t",len(Xvalid_D1[extra_prop:]))
+                print("Num of valid from D2:\t",len(Xvalid_D2))
+                
+
+                #Now creating the sample weight
+                D1_by_D2 = len(Xtrain_all_D1)/len(Xtrain_D2) 
+                sample_weight = [1]*len(Xtrain_all_D1) + [D1_by_D2]*len(Xtrain_D2)
+                print("sample weight for D1:\t",1)
+                print("sample weight for D2:\t",D1_by_D2)
+
+                data_handle.train_data = Xtrain_all
+                data_handle.valid_data = Xvalid_all
+                data_handle.sample_weight = sample_weight
+            else:
+                extra_prop = int((model_args["train_prop"] - 0.5) * len(Xvalid_D1))
+                Xtrain_all_D1 = Xtrain_D1 + Xvalid_D1[0:extra_prop]
+
+                Xtrain_all =  Xtrain_all_D1
+                Xvalid_all = Xvalid_D1[extra_prop:]
+
+                data_handle.train_data = Xtrain_all
+                data_handle.valid_data = Xvalid_all
+
+        elif "single" in model_args["expt_num"]:
+            domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
+            Xtrain_D1,Xvalid_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+        elif "both" in model_args["expt_num"]:
+            both_path = "counterfactually-augmented-data-master/sentiment/combined/"
+            Xtrain_D,Xvalid_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
         else:
-            extra_prop = int((model_args["train_prop"] - 0.5) * len(Xvalid_D1))
-            Xtrain_all_D1 = Xtrain_D1 + Xvalid_D1[0:extra_prop]
-
-            Xtrain_all =  Xtrain_all_D1
-            Xvalid_all = Xvalid_D1[extra_prop:]
-
-            data_handle.train_data = Xtrain_all
-            data_handle.valid_data = Xvalid_all
+            raise NotImplementedError()
+        
+        #Initialize the embedding matrix
+        data_handle.load_embedding_mat()
 
 
-    elif "single" in model_args["expt_num"]:
-        domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
-        Xtrain_D1,Xvalid_D1 = data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
-    elif "both" in model_args["expt_num"]:
-        both_path = "counterfactually-augmented-data-master/sentiment/combined/"
-        Xtrain_D,Xvalid_D = data_handle.data_handler_ltdiff_paper_sentiment(both_path)
-    else:
-        raise NotImplementedError()
-    
-    #Initialize the embedding matrix
-    data_handle.load_embedding_mat()
-
-
-    simpleBOW = SimpleBOW(model_args)
-    simpleBOW.get_bow_predictor(train=True,epochs=30)
+        simpleBOW = SimpleBOW(model_args)
+        simpleBOW.get_bow_predictor(train=True,epochs=30)
 
 
