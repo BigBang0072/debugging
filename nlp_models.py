@@ -4,6 +4,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 import pdb
+import os
 import sys
 from pprint import pprint
 
@@ -174,8 +175,9 @@ class SimpleBOW():
         '''
         '''
         #Saving the embedding matrix
-        fpath ="embeddings/"+self.model_args["expt_folder"]+"/"+fname
-        np.savetxt(fpath,matrix,fmt=fmt,delimiter="\t")
+        fpath ="embeddings/"+self.model_args["expt_folder"]+"/"
+        os.makedirs(fpath,exist_ok=True)
+        np.savetxt(fpath+fname,matrix,fmt=fmt,delimiter="\t")
 
 
 

@@ -1,6 +1,7 @@
 import pandas as pd
 import pdb
 import matplotlib.pyplot as plt
+import numpy as np
 
 word_actual_neg = ["worst","boring","bad","terrible","awful","not","poorly","dull"]
 word_actual_pos = ["awesome","fantastic","well","wonderful","best","good","excellent","great"]
@@ -47,12 +48,36 @@ def analyze_amazon_experiments(expt_name,num_domains):
             #Plotting the importance
             ax.plot(word_imp,"o-",label=word)
         ax.legend()
+        ax.set_ylim([0,1.02])
+        ax.grid(True)
 
     #Now plotting each of the groups one by one
     get_score_and_plot(word_actual_pos,axes[0],imp_dict_list)
     get_score_and_plot(word_actual_neg,axes[1],imp_dict_list)
     get_score_and_plot(word_neutral,axes[2],imp_dict_list)
 
+
+     
+
+    plt.show()
+
+    #Plotting the mean and variance of imporrance score
+    def get_domain_mean_std(imp_dict):
+        dmean = np.mean(list(imp_dict.values()))
+        dstd =  np.std(list(imp_dict.values()))
+
+        return dmean,dstd 
+
+    dmean,dstd = zip(*[
+        get_domain_mean_std(imp_dict_list[dnum])
+                for dnum in range(num_domains)
+    ])
+    plt.errorbar(list(range(num_domains)),dmean,yerr=dstd,fmt='o-',alpha=0.6,
+                            capsize=5,capthick=2,linewidth=2)
+
+    axes = plt.gca()
+    axes.set_ylim([-1.02,1.02]) 
+    axes.grid(True) 
     plt.show()
 
     
