@@ -174,7 +174,7 @@ class SimpleBOW():
         '''
         '''
         #Saving the embedding matrix
-        fpath ="embeddings/"+fname
+        fpath ="embeddings/"+self.model_args["expt_folder"]+"/"+fname
         np.savetxt(fpath,matrix,fmt=fmt,delimiter="\t")
 
 
@@ -218,6 +218,7 @@ if __name__=="__main__":
     #Now we will start the training of basic model
     model_args={}
     model_args["data_handle"]=data_handle
+    model_args["expt_folder"] = args.expt_num
     model_args["expt_num"] = args.expt_num + "."+ str(args.num_domains)  #single or both
     model_args["save_emb"] = False 
     model_args["save_imp"] = True

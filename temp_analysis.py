@@ -1,5 +1,10 @@
 import pandas as pd
 import pdb
+import matplotlib.pyplot as plt
+
+word_actual_neg = ["worst","boring","bad","terrible","awful","not","poorly","dull"]
+word_actual_pos = ["awesome","fantastic","well","wonderful","best","good","excellent","great"]
+word_neutral = ["romance","horror","scary","science","tragedy","money"]
 
 def read_file(path):
     df = pd.read_csv(path,delimiter=" ",header=None)
@@ -24,9 +29,34 @@ def read_file(path):
 
     return word_imp_dict
 
+def analyze_amazon_experiments(expt_name,num_domains):
+    imp_dict_list = []
+    for dnum in range(1,num_domains+1):
+        imp_dict = read_file("embeddings/importance_{}.{}.tsv".format(expt_name,dnum))
+        imp_dict_list.append(imp_dict)
+    
+    #Now we will plot the variation of certain chosen words
+    figure, axes = plt.subplots(3,1)
 
-if __name__=="__main__":
-    expt_name = "5.fd1"
+    #Getting the scores and plotting them
+    def get_score_and_plot(word_list,ax,imp_dict_list):
+        for word in word_list:
+            #Getting the importance of word in each doamin experiemnts
+            word_imp = [imp_dict_list[didx][word] for didx in range(num_domains)]
+
+            #Plotting the importance
+            ax.plot(word_imp,"o-",label=word)
+        ax.legend()
+
+    #Now plotting each of the groups one by one
+    get_score_and_plot(word_actual_pos,axes[0],imp_dict_list)
+    get_score_and_plot(word_actual_neg,axes[1],imp_dict_list)
+    get_score_and_plot(word_neutral,axes[2],imp_dict_list)
+
+    plt.show()
+
+    
+def analyze_imdb_experiments(expt_name):
     imp1_dict = read_file("embeddings/importance_{}.single.tsv".format(expt_name))
     imp2_dict = read_file("embeddings/importance_{}.both.tsv".format(expt_name))
 
@@ -56,9 +86,6 @@ if __name__=="__main__":
         diff=["{}\t\t{:0.3f}\t\t{:0.3f}".format(word,imp1_dict[word],diff_dict[word]) for word in word_list]
         print("\n".join(diff))
     
-    word_actual_neg = ["worst","boring","bad","terrible","awful","not","poorly","dull"]
-    word_actual_pos = ["awesome","fantastic","well","wonderful","best","good","excellent","great"]
-    word_neutral = ["romance","horror","scary","comedy","science","scifi","tragedy","disco"]
 
     print("#######################################")
     print_diff(word_actual_neg)
@@ -67,6 +94,12 @@ if __name__=="__main__":
     print("#######################################\n\n")
     print_diff(word_neutral)
     print("#######################################\n\n")
+
+if __name__=="__main__":
+    expt_name = "9.amzn"
+    num_domains = 8
+
+    analyze_amazon_experiments(expt_name,num_domains)
 
 
 
