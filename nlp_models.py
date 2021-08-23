@@ -199,7 +199,7 @@ if __name__=="__main__":
     data_args["emb_dim"]=100
     data_args["train_split"]=0.8
     data_args["epsilon"] = 1e-3         #for numerical stability in sample weights
-    data_args["num_samples"]=args.num_samples
+    data_args["num_samples"]=int(args.num_samples/args.num_domains)
     data_args["num_domains"] = args.num_domains
     data_handle = DataHandler(data_args)
 
@@ -238,11 +238,11 @@ if __name__=="__main__":
             #Defining the possible domains
             all_domain_list = ["arts","books","phones","clothes","groceries","movies","pets","tools"]
             # all_domain_list = ["beauty","software","appliance","faishon","giftcard","magazine"]
-            domain_list = all_domain_list[0:args.num_domains]
+            domain_list = all_domain_list[0:data_args["num_domains"]]
 
             #Now generating the dataset according to the 
             path = "dataset/amazon/"
-            data_handle.data_handler_amazon_reviews(path,domain_list,args.num_samples)
+            data_handle.data_handler_amazon_reviews(path,domain_list,data_args["num_samples"])
 
         elif "fd1" in model_args["expt_num"]:
             #Getting the data from domain 1
