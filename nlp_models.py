@@ -190,6 +190,7 @@ if __name__=="__main__":
     parser.add_argument('-normalize_emb',dest="normalize_emb",type=bool)
     parser.add_argument('-num_samples',dest="num_samples",type=int)
     parser.add_argument('-num_domains',dest="num_domains",type=int)
+    parser.add_argument('-domain_name',dest="domain_name",type=str,default="all")
     args=parser.parse_args()
     print(args)
 
@@ -221,7 +222,7 @@ if __name__=="__main__":
     model_args={}
     model_args["data_handle"]=data_handle
     model_args["expt_folder"] = args.expt_num
-    model_args["expt_num"] = args.expt_num + "."+ str(args.num_domains)  #single or both
+    model_args["expt_num"] = args.expt_num + "."+ str(args.num_domains) + "." + args.domain_name  #single or both
     model_args["save_emb"] = False 
     model_args["save_imp"] = True
     model_args["emb_train"] = args.emb_train
@@ -238,10 +239,14 @@ if __name__=="__main__":
         sys.stderr = log_port
 
         if "amzn" in model_args["expt_num"]:
-            #Defining the possible domains
-            all_domain_list = ["arts","books","phones","clothes","groceries","movies","pets","tools"]
-            # all_domain_list = ["beauty","software","appliance","faishon","giftcard","magazine"]
-            domain_list = all_domain_list[0:data_args["num_domains"]]
+            #If we are only oging to have one domain training
+            domain_list = [args.domain_name]
+
+            if args.domain_name=="all":
+                #Defining the possible domains
+                all_domain_list = ["arts","books","phones","clothes","groceries","movies","pets","tools"]
+                # all_domain_list = ["beauty","software","appliance","faishon","giftcard","magazine"]
+                domain_list = all_domain_list[0:data_args["num_domains"]]
 
             #Now generating the dataset according to the 
             path = "dataset/amazon/"

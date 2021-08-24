@@ -121,8 +121,8 @@ def analyze_imdb_experiments(expt_name):
     print("#######################################\n\n")
 
 if __name__=="__main__":
-    expt_name = "12.amzn"
-    num_domains = 8
+    expt_name = "11.amzn"
+    num_domains = 7
 
     analyze_amazon_experiments(expt_name,num_domains)
 
