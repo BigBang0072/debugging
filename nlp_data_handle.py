@@ -313,7 +313,7 @@ class DataHandleTransformer():
                             )
             )
             print("Created category df for: ",cat)
-            print(cat_df.head)
+            print(cat_df.head())
             print("===========================================")
             return cat_df
         
@@ -328,41 +328,36 @@ class DataHandleTransformer():
             all_cat_dfs[cat]=cat_df
         
         #Now its time to build a data loader for the transformer
-        class DFIterator(object):
-            def __init__(self,df,name):
-                self.df = df
-                self.num_example = df.shape[0]
-                self.name=name
-            
-            def __iter__(self,):
-                idx = 0 
-                while True:
-                    label = self.df.iloc[idx]["label"]
-                    doc = self.df.iloc[idx]["doc"]
+        def df_iterator(df,name):
+            num_example = df.shape[0]
+            idx = 0 
+            while True:
+                label = df.iloc[idx]["label"]
+                doc = df.iloc[idx]["doc"]
 
-                    #Now parsing the document from the tokenizer
-                    encoded_doc = self.tokenizer(
-                                            doc,
-                                            padding='max_length',
-                                            truncation=True,
-                                            max_length=self.data_args["max_len"],
-                                            return_tensors="tf"
-                    )
-                    input_idx = encoded_doc["input_ids"]
-                    attn_mask = encoded_doc["attention_mask"]
+                #Now parsing the document from the tokenizer
+                encoded_doc = self.tokenizer(
+                                        doc,
+                                        padding='max_length',
+                                        truncation=True,
+                                        max_length=self.data_args["max_len"],
+                                        return_tensors="tf"
+                )
+                input_idx = encoded_doc["input_ids"]
+                attn_mask = encoded_doc["attention_mask"]
 
 
-                    idx = (idx+1)%self.num_example
-                    if(idx==0):
-                        print("New Start df: ",self.name)
-                    
-                    yield (label,input_idx,attn_mask)
+                idx = (idx+1)%num_example
+                if(idx==0):
+                    print("New Start df: ",name)
+                
+                yield (label,input_idx,attn_mask)
         
 
         def get_next_item(all_cat_dfs,all_cat_names):
             #Creating the dataset from iteratable object
             all_cat_iter = {
-                cat: DFIterator(all_cat_dfs[cat],all_cat_names[cat])
+                cat: df_iterator(all_cat_dfs[cat],cat)
                     for cat in all_cat_names
             }
 
@@ -388,6 +383,14 @@ class DataHandleTransformer():
         #Now creating the dataset from this iterator
         dataset = tf.data.Dataset.from_generator(
             get_next_item,
+            output_signature=(
+                (
+                    tf.TensorSpec(shape=(),dtype=tf.int32),
+                    tf.TensorSpec(shape=(self.data_args["max_len"]),dtype=tf.int32),
+                    tf.TensorSpec(shape=(self.data_args["max_len"]),dtype=tf.int32),
+                )
+                for _ in self.data_args["cat_list"]
+            )
         )
         dataset = dataset.shuffle(self.data_args["shuffle_size"])
         dataset = dataset.batch(self.data_args["batch_size"])

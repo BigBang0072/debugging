@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from transformers import BertModel,DistilBertModel
+from transformers import TFBertModel,TFDistilBertModel
 
 import pdb
 import os
@@ -27,19 +27,19 @@ class TransformerClassifier(keras.Model):
         self.model_args = model_args
 
         #Now initializing the layers to be used
-        self.bert_model = BertModel.from_pretrained('bert-base-uncased')
+        self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
 
         #Initializing the heads for each classifier
         self.cat_classifier_list = []
         for cat in self.data_args["cat_list"]:
             #Creating a dense layer
             cat_dense = layers.Dense(2,activation="softmax")
-            self.cat_classfier_list.append(cat_dense)
+            self.cat_classifier_list.append(cat_dense)
         
 
         #Initializing the trackers
         self.pred_xentropy = keras.metrics.Mean(name="pred_x")
-        self.prec_acc_list = [
+        self.pred_acc_list = [
             tf.keras.metrics.SparseCategoricalAccuracy(name="{}_acc".format(cat))
                 for cat in self.data_args["cat_list"]
         ]
@@ -61,9 +61,10 @@ class TransformerClassifier(keras.Model):
         cat_accuracy_list = []
 
         #Now getting the classification loss one by one each category
-        with tf.GradientTape() as tape:
-            total_loss = 0.0
-            for cidx,cat in enumerate(self.data_args["cat_list"]):
+        
+        total_loss = 0.0
+        for cidx,cat in enumerate(self.data_args["cat_list"]):
+            with tf.GradientTape() as tape:
                 cat_label,cat_idx,cat_mask = cat_dataset_list[cidx]
 
                 #Getting the bert activation
@@ -73,43 +74,41 @@ class TransformerClassifier(keras.Model):
                 )
                 bert_seq_output = bert_outputs.last_hidden_state
 
-                #Now we need to take average of the last hidden state
-                def mask_reduce_mean(x,m):
-                    masked_sum = tf.squeeze(tf.sum(
-                                x * tf.expand_dims(m,-1),
-                                dim=1
-                    ))
+                #Now we need to take average of the last hidden state:
+                #Dont use function, the output shape is not defined
+                m = tf.cast(cat_mask,dtype=tf.float32)
 
-                    num_tokens = tf.sum(cat_mask,dim=1,keepdims=True)
+                masked_sum =tf.reduce_sum(
+                                bert_seq_output * tf.expand_dims(m,-1),
+                                axis=1
+                )
 
-                    masked_avg = masked_sum / (num_tokens+1e-10)
-                    return masked_avg
+                num_tokens = tf.reduce_sum(m,axis=1,keepdims=True)
+
+                avg_embedding = masked_sum / (num_tokens+1e-10)
                 
-                avg_embedding = mask_reduce_mean(bert_seq_output,cat_mask)
-
                 #Now we will apply the dense layer for this category
-                cat_class_prob = self.cat_classifier_list[cidx]
+                cat_class_prob = self.cat_classifier_list[cidx](avg_embedding)
 
                 #Getting the loss for this classifier
                 cat_loss = scxentropy_loss(cat_label,cat_class_prob)
                 total_loss += cat_loss
 
                 #Updating the prediciton accuracy of current category
-                self.prec_acc_list[cidx].update_state(cat_label,cat_class_prob)
-
-            #Updating the metrics to track
-            self.pred_xentropy.update_state(total_loss)
-
+                self.pred_acc_list[cidx].update_state(cat_label,cat_class_prob)
         
-        #Now we have total classification loss, lets update the gradient
-        grads = tape.gradient(total_loss,self.trainable_weights)
-        self.optimizer.apply_gradients(
-            zip(grads,self.trainable_weights)
-        )
+                #Now we have total classification loss, lets update the gradient
+                grads = tape.gradient(cat_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
+        
+        #Updating the metrics to track
+        self.pred_xentropy.update_state(total_loss)
 
         #Getting the tracking results
         track_dict= {
-                    cat:self.pred_acc_list[cidx].result()
+                    "pred_acc_"+cat:self.pred_acc_list[cidx].result()
                         for cidx,cat in enumerate(self.data_args["cat_list"])
         }
         track_dict["xentropy"]=self.pred_xentropy.result()
@@ -141,16 +140,17 @@ def transformer_trainer(data_args,model_args):
     )
 
 
-if __name__=="__init__":
+if __name__=="__main__":
     #Defining the Data args
     data_args={}
     data_args["path"] = "dataset/amazon/"
+    data_args["transformer_name"]="bert-base-uncased"
     data_args["num_class"]=2
     data_args["max_len"]=200
-    data_args["num_sample"]=8000
-    data_args["batch_size"]=128
+    data_args["num_sample"]=100
+    data_args["batch_size"]=8
     data_args["shuffle_size"]=data_args["batch_size"]*3
-    data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
+    data_args["cat_list"]=["arts","books"]#,"phones","clothes","groceries","movies","pets","tools"]
     
 
     #Defining the Model args
