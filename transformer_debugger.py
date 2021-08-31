@@ -64,9 +64,11 @@ class TransformerClassifier(keras.Model):
         
         total_loss = 0.0
         for cidx,cat in enumerate(self.data_args["cat_list"]):
-            with tf.GradientTape() as tape:
-                cat_label,cat_idx,cat_mask = cat_dataset_list[cidx]
+            cat_label = cat_dataset_list[cidx]["label"]
+            cat_idx = cat_dataset_list[cidx]["input_idx"]
+            cat_mask = cat_dataset_list[cidx]["attn_mask"]
 
+            with tf.GradientTape() as tape:
                 #Getting the bert activation
                 bert_outputs=self.bert_model(
                             input_ids=cat_idx,

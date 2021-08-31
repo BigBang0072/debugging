@@ -306,95 +306,119 @@ class DataHandleTransformer():
             pos_label, pos_doc = zip(*pos_list)
             neg_label, neg_doc = zip(*neg_list)
 
-            cat_df = pd.DataFrame(
-                            dict(
-                                label=pos_label+neg_label,
-                                doc=pos_doc+neg_doc
-                            )
-            )
-            print("Created category df for: ",cat)
-            print(cat_df.head())
-            print("===========================================")
-            return cat_df
-        
-        #Getting the dataframe for each categories
-        all_cat_dfs = {}
-        for cat in self.data_args["cat_list"]:
-            cat_df =  get_category_df(
-                                self.data_args["path"],
-                                cat,
-                                self.data_args["num_sample"],                         
-            )
-            all_cat_dfs[cat]=cat_df
-        
-        #Now its time to build a data loader for the transformer
-        def df_iterator(df,name):
-            num_example = df.shape[0]
-            idx = 0 
-            while True:
-                label = df.iloc[idx]["label"]
-                doc = df.iloc[idx]["doc"]
-
-                #Now parsing the document from the tokenizer
-                encoded_doc = self.tokenizer(
-                                        doc,
+            #Now we will parse the documents
+            encoded_doc = self.tokenizer(
+                                        pos_doc+neg_doc,
                                         padding='max_length',
                                         truncation=True,
                                         max_length=self.data_args["max_len"],
                                         return_tensors="tf"
                 )
-                input_idx = encoded_doc["input_ids"]
-                attn_mask = encoded_doc["attention_mask"]
+            input_idx = encoded_doc["input_ids"]
+            attn_mask = encoded_doc["attention_mask"]
+
+            #Creating the dataset for this category
+            cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                    dict(
+                                        label=pos_label+neg_label,
+                                        input_idx = input_idx,
+                                        attn_mask = attn_mask
+                                    )
+            )
+
+            # cat_df = pd.DataFrame(
+            #                 dict(
+            #                     label=pos_label+neg_label,
+            #                     doc=pos_doc+neg_doc
+            #                 )
+            # )
+            # print("Created category df for: ",cat)
+            # print(cat_df.head())
+            # print("===========================================")
+            # return cat_df
+            return cat_dataset
+        
+        #Getting the dataframe for each categories
+        all_cat_ds = {}
+        for cat in self.data_args["cat_list"]:
+            cat_ds =  get_category_df(
+                                self.data_args["path"],
+                                cat,
+                                self.data_args["num_sample"],                         
+            )
+            all_cat_ds[cat]=cat_ds
+        
+        #Creating the zipped dataset
+        dataset = tf.data.Dataset.zip(all_cat_ds)
+        
+        #Now its time to build a data loader for the transformer
+        # def df_iterator(df,name):
+        #     num_example = df.shape[0]
+        #     idx = 0 
+        #     while True:
+        #         label = df.iloc[idx]["label"]
+        #         doc = df.iloc[idx]["doc"]
+
+        #         #Now parsing the document from the tokenizer
+        #         encoded_doc = self.tokenizer(
+        #                                 doc,
+        #                                 padding='max_length',
+        #                                 truncation=True,
+        #                                 max_length=self.data_args["max_len"],
+        #                                 return_tensors="tf"
+        #         )
+        #         input_idx = encoded_doc["input_ids"]
+        #         attn_mask = encoded_doc["attention_mask"]
 
 
-                idx = (idx+1)%num_example
-                if(idx==0):
-                    print("New Start df: ",name)
+        #         idx = (idx+1)%num_example
+        #         if(idx==0):
+        #             print("New Start df: ",name)
                 
-                yield (label,input_idx,attn_mask)
+        #         yield (label,input_idx,attn_mask)
         
 
-        def get_next_item(all_cat_dfs,all_cat_names):
-            #Creating the dataset from iteratable object
-            all_cat_iter = {
-                cat: df_iterator(all_cat_dfs[cat],cat)
-                    for cat in all_cat_names
-            }
+        # def get_next_item(all_cat_dfs,all_cat_names):
+        #     #Creating the dataset from iteratable object
+        #     all_cat_iter = {
+        #         cat: df_iterator(all_cat_dfs[cat],cat)
+        #             for cat in all_cat_names
+        #     }
 
-            #Now one by one we will yield one example from each
-            idx = 0 
-            while True:
-                all_cat_samples = [
-                    next(all_cat_iter[cat])
-                        for cat in all_cat_names
-                ]
+        #     #Now one by one we will yield one example from each
+        #     idx = 0 
+        #     while True:
+        #         all_cat_samples = [
+        #             next(all_cat_iter[cat])
+        #                 for cat in all_cat_names
+        #         ]
 
-                yield all_cat_samples
+        #         yield all_cat_samples
 
-                idx+=1
-                #Getting out of this loop once we iterated over all the examples
-                '''
-                The side effect is if some of the ds has lesser num of example
-                then they will be cycled.
-                '''
-                if(idx==(self.data_args["num_sample"]*self.data_args["num_class"])):
-                    break
+        #         idx+=1
+        #         #Getting out of this loop once we iterated over all the examples
+        #         '''
+        #         The side effect is if some of the ds has lesser num of example
+        #         then they will be cycled.
+        #         '''
+        #         if(idx==(self.data_args["num_sample"]*self.data_args["num_class"])):
+        #             break
 
-        #Now creating the dataset from this iterator
-        dataset = tf.data.Dataset.from_generator(
-            get_next_item,
-            output_signature=(
-                (
-                    tf.TensorSpec(shape=(),dtype=tf.int32),
-                    tf.TensorSpec(shape=(self.data_args["max_len"]),dtype=tf.int32),
-                    tf.TensorSpec(shape=(self.data_args["max_len"]),dtype=tf.int32),
-                )
-                for _ in self.data_args["cat_list"]
-            )
-        )
+        # #Now creating the dataset from this iterator
+        # dataset = tf.data.Dataset.from_generator(
+        #     get_next_item,
+        #     output_signature=(
+        #         (
+        #             tf.TensorSpec(shape=(),dtype=tf.int32),
+        #             tf.TensorSpec(shape=(self.data_args["max_len"]),dtype=tf.int32),
+        #             tf.TensorSpec(shape=(self.data_args["max_len"]),dtype=tf.int32),
+        #         )
+        #     )
+        # )
+
+
         dataset = dataset.shuffle(self.data_args["shuffle_size"])
         dataset = dataset.batch(self.data_args["batch_size"])
-
         return dataset
 
 
