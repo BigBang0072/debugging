@@ -234,7 +234,7 @@ class TransformerClassifier(keras.Model):
         ]
         #Shuffling the topics for now (since one cat is ont topic for now)
         topic,input_idx,attn_mask = zip(*all_topic_data)
-        topic = tf.random.shuffle(tf.concat(topic,axis=0))
+        topic_label_all = tf.random.shuffle(tf.concat(topic,axis=0))
         input_idx = tf.random.shuffle(tf.concat(input_idx,axis=0))
         attn_mask=tf.random.shuffle(tf.concat(attn_mask,axis=0))
 
@@ -243,7 +243,7 @@ class TransformerClassifier(keras.Model):
         for tidx,topic in enumerate(self.data_args["topic_list"]):
             #Sharding the topic data into batches
             batch_size = self.data_args["batch_size"]
-            topic_label = topic[tidx*batch_size:(tidx+1)*batch_size]
+            topic_label = topic_label_all[tidx*batch_size:(tidx+1)*batch_size]
             topic_idx = input_idx[tidx*batch_size:(tidx+1)*batch_size]
             topic_mask = attn_mask[tidx*batch_size:(tidx+1)*batch_size]
 
