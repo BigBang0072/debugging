@@ -39,14 +39,40 @@ class TransformerClassifier(keras.Model):
 
         #Initializing the trackers
         self.pred_xentropy = keras.metrics.Mean(name="pred_x")
-        self.pred_acc_list = [
-            tf.keras.metrics.SparseCategoricalAccuracy(name="{}_acc".format(cat))
+        self.valid_acc_list = [
+            tf.keras.metrics.SparseCategoricalAccuracy(name="{}_valid_acc".format(cat))
                 for cat in self.data_args["cat_list"]
         ]
     
     def compile(self, optimizer):
         super(TransformerClassifier, self).compile()
         self.optimizer = optimizer 
+    
+    def get_pred_prob(self,idx_train,mask_train,cidx):     
+        #Getting the bert activation
+        bert_outputs=self.bert_model(
+                    input_ids=idx_train,
+                    attention_mask=mask_train
+        )
+        bert_seq_output = bert_outputs.last_hidden_state
+
+        #Now we need to take average of the last hidden state:
+        #Dont use function, the output shape is not defined
+        m = tf.cast(mask_train,dtype=tf.float32)
+
+        masked_sum =tf.reduce_sum(
+                        bert_seq_output * tf.expand_dims(m,-1),
+                        axis=1
+        )
+
+        num_tokens = tf.reduce_sum(m,axis=1,keepdims=True)
+
+        avg_embedding = masked_sum / (num_tokens+1e-10)
+        
+        #Now we will apply the dense layer for this category
+        cat_class_prob = self.cat_classifier_list[cidx](avg_embedding)
+
+        return cat_class_prob
     
     def train_step(self,data):
         '''
@@ -60,7 +86,7 @@ class TransformerClassifier(keras.Model):
         #Keeping track of classification accuracy
         cat_accuracy_list = []
 
-        #Now getting the classification loss one by one each category
+        #Now getting the classification loss one by one each category        
         
         total_loss = 0.0
         for cidx,cat in enumerate(self.data_args["cat_list"]):
@@ -68,49 +94,43 @@ class TransformerClassifier(keras.Model):
             cat_idx = cat_dataset_list[cidx]["input_idx"]
             cat_mask = cat_dataset_list[cidx]["attn_mask"]
 
+            #Taking aside a chunk of data for validation
+            valid_idx = int( (1-self.model_args["valid_split"]) * self.model_args["batch_size"] )
+
+            #Getting the train data
+            cat_label_train = cat_label[0:valid_idx]
+            cat_idx_train = cat_idx[0:valid_idx]
+            cat_mask_train = cat_mask[0:valid_idx]
+
+            #Getting the validation data
+            cat_label_valid = cat_label[valid_idx:]
+            cat_idx_valid = cat_idx[valid_idx:]
+            cat_mask_valid = cat_mask[valid_idx:]
+
             with tf.GradientTape() as tape:
-                #Getting the bert activation
-                bert_outputs=self.bert_model(
-                            input_ids=cat_idx,
-                            attention_mask=cat_mask
-                )
-                bert_seq_output = bert_outputs.last_hidden_state
-
-                #Now we need to take average of the last hidden state:
-                #Dont use function, the output shape is not defined
-                m = tf.cast(cat_mask,dtype=tf.float32)
-
-                masked_sum =tf.reduce_sum(
-                                bert_seq_output * tf.expand_dims(m,-1),
-                                axis=1
-                )
-
-                num_tokens = tf.reduce_sum(m,axis=1,keepdims=True)
-
-                avg_embedding = masked_sum / (num_tokens+1e-10)
-                
-                #Now we will apply the dense layer for this category
-                cat_class_prob = self.cat_classifier_list[cidx](avg_embedding)
+                #Forward propagating the model
+                cat_train_prob = self.get_pred_prob(cat_idx_train,cat_mask_train,cidx)
 
                 #Getting the loss for this classifier
-                cat_loss = scxentropy_loss(cat_label,cat_class_prob)
+                cat_loss = scxentropy_loss(cat_label_train,cat_train_prob)
                 total_loss += cat_loss
-
-                #Updating the prediciton accuracy of current category
-                self.pred_acc_list[cidx].update_state(cat_label,cat_class_prob)
         
-                #Now we have total classification loss, lets update the gradient
-                grads = tape.gradient(cat_loss,self.trainable_weights)
-                self.optimizer.apply_gradients(
-                    zip(grads,self.trainable_weights)
-                )
+            #Now we have total classification loss, lets update the gradient
+            grads = tape.gradient(cat_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+
+            #Getting the validation accuracy for this category
+            cat_valid_prob = self.get_pred_prob(cat_idx_valid,cat_mask_valid,cidx)
+            self.valid_acc_list[cidx].update_state(cat_label_valid,cat_valid_prob)
         
         #Updating the metrics to track
         self.pred_xentropy.update_state(total_loss)
 
         #Getting the tracking results
         track_dict= {
-                    "pred_acc_"+cat:self.pred_acc_list[cidx].result()
+                    "valid_acc_"+cat:self.valid_acc_list[cidx].result()
                         for cidx,cat in enumerate(self.data_args["cat_list"])
         }
         track_dict["xentropy"]=self.pred_xentropy.result()
@@ -138,7 +158,7 @@ def transformer_trainer(data_args,model_args):
     classifier.fit(
                         dataset,
                         epochs=model_args["epochs"],
-                        validation_split=model_args["valid_split"]
+                        # validation_split=model_args["valid_split"]
     )
 
 

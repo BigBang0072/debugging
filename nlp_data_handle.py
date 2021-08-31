@@ -9,6 +9,7 @@ import re
 import pprint
 import pdb
 pp=pprint.PrettyPrinter(indent=4)
+import random
 
 from transformers import AutoTokenizer
 
@@ -303,12 +304,14 @@ class DataHandleTransformer():
             ))
 
             #Now we will create the dataframe for this category
-            pos_label, pos_doc = zip(*pos_list)
-            neg_label, neg_doc = zip(*neg_list)
+            all_data_list = random.shuffle(pos_list+neg_list)
+            label, doc = zip(*all_data_list)
+            # pos_label, pos_doc = zip(*pos_list)
+            # neg_label, neg_doc = zip(*neg_list)
 
             #Now we will parse the documents
             encoded_doc = self.tokenizer(
-                                        pos_doc+neg_doc,
+                                        list(doc),
                                         padding='max_length',
                                         truncation=True,
                                         max_length=self.data_args["max_len"],
@@ -320,7 +323,7 @@ class DataHandleTransformer():
             #Creating the dataset for this category
             cat_dataset = tf.data.Dataset.from_tensor_slices(
                                     dict(
-                                        label=pos_label+neg_label,
+                                        label=np.array(label),
                                         input_idx = input_idx,
                                         attn_mask = attn_mask
                                     )
