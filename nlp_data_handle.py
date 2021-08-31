@@ -263,7 +263,7 @@ class DataHandleTransformer():
             for l in g:
                 yield json.loads(l)
 
-        def get_category_df(path,cat,num_sample):
+        def get_category_df(path,cat,num_sample,cidx):
             pos_list = []
             neg_list = []
             pos_doclen = []
@@ -307,6 +307,7 @@ class DataHandleTransformer():
             all_data_list = pos_list+neg_list
             random.shuffle(all_data_list)
             label, doc = zip(*all_data_list)
+            topic = [cidx]*len(label)
             # pos_label, pos_doc = zip(*pos_list)
             # neg_label, neg_doc = zip(*neg_list)
 
@@ -325,6 +326,7 @@ class DataHandleTransformer():
             cat_dataset = tf.data.Dataset.from_tensor_slices(
                                     dict(
                                         label=np.array(label),
+                                        topic=np.array(topic),
                                         input_idx = input_idx,
                                         attn_mask = attn_mask
                                     )
@@ -344,11 +346,12 @@ class DataHandleTransformer():
         
         #Getting the dataframe for each categories
         all_cat_ds = {}
-        for cat in self.data_args["cat_list"]:
+        for cidx,cat in enumerate(self.data_args["cat_list"]):
             cat_ds =  get_category_df(
                                 self.data_args["path"],
                                 cat,
-                                self.data_args["num_sample"],                         
+                                self.data_args["num_sample"], 
+                                cidx,                        
             )
             all_cat_ds[cat]=cat_ds
         
