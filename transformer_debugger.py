@@ -28,10 +28,24 @@ class TransformerClassifier(keras.Model):
 
         #Now initializing the layers to be used
         self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
+        if model_args["train_bert"]==False:
+            for layer in self.bert_model:
+                layer.trainable = False
 
         #Initializing the heads for each classifier
         self.cat_classifier_list = []
+        self.cat_importance_weight_list = []
         for cat in self.data_args["cat_list"]:
+            #Creating the imporatance paramaters for each classifier
+            cat_imp_weight = tf.Variable(
+                tf.random_normal_initializer(mean=0.0,stddev=1.0)(
+                                shape=[1,model_args["bemb_dim"]],
+                                dtype=tf.float32,
+                ),
+                trainable=True
+            )
+            self.cat_importance_weight_list.append(cat_imp_weight)
+
             #Creating a dense layer
             cat_dense = layers.Dense(2,activation="softmax")
             self.cat_classifier_list.append(cat_dense)
@@ -56,12 +70,16 @@ class TransformerClassifier(keras.Model):
         )
         bert_seq_output = bert_outputs.last_hidden_state
 
+        #Multiplying this embedding with corresponding weights
+        cat_imp_weights = tf.sigmoid(self.cat_importance_weight_list[cidx])
+        weighted_bert_seq_output = bert_seq_output * cat_imp_weights
+
         #Now we need to take average of the last hidden state:
         #Dont use function, the output shape is not defined
         m = tf.cast(mask_train,dtype=tf.float32)
 
         masked_sum =tf.reduce_sum(
-                        bert_seq_output * tf.expand_dims(m,-1),
+                        weighted_bert_seq_output * tf.expand_dims(m,-1),
                         axis=1
         )
 
@@ -90,12 +108,12 @@ class TransformerClassifier(keras.Model):
         
         total_loss = 0.0
         for cidx,cat in enumerate(self.data_args["cat_list"]):
-            cat_label = cat_dataset_list[cidx]["label"]
-            cat_idx = cat_dataset_list[cidx]["input_idx"]
-            cat_mask = cat_dataset_list[cidx]["attn_mask"]
+            cat_label = cat_dataset_list[cat]["label"]
+            cat_idx = cat_dataset_list[cat]["input_idx"]
+            cat_mask = cat_dataset_list[cat]["attn_mask"]
 
             #Taking aside a chunk of data for validation
-            valid_idx = int( (1-self.model_args["valid_split"]) * self.model_args["batch_size"] )
+            valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
             #Getting the train data
             cat_label_train = cat_label[0:valid_idx]
@@ -153,11 +171,20 @@ def transformer_trainer(data_args,model_args):
     data_handler = DataHandleTransformer(data_args)
     dataset = data_handler.amazon_reviews_handler()
 
+    checkpoint_path = "{}/cp.ckpt".format(model_args["expt_name"])
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+
+    # Create a callback that saves the model's weights
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                                 save_weights_only=True,
+                                                 verbose=1)
+
 
     #Now fitting the model
     classifier.fit(
                         dataset,
                         epochs=model_args["epochs"],
+                        callbacks=[cp_callback]
                         # validation_split=model_args["valid_split"]
     )
 
@@ -172,14 +199,17 @@ if __name__=="__main__":
     data_args["num_sample"]=100
     data_args["batch_size"]=8
     data_args["shuffle_size"]=data_args["batch_size"]*3
-    data_args["cat_list"]=["arts","books"]#,"phones","clothes","groceries","movies","pets","tools"]
+    data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
     
 
     #Defining the Model args
     model_args={}
+    model_args["expt_name"]="1.0"
     model_args["lr"]=0.001
     model_args["epochs"]=5
     model_args["valid_split"]=0.2
+    model_args["train_bert"]=False
+    model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
 
     transformer_trainer(data_args,model_args)
 

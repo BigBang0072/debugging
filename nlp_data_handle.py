@@ -304,7 +304,8 @@ class DataHandleTransformer():
             ))
 
             #Now we will create the dataframe for this category
-            all_data_list = random.shuffle(pos_list+neg_list)
+            all_data_list = pos_list+neg_list
+            random.shuffle(all_data_list)
             label, doc = zip(*all_data_list)
             # pos_label, pos_doc = zip(*pos_list)
             # neg_label, neg_doc = zip(*neg_list)
