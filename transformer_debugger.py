@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.lib.function_base import append
 import pandas as pd
 
 
@@ -201,11 +202,14 @@ class TransformerClassifier(keras.Model):
                 cat_total_loss += cat_loss
         
             #Now we have total classification loss, lets update the gradient
-            cat_trainable_weights = [ 
-                        self.cat_importance_weight_list[cidx],
-                        self.cat_classifier_list[cidx]
-                            for cidx in range(len(self.data_args["cat_list"]))
-            ]
+            cat_trainable_weights=[]
+            for cidx in range(len(self.data_args["cat_list"])):
+                cat_trainable_weights.append(
+                                self.cat_importance_weight_list[cidx]
+                )
+                cat_trainable_weights += self.cat_classifier_list[cidx].trainable_weights
+                
+                
             grads = tape.gradient(cat_loss,cat_trainable_weights)
             self.optimizer.apply_gradients(
                 zip(grads,cat_trainable_weights)
@@ -266,9 +270,9 @@ class TransformerClassifier(keras.Model):
         
             #Now we have total classification loss, lets update the gradient
             topic_trainable_weights = [
-                                        self.topic_importance_weight_list[0].trainable_weight,
-                                        self.topic_classifier_list[0].trainable_weights
+                                            self.topic_importance_weight_list[0],
             ]
+            topic_trainable_weights += self.topic_classifier_list[0].trainable_weights
             grads = tape.gradient(topic_loss,topic_trainable_weights)
             self.optimizer.apply_gradients(
                 zip(grads,topic_trainable_weights)
@@ -338,6 +342,7 @@ if __name__=="__main__":
     data_args["batch_size"]=8
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
+    data_args["topic_list"]=data_args["cat_list"]
     
 
     #Defining the Model args
