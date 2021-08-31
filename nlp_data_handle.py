@@ -10,6 +10,8 @@ import pprint
 import pdb
 pp=pprint.PrettyPrinter(indent=4)
 
+from transformers import AutoTokenizer
+
 class DataHandler():
     '''
     This class will handle all the dataset we will use in our nlp experiemnts
@@ -238,6 +240,159 @@ class DataHandler():
                         for cat_ssize in cat_wise_ssize
                 ]
         )
+
+
+class DataHandleTransformer():
+    '''
+    This class will serve the experiment ground for data handling for
+    all transformer related experiments.
+    '''
+    def __init__(self,data_args):
+        self.data_args = data_args
+        self.tokenizer = AutoTokenizer.from_pretrained(data_args["transformer_name"])
+    
+    def amazon_reviews_handler(self,):
+        '''
+        This function will handle all the data processing needed for
+        handling the amazon reviews.
+        '''
+        #Parser for the zipped file
+        def parse(path):
+            g = gzip.open(path,"rb")
+            for l in g:
+                yield json.loads(l)
+
+        def get_category_df(path,cat,num_sample):
+            pos_list = []
+            neg_list = []
+            pos_doclen = []
+            neg_doclen = []
+            skip_count = 0
+            path = "{}{}.json.gz".format(path,cat)
+            for d in parse(path):
+                # pdb.set_trace()
+                #first of all see if this is relavant (>3: pos ; <3:neg)
+                if (d["overall"]==3):
+                    continue
+                elif (len(pos_list)>=num_sample and len(neg_list)>=num_sample):
+                    break
+                
+                #Now cleaning the text
+                if("reviewText" not in d):
+                    skip_count  +=1
+                    continue 
+                # doc2idx,doclen = self._clean_the_document(d["reviewText"])
+                sentiment = 1 if d["overall"]>3 else 0
+                
+                if(len(neg_list)<num_sample and sentiment==0):
+                    neg_list.append((sentiment,d["reviewText"]))
+                    neg_doclen.append(len(d["reviewText"]))
+                elif (len(pos_list)<num_sample and sentiment==1):
+                    pos_list.append((sentiment,d["reviewText"]))
+                    pos_doclen.append(len(d["reviewText"]))
+                
+            print("===========================================")
+            #Getting the stats from this category
+            print("cat:{}\tpos:{}\tneg:{}\tpos_avlen:{}\tneg_avlen:{}\tskips:{}".format(
+                                        cat,
+                                        len(pos_list),
+                                        len(neg_list),
+                                        np.mean(pos_doclen),
+                                        np.mean(neg_doclen),
+                                        skip_count,
+            ))
+
+            #Now we will create the dataframe for this category
+            pos_label, pos_doc = zip(*pos_list)
+            neg_label, neg_doc = zip(*neg_list)
+
+            cat_df = pd.DataFrame(
+                            dict(
+                                label=pos_label+neg_label,
+                                doc=pos_doc+neg_doc
+                            )
+            )
+            print("Created category df for: ",cat)
+            print(cat_df.head)
+            print("===========================================")
+            return cat_df
+        
+        #Getting the dataframe for each categories
+        all_cat_dfs = {}
+        for cat in self.data_args["cat_list"]:
+            cat_df =  get_category_df(
+                                self.data_args["path"],
+                                cat,
+                                self.data_args["num_sample"],                         
+            )
+            all_cat_dfs[cat]=cat_df
+        
+        #Now its time to build a data loader for the transformer
+        class DFIterator(object):
+            def __init__(self,df,name):
+                self.df = df
+                self.num_example = df.shape[0]
+                self.name=name
+            
+            def __iter__(self,):
+                idx = 0 
+                while True:
+                    label = self.df.iloc[idx]["label"]
+                    doc = self.df.iloc[idx]["doc"]
+
+                    #Now parsing the document from the tokenizer
+                    encoded_doc = self.tokenizer(
+                                            doc,
+                                            padding='max_length',
+                                            truncation=True,
+                                            max_length=self.data_args["max_len"],
+                                            return_tensors="tf"
+                    )
+                    input_idx = encoded_doc["input_ids"]
+                    attn_mask = encoded_doc["attention_mask"]
+
+
+                    idx = (idx+1)%self.num_example
+                    if(idx==0):
+                        print("New Start df: ",self.name)
+                    
+                    yield (label,input_idx,attn_mask)
+        
+
+        def get_next_item(all_cat_dfs,all_cat_names):
+            #Creating the dataset from iteratable object
+            all_cat_iter = {
+                cat: DFIterator(all_cat_dfs[cat],all_cat_names[cat])
+                    for cat in all_cat_names
+            }
+
+            #Now one by one we will yield one example from each
+            idx = 0 
+            while True:
+                all_cat_samples = [
+                    next(all_cat_iter[cat])
+                        for cat in all_cat_names
+                ]
+
+                yield all_cat_samples
+
+                idx+=1
+                #Getting out of this loop once we iterated over all the examples
+                '''
+                The side effect is if some of the ds has lesser num of example
+                then they will be cycled.
+                '''
+                if(idx==(self.data_args["num_sample"]*self.data_args["num_class"])):
+                    break
+
+        #Now creating the dataset from this iterator
+        dataset = tf.data.Dataset.from_generator(
+            get_next_item,
+        )
+        dataset = dataset.shuffle(self.data_args["shuffle_size"])
+        dataset = dataset.batch(self.data_args["batch_size"])
+
+        return dataset
 
 
 if __name__=="__main__":
