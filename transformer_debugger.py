@@ -1,5 +1,4 @@
 import numpy as np
-from numpy.lib.function_base import append
 import pandas as pd
 
 
@@ -202,17 +201,9 @@ class TransformerClassifier(keras.Model):
                 cat_total_loss += cat_loss
         
             #Now we have total classification loss, lets update the gradient
-            cat_trainable_weights=[]
-            for cidx in range(len(self.data_args["cat_list"])):
-                cat_trainable_weights.append(
-                                self.cat_importance_weight_list[cidx]
-                )
-                cat_trainable_weights += self.cat_classifier_list[cidx].trainable_weights
-                
-                
-            grads = tape.gradient(cat_loss,cat_trainable_weights)
+            grads = tape.gradient(cat_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
-                zip(grads,cat_trainable_weights)
+                zip(grads,self.trainable_weights)
             )
 
             #Getting the validation accuracy for this category
@@ -269,13 +260,9 @@ class TransformerClassifier(keras.Model):
                 topic_total_loss += topic_loss
         
             #Now we have total classification loss, lets update the gradient
-            topic_trainable_weights = [
-                                            self.topic_importance_weight_list[0],
-            ]
-            topic_trainable_weights += self.topic_classifier_list[0].trainable_weights
-            grads = tape.gradient(topic_loss,topic_trainable_weights)
+            grads = tape.gradient(topic_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
-                zip(grads,topic_trainable_weights)
+                zip(grads,self.trainable_weights)
             )
 
             #Getting the validation accuracy for this category
@@ -331,6 +318,35 @@ def transformer_trainer(data_args,model_args):
     )
 
 
+def load_and_analyze_transformer(data_args,model_args):
+    #First of all creating the model
+    classifier = TransformerClassifier(data_args,model_args)
+    
+    
+    checkpoint_path = "{}/cp.ckpt".format(model_args["expt_name"])
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    
+    
+    classifier.load_weights(checkpoint_path)
+
+
+    #Getting the variance in the diemnsion of weights
+    sent_weights=[
+        np.squeeze(classifier.cat_importance_weight_list[cidx].numpy())
+                        for cidx in range(data_args["cat_list"])
+    ]
+    sent_weights = np.stack(sent_weights,axis=1)
+
+    dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)
+    spurious_dims = np.argsort(dim_score)
+
+
+    #Sorting the importance score of the topic weights
+    topic_weight = np.squeeze(classifier.topic_importance_weight_list[0].numpy())
+    topic_imp_dims = np.argsort(topic_weight)
+    pdb.set_trace()
+
+
 if __name__=="__main__":
     #Defining the Data args
     data_args={}
@@ -354,7 +370,8 @@ if __name__=="__main__":
     model_args["train_bert"]=False
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
 
-    transformer_trainer(data_args,model_args)
+    # transformer_trainer(data_args,model_args)
+    load_and_analyze_transformer(data_args,model_args)
 
 
             
