@@ -314,7 +314,7 @@ class DataHandleTransformer():
                 #Also we would like to get the topic for this document
                 doc_tokens,doclen = self._clean_the_document(d["reviewText"])
 
-                genre_words  = set("science","tragedy","drama","comedy","fiction","fantasy","horror","cartoon")
+                genre_words  = set(["science","tragedy","drama","comedy","fiction","fantasy","horror","cartoon"])
                 topic=0
                 if(genre_words.intersection(set(doc_tokens))!=0):
                     topic=1

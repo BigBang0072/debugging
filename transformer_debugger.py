@@ -221,7 +221,7 @@ class TransformerClassifier(keras.Model):
                             cat_dataset_list[cat]["input_idx"],
                             cat_dataset_list[cat]["attn_mask"]
                     )
-                        for cat in self.data_args["topic_list"]
+                        for cat in self.data_args["cat_list"]
         ]
         #Shuffling the topics for now (since one cat is ont topic for now)
         topic,input_idx,attn_mask = zip(*all_topic_data)
@@ -231,7 +231,7 @@ class TransformerClassifier(keras.Model):
 
         #Training the topic classifier in batches
         topic_total_loss = 0.0
-        for tidx,topic in enumerate(self.data_args["topic_list"]):
+        for tidx,cat in enumerate(self.data_args["cat_list"]):
             #Sharding the topic data into batches
             batch_size = self.data_args["batch_size"]
             topic_label = topic_label_all[tidx*batch_size:(tidx+1)*batch_size]
@@ -337,13 +337,23 @@ def load_and_analyze_transformer(data_args,model_args):
     ]
     sent_weights = np.stack(sent_weights,axis=1)
 
-    dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)
-    spurious_dims = np.argsort(dim_score)
+    # dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)
+    # spurious_dims = np.argsort(dim_score)
+
+    dim_std = np.std(sent_weights,axis=1)
+    dim_mean=np.mean(sent_weights,axis=1)
+    dim_score2 = dim_std * (dim_mean>0.7)
+    num_spurious = np.sum(dim_score2>0.1)
+    spurious_dims2 = np.argsort(dim_score2)[-num_spurious:]
 
 
     #Sorting the importance score of the topic weights
     topic_weight = np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[0]).numpy())
     topic_imp_dims = np.argsort(topic_weight)
+
+    #Percentage of spuriousness is biggest 50 importance
+    upto_index = num_spurious
+    spuriousness_percentage = len(set(spurious_dims2).intersection(set(topic_imp_dims[-1*upto_index:])))/upto_index
     pdb.set_trace()
 
 
@@ -370,7 +380,7 @@ if __name__=="__main__":
     model_args["train_bert"]=False
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
 
-    # transformer_trainer(data_args,model_args)
+    transformer_trainer(data_args,model_args)
     load_and_analyze_transformer(data_args,model_args)
 
 
