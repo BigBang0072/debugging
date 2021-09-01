@@ -333,7 +333,7 @@ def load_and_analyze_transformer(data_args,model_args):
     #Getting the variance in the diemnsion of weights
     sent_weights=[
         np.squeeze(classifier.cat_importance_weight_list[cidx].numpy())
-                        for cidx in range(data_args["cat_list"])
+                        for cidx in range(len(data_args["cat_list"]))
     ]
     sent_weights = np.stack(sent_weights,axis=1)
 
@@ -354,8 +354,8 @@ if __name__=="__main__":
     data_args["transformer_name"]="bert-base-uncased"
     data_args["num_class"]=2
     data_args["max_len"]=200
-    data_args["num_sample"]=100
-    data_args["batch_size"]=8
+    data_args["num_sample"]=8000
+    data_args["batch_size"]=32
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
     data_args["topic_list"]=data_args["cat_list"]
