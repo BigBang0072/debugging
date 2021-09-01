@@ -332,7 +332,7 @@ def load_and_analyze_transformer(data_args,model_args):
 
     #Getting the variance in the diemnsion of weights
     sent_weights=[
-        np.squeeze(classifier.cat_importance_weight_list[cidx].numpy())
+        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
                         for cidx in range(len(data_args["cat_list"]))
     ]
     sent_weights = np.stack(sent_weights,axis=1)
@@ -342,7 +342,7 @@ def load_and_analyze_transformer(data_args,model_args):
 
 
     #Sorting the importance score of the topic weights
-    topic_weight = np.squeeze(classifier.topic_importance_weight_list[0].numpy())
+    topic_weight = np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[0]).numpy())
     topic_imp_dims = np.argsort(topic_weight)
     pdb.set_trace()
 
@@ -354,7 +354,7 @@ if __name__=="__main__":
     data_args["transformer_name"]="bert-base-uncased"
     data_args["num_class"]=2
     data_args["max_len"]=200
-    data_args["num_sample"]=8000
+    data_args["num_sample"]=10000
     data_args["batch_size"]=32
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
