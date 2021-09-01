@@ -354,16 +354,16 @@ if __name__=="__main__":
     data_args["transformer_name"]="bert-base-uncased"
     data_args["num_class"]=2
     data_args["max_len"]=200
-    data_args["num_sample"]=10000
+    data_args["num_sample"]=100
     data_args["batch_size"]=32
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
-    data_args["topic_list"]=data_args["cat_list"]
+    data_args["topic_list"]=["genre","nogenre"]
     
 
     #Defining the Model args
     model_args={}
-    model_args["expt_name"]="1.0"
+    model_args["expt_name"]="1.1"
     model_args["lr"]=0.001
     model_args["epochs"]=5
     model_args["valid_split"]=0.2

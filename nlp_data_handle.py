@@ -251,7 +251,33 @@ class DataHandleTransformer():
     def __init__(self,data_args):
         self.data_args = data_args
         self.tokenizer = AutoTokenizer.from_pretrained(data_args["transformer_name"])
+
+        self.delimiter=",|\?|\!|-|\*| |  |;|\.|\(|\)|\n|\"|:|'|/|&|`|[|]|\{|\}|\>|\<"
     
+    def _clean_the_document(self,document):
+        #Splitting the document by the delimiters
+        tokens = re.split(self.delimiter,document)
+        
+        #Updating the vocablury dictionary
+        doc2idx = []
+        for token in tokens:
+            if(len(token)==0):
+                continue
+            token = token.lower()
+
+            # #Adding the token to vocab
+            # if token not in self.dict_w2i:
+            #     self._add_word_to_vocab(token)
+            
+            #Adding the token idx if not approached max len
+            if self.data_args["max_len"]==len(doc2idx):
+                break
+            doc2idx.append(token)
+        
+
+        #TODO: Later we could remove some of the words --> unk based on frequency
+        return doc2idx,len(tokens)
+
     def amazon_reviews_handler(self,):
         '''
         This function will handle all the data processing needed for
@@ -269,6 +295,7 @@ class DataHandleTransformer():
             pos_doclen = []
             neg_doclen = []
             skip_count = 0
+            topic_count=0
             path = "{}{}.json.gz".format(path,cat)
             for d in parse(path):
                 # pdb.set_trace()
@@ -282,22 +309,34 @@ class DataHandleTransformer():
                 if("reviewText" not in d):
                     skip_count  +=1
                     continue 
-                # doc2idx,doclen = self._clean_the_document(d["reviewText"])
                 sentiment = 1 if d["overall"]>3 else 0
+
+                #Also we would like to get the topic for this document
+                doc_tokens,doclen = self._clean_the_document(d["reviewText"])
+
+                genre_words  = set("science","tragedy","drama","comedy","fiction","fantasy","horror","cartoon")
+                topic=0
+                if(genre_words.intersection(set(doc_tokens))!=0):
+                    topic=1
+                    topic_count+=1
+
                 
                 if(len(neg_list)<num_sample and sentiment==0):
-                    neg_list.append((sentiment,d["reviewText"]))
+                    neg_list.append((sentiment,topic,d["reviewText"]))
                     neg_doclen.append(len(d["reviewText"]))
                 elif (len(pos_list)<num_sample and sentiment==1):
-                    pos_list.append((sentiment,d["reviewText"]))
+                    pos_list.append((sentiment,topic,d["reviewText"]))
                     pos_doclen.append(len(d["reviewText"]))
                 
+                
+            
             print("===========================================")
             #Getting the stats from this category
-            print("cat:{}\tpos:{}\tneg:{}\tpos_avlen:{}\tneg_avlen:{}\tskips:{}".format(
+            print("cat:{}\tpos:{}\tneg:{}\ttopic:{}\tpos_avlen:{}\tneg_avlen:{}\tskips:{}".format(
                                         cat,
                                         len(pos_list),
                                         len(neg_list),
+                                        topic_count,
                                         np.mean(pos_doclen),
                                         np.mean(neg_doclen),
                                         skip_count,
@@ -306,8 +345,10 @@ class DataHandleTransformer():
             #Now we will create the dataframe for this category
             all_data_list = pos_list+neg_list
             random.shuffle(all_data_list)
-            label, doc = zip(*all_data_list)
-            topic = [cidx]*len(label)
+            label,topic, doc = zip(*all_data_list)
+
+            #Now we will generate the topic label for 
+            # topic = [cidx]*len(label)
             # pos_label, pos_doc = zip(*pos_list)
             # neg_label, neg_doc = zip(*neg_list)
 
