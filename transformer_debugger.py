@@ -12,7 +12,7 @@ from transformers import TFBertModel,TFDistilBertModel
 import pdb
 import os
 import sys
-from pprint import pprint
+from pprint import pprint as mypp
 
 
 from nlp_data_handle import *
@@ -369,7 +369,8 @@ def get_sorted_rank_correlation(sent_weights,topic_weights,topic_list,policy):
         
     #Sorting the ranking
     topic_correlation.sort(key=lambda x:-x[0])
-    pprint(topic_correlation)
+    print("\ncorrelation_policy: ",policy)
+    mypp(topic_correlation)
 
     return topic_correlation
 
