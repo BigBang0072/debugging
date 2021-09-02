@@ -80,7 +80,7 @@ class TransformerClassifier(keras.Model):
 
         #Initilaizing the trackers for topics classifier
         self.topic_pred_xentropy = keras.metrics.Mean(name="topic_pred_x")
-        self.topic_valid_acc = [
+        self.topic_valid_acc_list = [
             tf.keras.metrics.SparseCategoricalAccuracy(name="t{}_valid_acc".format(topic))
                 for topic in self.data_args["topic_list"]
         ]
@@ -157,6 +157,7 @@ class TransformerClassifier(keras.Model):
         This function will run one step of training for the classifier
         '''
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        cxentropy_loss = keras.losses.CategoricalCrossentropy(from_logits=False)
 
         #Get the dataset for each category
         cat_dataset_list = data
@@ -251,20 +252,20 @@ class TransformerClassifier(keras.Model):
                 tclass_factor = self.data_args["per_topic_class"]
                 #Getting the train data
                 topic_label_train = topic_label[0:valid_idx,tidx]
-                topic_idx_train = topic_idx[0:valid_idx,tidx]
-                topic_mask_train = topic_mask[0:valid_idx,tidx]
+                topic_idx_train = topic_idx[0:valid_idx]
+                topic_mask_train = topic_mask[0:valid_idx]
 
                 #Getting the validation data
                 topic_label_valid = topic_label[valid_idx:,tidx]
-                topic_idx_valid = topic_idx[valid_idx:,tidx]
-                topic_mask_valid = topic_mask[valid_idx:,tidx]
+                topic_idx_valid = topic_idx[valid_idx:]
+                topic_mask_valid = topic_mask[valid_idx:]
 
                 with tf.GradientTape() as tape:
                     #Forward propagating the model
                     topic_train_prob = self.get_topic_pred_prob(topic_idx_train,topic_mask_train,tidx)
 
                     #Getting the loss for this classifier
-                    topic_loss = scxentropy_loss(topic_label_train,topic_train_prob)
+                    topic_loss = cxentropy_loss(topic_label_train,topic_train_prob)
                     topic_total_loss += topic_loss
             
                 #Now we have total classification loss, lets update the gradient
@@ -276,7 +277,10 @@ class TransformerClassifier(keras.Model):
 
                 #Getting the validation accuracy for this category
                 topic_valid_prob = self.get_topic_pred_prob(topic_idx_valid,topic_mask_valid,tidx)
-                self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
+
+                #For calculating the accuracy we need one single label instead of mixed prob.
+                topic_label_valid_MAX = tf.argmax(topic_label_valid,axis=-1)
+                self.topic_valid_acc_list[tidx].update_state(topic_label_valid_MAX,topic_valid_prob)
         
         #Updating the metrics to track
         self.topic_pred_xentropy.update_state(topic_total_loss)
@@ -440,6 +444,7 @@ if __name__=="__main__":
     #Defining the Model args
     model_args={}
     model_args["expt_name"]="2.0"
+    data_args["expt_name"]=model_args["expt_name"]
     model_args["lr"]=0.001
     model_args["epochs"]=5
     model_args["valid_split"]=0.2

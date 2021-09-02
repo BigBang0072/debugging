@@ -298,7 +298,7 @@ class DataHandleTransformer():
         parser = English()
 
         #Creating the tokens
-        tokens = parser(doc)
+        tokens = nlp(doc)
         tokens = [word.lemma_.lower().strip() 
                     if word.lemma_ !="-PRON-" 
                     else word.lower_ 
@@ -320,7 +320,7 @@ class DataHandleTransformer():
         for cat_df in all_cat_df.values():
 
             cat_pdocs = cat_df[pdoc_name].tolist()
-            pdoc_list.append(cat_pdocs)
+            pdoc_list+=cat_pdocs
         
         #Vectorizing the data
         vectorizer = CountVectorizer(min_df=0.01, 
@@ -344,7 +344,7 @@ class DataHandleTransformer():
             for ctidx in range(cat_df.shape[0]):
                 doc = cat_df.iloc[ctidx][pdoc_name]
                 #Getting the topic distriubiton
-                doc_vector = vectorizer.transform(doc)
+                doc_vector = vectorizer.transform([doc])
                 doc_topic = np.array(lda.transform(doc_vector)[0])
 
                 #Creating the doc_topic_label
@@ -352,7 +352,7 @@ class DataHandleTransformer():
                 topic_label_list.append(doc_topic_label)
 
             #Assigning the topic label in the new column
-            topic_label_list[topic_col_name]=topic_label_list
+            cat_df[topic_col_name]=topic_label_list
         
         return all_cat_df
 
