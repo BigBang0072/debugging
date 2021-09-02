@@ -6,7 +6,7 @@ import gensim.downloader as gensim_api
 
 import string
 import spacy
-nlp = spacy.load("en_core_web_lg")
+nlp = spacy.load("en_core_web_lg",disable=["tagger", "parser", "lemmatizer", "ner", "textcat"])
 from spacy.lang.en.stop_words import STOP_WORDS
 from spacy.lang.en import English
 from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
@@ -264,6 +264,7 @@ class DataHandleTransformer():
 
         self.delimiter=",|\?|\!|-|\*| |  |;|\.|\(|\)|\n|\"|:|'|/|&|`|[|]|\{|\}|\>|\<"
         self.word_count=defaultdict(int)
+        self.filter_dict=None
     
     def _clean_the_document(self,document):
         #Splitting the document by the delimiters
@@ -319,10 +320,18 @@ class DataHandleTransformer():
         if self.filter_dict !=None:
             return self.filter_dict
         
-        word_tf = [(word,freq) for word,freq in self.word_count.items()]
-        word_tf.sort(key=lambda x:x[-1])
-        slice_idx = int(tfreq_ulim*len(word_tf))
-        word_tf=word_tf[slice_idx:]
+        word_tf=None
+        if(type(tfreq_ulim)==type(1)):
+            word_tf = [(word,freq) for word,freq in self.word_count.items() if freq>=tfreq_ulim]
+            word_tf_keep = [(word,freq) for word,freq in self.word_count.items() if freq<tfreq_ulim]
+            self.vocab_dict={word:idx for idx,(word,_) in enumerate(word_tf_keep)}
+        else:
+            word_tf = [(word,freq) for word,freq in self.word_count.items()]
+            word_tf.sort(key=lambda x:x[-1])
+            slice_idx = int(tfreq_ulim*len(word_tf))
+            word_tf=word_tf[slice_idx:]
+            # pdb.set_trace()
+            self.vocab_dict={word:idx for idx,(word,_) in enumerate(word_tf[0:slice_idx])}
 
         #Hasing the words to remove
         filter_dict = {}
@@ -336,7 +345,7 @@ class DataHandleTransformer():
         
         self.filter_dict=filter_dict
 
-        return filter_dict
+        return filter_dict,self.vocab_dict
     
     def _get_topic_labels(self,all_cat_df,pdoc_name,num_topics,topic_col_name):
         '''
@@ -348,14 +357,18 @@ class DataHandleTransformer():
         for cat_df in all_cat_df.values():
             for idx in range(cat_df.shape[0]):
                 doc = cat_df.iloc[idx][pdoc_name]
-                cat_pdoc = self._spacy_cleaner(doc,tfreq_ulim=0.7)
-                pdoc_list.append(cat_pdoc)
+                # cat_pdoc = self._spacy_cleaner(doc,tfreq_ulim=0.7)
+                pdoc_list.append(doc)
         
+        #Generating the vocabulary
+        _,vocab_dict=self._get_filter_word_dict(tfreq_ulim=0.7)
+
         #Vectorizing the data
         vectorizer = CountVectorizer(min_df=0.1, 
                                         max_df=0.9, 
                                         stop_words=None, 
                                         lowercase=True,
+                                        vocabulary=vocab_dict
         )
         data_vectorized = vectorizer.fit_transform(pdoc_list)
 
