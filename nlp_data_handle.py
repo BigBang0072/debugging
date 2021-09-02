@@ -361,11 +361,11 @@ class DataHandleTransformer():
                 pdoc_list.append(doc)
         
         #Generating the vocabulary
-        _,vocab_dict=self._get_filter_word_dict(tfreq_ulim=0.7)
+        _,vocab_dict=self._get_filter_word_dict(tfreq_ulim=self.data_args["tfreq_ulim"])
 
         #Vectorizing the data
-        vectorizer = CountVectorizer(min_df=0.1, 
-                                        max_df=0.9, 
+        vectorizer = CountVectorizer(min_df=self.data_args["min_df"], 
+                                        max_df=self.data_args["max_df"], 
                                         stop_words=None, 
                                         lowercase=True,
                                         vocabulary=vocab_dict
@@ -374,12 +374,13 @@ class DataHandleTransformer():
 
 
         #Performing the LDA
-        lda = LatentDirichletAllocation(n_components=num_topics, max_iter=10, 
+        lda = LatentDirichletAllocation(n_components=num_topics, 
+                                        max_iter=self.data_args["lda_epochs"], 
                                         learning_method='online',verbose=True)
         data_lda = lda.fit_transform(data_vectorized)
 
         #Saving the topic distribution
-        self._save_topic_distiribution(lda,vectorizer,"lda_topics.txt",top_n=30)
+        self._save_topic_distiribution(lda,vectorizer,"lda_topics.txt",top_n=50)
 
         #Now we have to label the documents with topic
         for cat_df in all_cat_df.values():

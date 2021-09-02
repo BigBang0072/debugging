@@ -426,29 +426,42 @@ def load_and_analyze_transformer(data_args,model_args):
 
 
 if __name__=="__main__":
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('-expt_num',dest="expt_name",type=str)
+    parser.add_argument('-num_samples',dest="num_samples",type=int)
+    parser.add_argument('-num_topics',dest="num_topics",type=int)
+    parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float)
+    parser.add_argument('-train_bert',dest="train_bert",type=bool)
+    args=parser.parse_args()
+    print(args)
+
     #Defining the Data args
     data_args={}
     data_args["path"] = "dataset/amazon/"
     data_args["transformer_name"]="bert-base-uncased"
     data_args["num_class"]=2
     data_args["max_len"]=200
-    data_args["num_sample"]=100
+    data_args["num_sample"]=args.num_samples
     data_args["batch_size"]=32
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
-    data_args["num_topics"]=10
+    data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
     data_args["per_topic_class"]=2 #Each of the topic is binary (later could have more)
-    
+    data_args["tfreq_ulim"]=args.tfreq_ulim
+    data_args["lda_epochs"]=25
+    data_args["min_df"]=0.0
+    data_args["max_df"]=1.0
 
     #Defining the Model args
     model_args={}
-    model_args["expt_name"]="2.0"
+    model_args["expt_name"]=args.expt_name
     data_args["expt_name"]=model_args["expt_name"]
     model_args["lr"]=0.001
     model_args["epochs"]=5
     model_args["valid_split"]=0.2
-    model_args["train_bert"]=False
+    model_args["train_bert"]=args.train_bert
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
     model_args["shuffle_topic_batch"]=False
 
