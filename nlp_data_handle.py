@@ -3,6 +3,15 @@ import pandas as pd
 import tensorflow as tf
 import gensim.downloader as gensim_api
 
+import string
+import spacy
+nlp = spacy.load("en_core_web_lg")
+from spacy.lang.en.stop_words import STOP_WORDS
+from spacy.lang.en import English
+from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
+from sklearn.feature_extraction.text import CountVectorizer
+
+import os
 import gzip
 import json
 import re 
@@ -277,6 +286,127 @@ class DataHandleTransformer():
 
         #TODO: Later we could remove some of the words --> unk based on frequency
         return doc2idx,len(tokens)
+    
+    def _spacy_cleaner(self,doc):
+        '''
+        This function will clean the document using the spacy's functions
+        and return the processed doc
+        '''
+        punctuations = string.punctuation
+        #Lets not remove stopwords for now, because it could also be a possible bug
+        # stopwords = list(STOP_WORDS)
+        parser = English()
+
+        #Creating the tokens
+        tokens = parser(doc)
+        tokens = [word.lemma_.lower().strip() 
+                    if word.lemma_ !="-PRON-" 
+                    else word.lower_ 
+                        for word in tokens
+        ]
+        tokens = [word for word in tokens if word not in punctuations]
+
+        processed_doc = " ".join([i for i in tokens])
+
+        return processed_doc
+    
+    def _get_topic_labels(self,all_cat_df,pdoc_name,num_topics,topic_col_name):
+        '''
+        This will convert all the documents into a topic model
+        and label the documents accordinly.
+        '''
+        #Getting the list of documents
+        pdoc_list =[]
+        for cat_df in all_cat_df.values():
+
+            cat_pdocs = cat_df[pdoc_name].tolist()
+            pdoc_list.append(cat_pdocs)
+        
+        #Vectorizing the data
+        vectorizer = CountVectorizer(min_df=0.01, 
+                                        max_df=0.99, 
+                                        stop_words=None, 
+                                        lowercase=True,
+        )
+        data_vectorized = vectorizer.fit_transform(pdoc_list)
+
+        #Performing the LDA
+        lda = LatentDirichletAllocation(n_components=num_topics, max_iter=10, 
+                                        learning_method='online',verbose=True)
+        data_lda = lda.fit_transform(data_vectorized)
+
+        #Saving the topic distribution
+        self._save_topic_distiribution(lda,vectorizer,"lda_topics.txt",top_n=30)
+
+        #Now we have to label the documents with topic
+        for cat_df in all_cat_df.values():
+            topic_label_list = []
+            for ctidx in range(cat_df.shape[0]):
+                doc = cat_df.iloc[ctidx][pdoc_name]
+                #Getting the topic distriubiton
+                doc_vector = vectorizer.transform(doc)
+                doc_topic = np.array(lda.transform(doc_vector)[0])
+
+                #Creating the doc_topic_label
+                doc_topic_label = np.stack([doc_topic,1-doc_topic],axis=-1).tolist()
+                topic_label_list.append(doc_topic_label)
+
+            #Assigning the topic label in the new column
+            topic_label_list[topic_col_name]=topic_label_list
+        
+        return all_cat_df
+
+    def _save_topic_distiribution(self,model, vectorizer,fname, top_n=100):
+        #Saving the topic distribution to a file
+        file_path = "nlp_logs/{}/".format(self.data_args["expt_name"])
+        os.makedirs(file_path,exist_ok = True)
+
+        #Writing to the file
+        with open(file_path+fname,"w") as whandle:
+            for idx, topic in enumerate(model.components_):
+                feature_vector = [
+                                    (vectorizer.get_feature_names()[i], "{:.5f}".format(topic[i]))
+                                        for i in topic.argsort()[:-top_n - 1:-1]
+                                ]
+                write_string = "Topic:{}\t\tComponent:{}".format(idx,feature_vector)
+                print("Topic:{} \t\t Component:{}".format(idx,feature_vector))
+
+    def _convert_df_to_dataset(self,df,doc_col_name,label_col_name,topic_col_name):
+        '''
+        This function will conver the dataframe to a tensorflow dataset
+        to be used as input for Transformer.
+        '''
+        #First of all parsing the review documents into tensors
+        doc_list = []
+        label_list = []
+        topic_list = []
+        for ridx in range(df.shape[0]):
+            doc_list.append(df.iloc[ridx][doc_col_name])
+            label_list.append(df.iloc[ridx][label_col_name])
+            topic_list.append(df.iloc[ridx][topic_col_name])
+        
+        #Now we will parse the documents
+        encoded_doc = self.tokenizer(
+                                    doc_list,
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+        input_idx = encoded_doc["input_ids"]
+        attn_mask = encoded_doc["attention_mask"]
+
+        #Creating the dataset for this category
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    label=np.array(label_list),
+                                    topic=np.array(topic_list),
+                                    input_idx = input_idx,
+                                    attn_mask = attn_mask
+                                )
+        )
+
+        return cat_dataset
 
     def amazon_reviews_handler(self,):
         '''
@@ -312,31 +442,32 @@ class DataHandleTransformer():
                 sentiment = 1 if d["overall"]>3 else 0
 
                 #Also we would like to get the topic for this document
-                doc_tokens,doclen = self._clean_the_document(d["reviewText"])
+                # doc_tokens,doclen = self._clean_the_document(d["reviewText"])
 
-                genre_words  = set(["science","tragedy","drama","comedy","fiction","fantasy","horror","cartoon"])
-                topic=0
-                if(genre_words.intersection(set(doc_tokens))!=0):
-                    topic=1
-                    topic_count+=1
+                # genre_words  = set(["science","tragedy","drama","comedy","fiction","fantasy","horror","cartoon"])
+                # topic=0
+                # if(genre_words.intersection(set(doc_tokens))!=0):
+                #     topic=1
+                #     topic_count+=1
 
                 
                 if(len(neg_list)<num_sample and sentiment==0):
-                    neg_list.append((sentiment,topic,d["reviewText"]))
+                    processed_doc = self._spacy_cleaner(d["reviewText"])
+                    neg_list.append((sentiment,d["reviewText"],processed_doc))
                     neg_doclen.append(len(d["reviewText"]))
                 elif (len(pos_list)<num_sample and sentiment==1):
-                    pos_list.append((sentiment,topic,d["reviewText"]))
+                    processed_doc = self._spacy_cleaner(d["reviewText"])
+                    pos_list.append((sentiment,d["reviewText"],processed_doc))
                     pos_doclen.append(len(d["reviewText"]))
                 
                 
             
             print("===========================================")
             #Getting the stats from this category
-            print("cat:{}\tpos:{}\tneg:{}\ttopic:{}\tpos_avlen:{}\tneg_avlen:{}\tskips:{}".format(
+            print("cat:{}\tpos:{}\tneg:{}\tpos_avlen:{}\tneg_avlen:{}\tskips:{}".format(
                                         cat,
                                         len(pos_list),
                                         len(neg_list),
-                                        topic_count,
                                         np.mean(pos_doclen),
                                         np.mean(neg_doclen),
                                         skip_count,
@@ -345,58 +476,55 @@ class DataHandleTransformer():
             #Now we will create the dataframe for this category
             all_data_list = pos_list+neg_list
             random.shuffle(all_data_list)
-            label,topic, doc = zip(*all_data_list)
+            label, doc, pdoc = zip(*all_data_list)
+            topic = [cidx]*len(label)
 
-            #Now we will generate the topic label for 
-            # topic = [cidx]*len(label)
-            # pos_label, pos_doc = zip(*pos_list)
-            # neg_label, neg_doc = zip(*neg_list)
-
-            #Now we will parse the documents
-            encoded_doc = self.tokenizer(
-                                        list(doc),
-                                        padding='max_length',
-                                        truncation=True,
-                                        max_length=self.data_args["max_len"],
-                                        return_tensors="tf"
-                )
-            input_idx = encoded_doc["input_ids"]
-            attn_mask = encoded_doc["attention_mask"]
-
-            #Creating the dataset for this category
-            cat_dataset = tf.data.Dataset.from_tensor_slices(
-                                    dict(
-                                        label=np.array(label),
-                                        topic=np.array(topic),
-                                        input_idx = input_idx,
-                                        attn_mask = attn_mask
-                                    )
+            #Creating the dataframe
+            cat_df = pd.DataFrame(
+                            dict(
+                                label=label,
+                                topic=topic,
+                                doc=doc,
+                                pdoc=pdoc,
+                            )
             )
-
-            # cat_df = pd.DataFrame(
-            #                 dict(
-            #                     label=pos_label+neg_label,
-            #                     doc=pos_doc+neg_doc
-            #                 )
-            # )
-            # print("Created category df for: ",cat)
-            # print(cat_df.head())
-            # print("===========================================")
-            # return cat_df
-            return cat_dataset
+            print("Created category df for: ",cat)
+            print(cat_df.head())
+            print("===========================================")
+            return cat_df
         
         #Getting the dataframe for each categories
-        all_cat_ds = {}
+        all_cat_df = {}
         for cidx,cat in enumerate(self.data_args["cat_list"]):
-            cat_ds =  get_category_df(
+            cat_df =  get_category_df(
                                 self.data_args["path"],
                                 cat,
                                 self.data_args["num_sample"], 
                                 cidx,                        
             )
-            all_cat_ds[cat]=cat_ds
-        
+            all_cat_df[cat]=cat_df
+
+
+        #Getting the topic for each of dataframe
+        all_cat_df = self._get_topic_labels(all_cat_df=all_cat_df,
+                                            pdoc_name="pdoc",
+                                            num_topics=self.data_args["num_topics"],
+                                            topic_col_name="topic")
+
+
         #Creating the zipped dataset
+        all_cat_ds = {}
+        for cat in self.data_args["cat_list"]:
+            cat_df = all_cat_df[cat]
+            #Getting the dataset object
+            cat_ds = self._convert_df_to_dataset(
+                                        df=cat_df,
+                                        doc_col_name="doc",
+                                        label_col_name="label",
+                                        topic_col_name="topic"
+            )
+            all_cat_ds[cat]=cat_ds
+        #Merging into one dictionary
         dataset = tf.data.Dataset.zip(all_cat_ds)
         
         #Now its time to build a data loader for the transformer

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import scipy
 
 
 import tensorflow as tf
@@ -53,48 +54,37 @@ class TransformerClassifier(keras.Model):
         #Initializing the heads for the "interpretable" topics
         self.topic_classifier_list = []
         self.topic_importance_weight_list = []
-        # for topic in self.data_args["topic_list"]:
-        #     #Creating the imporatance paramaters for each classifier
-        #     topic_imp_weight = tf.Variable(
-        #         tf.random_normal_initializer(mean=0.0,stddev=1.0)(
-        #                         shape=[1,model_args["bemb_dim"]],
-        #                         dtype=tf.float32,
-        #         ),
-        #         trainable=True
-        #     )
-        #     self.topic_importance_weight_list.append(topic_imp_weight)
-
-        #     #Creating a dense layer
-        #     topic_dense = layers.Dense(2,activation="softmax")
-        #     self.topic_classifier_list.append(topic_dense)
-
-        #Right now we will use just one classifier (we know domain should not be stable topics)
-        self.topic_importance_weight_list.append(
-            tf.Variable(
+        for topic in self.data_args["topic_list"]:
+            #Creating the imporatance paramaters for each classifier
+            topic_imp_weight = tf.Variable(
                 tf.random_normal_initializer(mean=0.0,stddev=1.0)(
                                 shape=[1,model_args["bemb_dim"]],
                                 dtype=tf.float32,
                 ),
                 trainable=True
             )
-        )
-        self.topic_classifier_list.append(
-            layers.Dense(len(self.data_args["topic_list"]),activation="softmax")
-        )
+            self.topic_importance_weight_list.append(topic_imp_weight)
+
+            #Creating a dense layer
+            topic_dense = layers.Dense(self.data_args["per_topic_class"],activation="softmax")
+            self.topic_classifier_list.append(topic_dense)
 
 
 
         #Initializing the trackers for sentiment classifier
         self.sent_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
         self.sent_valid_acc_list = [
-            tf.keras.metrics.SparseCategoricalAccuracy(name="{}_valid_acc".format(cat))
+            tf.keras.metrics.SparseCategoricalAccuracy(name="c{}_valid_acc".format(cat))
                 for cat in self.data_args["cat_list"]
         ]
 
         #Initilaizing the trackers for topics classifier
         self.topic_pred_xentropy = keras.metrics.Mean(name="topic_pred_x")
-        self.topic_valid_acc = tf.keras.metrics.SparseCategoricalAccuracy(name="topic_valid_acc")
-    
+        self.topic_valid_acc = [
+            tf.keras.metrics.SparseCategoricalAccuracy(name="t{}_valid_acc".format(topic))
+                for topic in self.data_args["topic_list"]
+        ]
+
     def compile(self, optimizer):
         super(TransformerClassifier, self).compile()
         self.optimizer = optimizer 
@@ -129,7 +119,7 @@ class TransformerClassifier(keras.Model):
 
         return cat_class_prob
     
-    def get_topic_pred_prob(self,idx_train,mask_train,cidx): 
+    def get_topic_pred_prob(self,idx_train,mask_train,tidx): 
         # raise NotImplementedError   
         #Getting the bert activation
         bert_outputs=self.bert_model(
@@ -137,9 +127,11 @@ class TransformerClassifier(keras.Model):
                     attention_mask=mask_train
         )
         bert_seq_output = bert_outputs.last_hidden_state
+        #Stopping the gradient update in case of bert training
+        bert_seq_output = tf.stop_gradient(bert_seq_output)
 
         #Multiplying this embedding with corresponding weights
-        topic_imp_weights = tf.sigmoid(self.topic_importance_weight_list[cidx])
+        topic_imp_weights = tf.sigmoid(self.topic_importance_weight_list[tidx])
         weighted_bert_seq_output = bert_seq_output * topic_imp_weights
 
         #Now we need to take average of the last hidden state:
@@ -156,7 +148,7 @@ class TransformerClassifier(keras.Model):
         avg_embedding = masked_sum / (num_tokens+1e-10)
         
         #Now we will apply the dense layer for this topic
-        topic_class_prob = self.topic_classifier_list[cidx](avg_embedding)
+        topic_class_prob = self.topic_classifier_list[tidx](avg_embedding)
 
         return topic_class_prob
     
@@ -225,62 +217,92 @@ class TransformerClassifier(keras.Model):
         ]
         #Shuffling the topics for now (since one cat is ont topic for now)
         topic,input_idx,attn_mask = zip(*all_topic_data)
-        topic_label_all = tf.random.shuffle(tf.concat(topic,axis=0))
-        input_idx = tf.random.shuffle(tf.concat(input_idx,axis=0))
-        attn_mask=tf.random.shuffle(tf.concat(attn_mask,axis=0))
+
+        topic_label_all     =   tf.concat(topic,axis=0)
+        input_idx           =   tf.concat(input_idx,axis=0)
+        attn_mask           =   tf.concat(attn_mask,axis=0)
+
+        #Shuffling the examples, incase the topic labels are skewed in a category
+        if(self.model_args["shuffle_topic_batch"]):
+            #To shuffle, dont use random shuffle independently
+            num_samples = tf.shape(topic_label_all).numpy()[0]
+            perm_indices = np.expand_dims(np.random.permutation(num_samples),axis=-1)
+
+            #Now we will gather the tensors using this perm indices
+            topic_label_all = tf.gather_nd(topic_label_all,indices=perm_indices)
+            input_idx       = tf.gather_nd(input_idx,indices=perm_indices)
+            attn_mask       = tf.gather_nd(attn_mask,indices=perm_indices)
+        
 
         #Training the topic classifier in batches
         topic_total_loss = 0.0
-        for tidx,cat in enumerate(self.data_args["cat_list"]):
-            #Sharding the topic data into batches
+        for iidx in range(len(self.data_args["cat_list"])):
+            #Sharding the topic data into batches (to keep the batch size equal to topic ones)
             batch_size = self.data_args["batch_size"]
-            topic_label = topic_label_all[tidx*batch_size:(tidx+1)*batch_size]
-            topic_idx = input_idx[tidx*batch_size:(tidx+1)*batch_size]
-            topic_mask = attn_mask[tidx*batch_size:(tidx+1)*batch_size]
+            topic_label = topic_label_all[iidx*batch_size:(iidx+1)*batch_size]
+            topic_idx = input_idx[iidx*batch_size:(iidx+1)*batch_size]
+            topic_mask = attn_mask[iidx*batch_size:(iidx+1)*batch_size]
 
-            #Taking aside a chunk of data for validation
-            valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+            #Now we will iterate the training for each of the poic classifier
+            for tidx,tname in enumerate(self.data_args["topic_list"]):
+                #Taking aside a chunk of data for validation
+                valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
-            #Getting the train data
-            topic_label_train = topic_label[0:valid_idx]
-            topic_idx_train = topic_idx[0:valid_idx]
-            topic_mask_train = topic_mask[0:valid_idx]
+                tclass_factor = self.data_args["per_topic_class"]
+                #Getting the train data
+                topic_label_train = topic_label[0:valid_idx,tidx]
+                topic_idx_train = topic_idx[0:valid_idx,tidx]
+                topic_mask_train = topic_mask[0:valid_idx,tidx]
 
-            #Getting the validation data
-            topic_label_valid = topic_label[valid_idx:]
-            topic_idx_valid = topic_idx[valid_idx:]
-            topic_mask_valid = topic_mask[valid_idx:]
+                #Getting the validation data
+                topic_label_valid = topic_label[valid_idx:,tidx]
+                topic_idx_valid = topic_idx[valid_idx:,tidx]
+                topic_mask_valid = topic_mask[valid_idx:,tidx]
 
-            with tf.GradientTape() as tape:
-                #Forward propagating the model
-                topic_train_prob = self.get_topic_pred_prob(topic_idx_train,topic_mask_train,0)
+                with tf.GradientTape() as tape:
+                    #Forward propagating the model
+                    topic_train_prob = self.get_topic_pred_prob(topic_idx_train,topic_mask_train,tidx)
 
-                #Getting the loss for this classifier
-                topic_loss = scxentropy_loss(topic_label_train,topic_train_prob)
-                topic_total_loss += topic_loss
-        
-            #Now we have total classification loss, lets update the gradient
-            grads = tape.gradient(topic_loss,self.trainable_weights)
-            self.optimizer.apply_gradients(
-                zip(grads,self.trainable_weights)
-            )
+                    #Getting the loss for this classifier
+                    topic_loss = scxentropy_loss(topic_label_train,topic_train_prob)
+                    topic_total_loss += topic_loss
+            
+                #Now we have total classification loss, lets update the gradient
+                #TODO: BERT Model weight shouldn't be updated here. Correct this (used tf.stop_grad)
+                grads = tape.gradient(topic_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
 
-            #Getting the validation accuracy for this category
-            topic_valid_prob = self.get_topic_pred_prob(topic_idx_valid,topic_mask_valid,0)
-            self.topic_valid_acc.update_state(topic_label_valid,topic_valid_prob)
+                #Getting the validation accuracy for this category
+                topic_valid_prob = self.get_topic_pred_prob(topic_idx_valid,topic_mask_valid,tidx)
+                self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
         
         #Updating the metrics to track
         self.topic_pred_xentropy.update_state(topic_total_loss)
 
 
         #Getting the tracking results
-        track_dict= {
-                    "sent_valid_acc_"+cat:self.sent_valid_acc_list[cidx].result()
-                        for cidx,cat in enumerate(self.data_args["cat_list"])
-        }
-        track_dict["topic_valid_acc"]=self.topic_valid_acc.result()
+        track_dict={}
         track_dict["xentropy_sent"]=self.sent_pred_xentropy.result()
         track_dict["xentorpy_topic"]=self.topic_pred_xentropy.result()
+
+        #Function to all the accuracy to tracker
+        def add_accuracy_mertrics(track_dict,acc_prefix,list_name,acc_list):
+            for ttidx,ttname in enumerate(self.data_args[list_name]):
+                track_dict["{}_{}".format(acc_prefix,ttidx)]=acc_list[ttidx].result()
+        
+        #Adding the accuracies
+        add_accuracy_mertrics(track_dict=track_dict,
+                                acc_prefix="sent_vacc",
+                                list_name="cat_list",
+                                acc_list=self.sent_valid_acc_list
+        )
+        add_accuracy_mertrics(track_dict=track_dict,
+                                acc_prefix="topic_vacc",
+                                list_name="topic_list",
+                                acc_list=self.topic_valid_acc_list
+        )
 
         return track_dict
 
@@ -300,7 +322,7 @@ def transformer_trainer(data_args,model_args):
     data_handler = DataHandleTransformer(data_args)
     dataset = data_handler.amazon_reviews_handler()
 
-    checkpoint_path = "{}/cp.ckpt".format(model_args["expt_name"])
+    checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
     checkpoint_dir = os.path.dirname(checkpoint_path)
 
     # Create a callback that saves the model's weights
@@ -318,12 +340,42 @@ def transformer_trainer(data_args,model_args):
     )
 
 
+def get_sorted_rank_correlation(sent_weights,topic_weights,topic_list,policy):
+    #Getting the spurious ranking (decreasing order)
+    dim_std = np.std(sent_weights,axis=1)
+    dim_spurious_rank = np.argsort(-1*dim_std)
+
+    #Now calculating the correlaiton
+    topic_correlation = []
+    for tidx,tname in enumerate(topic_list):
+        #Getting the correlation
+        topic_rank = np.argsort(-1*topic_weights[tidx])
+        if policy=="weightedtau":
+            tau,_=scipy.stats.weightedtau(dim_spurious_rank,topic_rank,rank=False)
+            topic_correlation.append((tau,tname))
+        elif policy=="kendalltau":
+            tau,_=scipy.stats.weightedtau(dim_spurious_rank,topic_rank)
+            topic_correlation.append((tau,tname))
+        elif policy=="spearmanr":
+            #correlation between the rank array (take abs)
+            corr,_ = scipy.stats.spearmanr(dim_spurious_rank,topic_rank)
+            topic_correlation.append((abs(corr),tname))
+        else:
+            raise NotImplementedError()
+        
+    #Sorting the ranking
+    topic_correlation.sort(key=lambda x:-x[0])
+    pprint(topic_correlation)
+
+    return topic_correlation
+
+
 def load_and_analyze_transformer(data_args,model_args):
     #First of all creating the model
     classifier = TransformerClassifier(data_args,model_args)
     
     
-    checkpoint_path = "{}/cp.ckpt".format(model_args["expt_name"])
+    checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
     checkpoint_dir = os.path.dirname(checkpoint_path)
     
     
@@ -337,23 +389,35 @@ def load_and_analyze_transformer(data_args,model_args):
     ]
     sent_weights = np.stack(sent_weights,axis=1)
 
+    #Now getting the importance weights of the topics
+    topic_weights=[
+        np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[tidx]).numpy())
+                        for tidx in range(len(data_args["topic_list"]))
+    ]
+
+    #Printing the different correlation weights
+    get_sorted_rank_correlation(sent_weights,topic_weights,data_args["topic_list"],"weightedtau")
+    get_sorted_rank_correlation(sent_weights,topic_weights,data_args["topic_list"],"kendalltau")
+    get_sorted_rank_correlation(sent_weights,topic_weights,data_args["topic_list"],"spearmanr")
+
+
     # dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)
     # spurious_dims = np.argsort(dim_score)
 
-    dim_std = np.std(sent_weights,axis=1)
-    dim_mean=np.mean(sent_weights,axis=1)
-    dim_score2 = dim_std * (dim_mean>0.7)
-    num_spurious = np.sum(dim_score2>0.1)
-    spurious_dims2 = np.argsort(dim_score2)[-num_spurious:]
+    # dim_std = np.std(sent_weights,axis=1)
+    # dim_mean=np.mean(sent_weights,axis=1)
+    # dim_score2 = dim_std * (dim_mean>0.7)
+    # num_spurious = np.sum(dim_score2>0.1)
+    # spurious_dims2 = np.argsort(dim_score2)[-num_spurious:]
 
 
-    #Sorting the importance score of the topic weights
-    topic_weight = np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[0]).numpy())
-    topic_imp_dims = np.argsort(topic_weight)
+    # #Sorting the importance score of the topic weights
+    # topic_weight = np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[0]).numpy())
+    # topic_imp_dims = np.argsort(topic_weight)
 
-    #Percentage of spuriousness is biggest 50 importance
-    upto_index = num_spurious
-    spuriousness_percentage = len(set(spurious_dims2).intersection(set(topic_imp_dims[-1*upto_index:])))/upto_index
+    # #Percentage of spuriousness is biggest 50 importance
+    # upto_index = num_spurious
+    # spuriousness_percentage = len(set(spurious_dims2).intersection(set(topic_imp_dims[-1*upto_index:])))/upto_index
     pdb.set_trace()
 
 
@@ -368,17 +432,20 @@ if __name__=="__main__":
     data_args["batch_size"]=32
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
-    data_args["topic_list"]=["genre","nogenre"]
+    data_args["num_topics"]=10
+    data_args["topic_list"]=list(range(data_args["num_topics"]))
+    data_args["per_topic_class"]=2 #Each of the topic is binary (later could have more)
     
 
     #Defining the Model args
     model_args={}
-    model_args["expt_name"]="1.1"
+    model_args["expt_name"]="2.0"
     model_args["lr"]=0.001
     model_args["epochs"]=5
     model_args["valid_split"]=0.2
     model_args["train_bert"]=False
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
+    model_args["shuffle_topic_batch"]=False
 
     transformer_trainer(data_args,model_args)
     load_and_analyze_transformer(data_args,model_args)
