@@ -1,3 +1,4 @@
+from collections import defaultdict
 import numpy as np
 import pandas as pd 
 import tensorflow as tf
@@ -262,6 +263,7 @@ class DataHandleTransformer():
         self.tokenizer = AutoTokenizer.from_pretrained(data_args["transformer_name"])
 
         self.delimiter=",|\?|\!|-|\*| |  |;|\.|\(|\)|\n|\"|:|'|/|&|`|[|]|\{|\}|\>|\<"
+        self.word_count=defaultdict(int)
     
     def _clean_the_document(self,document):
         #Splitting the document by the delimiters
@@ -275,8 +277,7 @@ class DataHandleTransformer():
             token = token.lower()
 
             # #Adding the token to vocab
-            # if token not in self.dict_w2i:
-            #     self._add_word_to_vocab(token)
+            self.word_count[token]+=1
             
             #Adding the token idx if not approached max len
             if self.data_args["max_len"]==len(doc2idx):
@@ -287,15 +288,15 @@ class DataHandleTransformer():
         #TODO: Later we could remove some of the words --> unk based on frequency
         return doc2idx,len(tokens)
     
-    def _spacy_cleaner(self,doc):
+    def _spacy_cleaner(self,doc,tfreq_ulim):
         '''
         This function will clean the document using the spacy's functions
         and return the processed doc
         '''
-        punctuations = string.punctuation
+        # punctuations = string.punctuation
         #Lets not remove stopwords for now, because it could also be a possible bug
         # stopwords = list(STOP_WORDS)
-        parser = English()
+        filter_dict = self._get_filter_word_dict(tfreq_ulim)
 
         #Creating the tokens
         tokens = nlp(doc)
@@ -304,11 +305,38 @@ class DataHandleTransformer():
                     else word.lower_ 
                         for word in tokens
         ]
-        tokens = [word for word in tokens if word not in punctuations]
+        tokens = [word for word in tokens if word not in filter_dict]
 
         processed_doc = " ".join([i for i in tokens])
 
         return processed_doc
+    
+    def _get_filter_word_dict(self,tfreq_ulim):
+        '''
+        This function will get the list of words whcih we want to filter
+        ie.  ones >= bottom total * tf_ulim words
+        '''
+        if self.filter_dict !=None:
+            return self.filter_dict
+        
+        word_tf = [(word,freq) for word,freq in self.word_count.items()]
+        word_tf.sort(key=lambda x:x[-1])
+        slice_idx = int(tfreq_ulim*len(word_tf))
+        word_tf=word_tf[slice_idx:]
+
+        #Hasing the words to remove
+        filter_dict = {}
+        for word,_ in word_tf:
+            filter_dict[word]=True
+
+        #Adding the stop words too in this list
+        stopwords=list(STOP_WORDS)
+        for word in stopwords:
+            filter_dict[word]=True
+        
+        self.filter_dict=filter_dict
+
+        return filter_dict
     
     def _get_topic_labels(self,all_cat_df,pdoc_name,num_topics,topic_col_name):
         '''
@@ -318,17 +346,19 @@ class DataHandleTransformer():
         #Getting the list of documents
         pdoc_list =[]
         for cat_df in all_cat_df.values():
-
-            cat_pdocs = cat_df[pdoc_name].tolist()
-            pdoc_list+=cat_pdocs
+            for idx in range(cat_df.shape[0]):
+                doc = cat_df.iloc[idx][pdoc_name]
+                cat_pdoc = self._spacy_cleaner(doc,tfreq_ulim=0.7)
+                pdoc_list.append(cat_pdoc)
         
         #Vectorizing the data
-        vectorizer = CountVectorizer(min_df=0.01, 
-                                        max_df=0.99, 
+        vectorizer = CountVectorizer(min_df=0.1, 
+                                        max_df=0.9, 
                                         stop_words=None, 
                                         lowercase=True,
         )
         data_vectorized = vectorizer.fit_transform(pdoc_list)
+
 
         #Performing the LDA
         lda = LatentDirichletAllocation(n_components=num_topics, max_iter=10, 
@@ -368,7 +398,8 @@ class DataHandleTransformer():
                                     (vectorizer.get_feature_names()[i], "{:.5f}".format(topic[i]))
                                         for i in topic.argsort()[:-top_n - 1:-1]
                                 ]
-                write_string = "Topic:{}\t\tComponent:{}".format(idx,feature_vector)
+                write_string = "Topic:{}\t\tComponent:{}\n".format(idx,feature_vector)
+                whandle.write(write_string)
                 print("Topic:{} \t\t Component:{}".format(idx,feature_vector))
 
     def _convert_df_to_dataset(self,df,doc_col_name,label_col_name,topic_col_name):
@@ -442,7 +473,7 @@ class DataHandleTransformer():
                 sentiment = 1 if d["overall"]>3 else 0
 
                 #Also we would like to get the topic for this document
-                # doc_tokens,doclen = self._clean_the_document(d["reviewText"])
+                doc_tokens,doclen = self._clean_the_document(d["reviewText"])
 
                 # genre_words  = set(["science","tragedy","drama","comedy","fiction","fantasy","horror","cartoon"])
                 # topic=0
@@ -452,11 +483,11 @@ class DataHandleTransformer():
 
                 
                 if(len(neg_list)<num_sample and sentiment==0):
-                    processed_doc = self._spacy_cleaner(d["reviewText"])
+                    processed_doc = d["reviewText"]#self._spacy_cleaner(d["reviewText"])
                     neg_list.append((sentiment,d["reviewText"],processed_doc))
                     neg_doclen.append(len(d["reviewText"]))
                 elif (len(pos_list)<num_sample and sentiment==1):
-                    processed_doc = self._spacy_cleaner(d["reviewText"])
+                    processed_doc = d["reviewText"]#self._spacy_cleaner(d["reviewText"])
                     pos_list.append((sentiment,d["reviewText"],processed_doc))
                     pos_doclen.append(len(d["reviewText"]))
                 
