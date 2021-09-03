@@ -28,7 +28,10 @@ class TransformerClassifier(keras.Model):
         self.model_args = model_args
 
         #Now initializing the layers to be used
-        self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
+        if "distil" in data_args["transformer_name"]:
+            self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
+        else:
+            self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
         if model_args["train_bert"]==False:
             for layer in self.bert_model.layers:
                 layer.trainable = False
@@ -423,7 +426,7 @@ def load_and_analyze_transformer(data_args,model_args):
     # #Percentage of spuriousness is biggest 50 importance
     # upto_index = num_spurious
     # spuriousness_percentage = len(set(spurious_dims2).intersection(set(topic_imp_dims[-1*upto_index:])))/upto_index
-    pdb.set_trace()
+    # pdb.set_trace()
 
 
 if __name__=="__main__":
@@ -434,13 +437,14 @@ if __name__=="__main__":
     parser.add_argument('-num_topics',dest="num_topics",type=int)
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float)
     parser.add_argument('-train_bert',dest="train_bert",type=bool)
+    parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
     args=parser.parse_args()
     print(args)
 
     #Defining the Data args
     data_args={}
     data_args["path"] = "dataset/amazon/"
-    data_args["transformer_name"]="bert-base-uncased"
+    data_args["transformer_name"]=args.transformer
     data_args["num_class"]=2
     data_args["max_len"]=200
     data_args["num_sample"]=args.num_samples

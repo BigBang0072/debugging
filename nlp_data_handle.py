@@ -272,6 +272,7 @@ class DataHandleTransformer():
         
         #Updating the vocablury dictionary
         doc2idx = []
+        token_list = []
         for token in tokens:
             if(len(token)==0):
                 continue
@@ -284,10 +285,11 @@ class DataHandleTransformer():
             if self.data_args["max_len"]==len(doc2idx):
                 break
             doc2idx.append(token)
+            token_list.append(token)
         
 
         #TODO: Later we could remove some of the words --> unk based on frequency
-        return doc2idx,len(tokens)
+        return doc2idx,len(tokens),token_list
     
     def _spacy_cleaner(self,doc,tfreq_ulim):
         '''
@@ -347,7 +349,7 @@ class DataHandleTransformer():
 
         return filter_dict,self.vocab_dict
     
-    def _get_topic_labels(self,all_cat_df,pdoc_name,num_topics,topic_col_name):
+    def _get_topic_labels_lda(self,all_cat_df,pdoc_name,num_topics,topic_col_name):
         '''
         This will convert all the documents into a topic model
         and label the documents accordinly.
@@ -399,6 +401,109 @@ class DataHandleTransformer():
             cat_df[topic_col_name]=topic_label_list
         
         return all_cat_df
+    
+    def _get_topic_labels_manual(self,all_cat_df,pdoc_name,topic_col_name):
+        '''
+        Here we will try to manually annotate certain concepts using bag of words
+        approach which we think are clean and have clear distinction ob being 
+        spurious and causal.
+        '''
+        for cat_df in all_cat_df.values():
+            topic_label_list = []
+            for ctidx in range(cat_df.shape[0]):
+                pdoc = cat_df.iloc[ctidx][pdoc_name]
+                #Getting the topic distriubiton
+                doc_topic = self._get_topic_annotation_manual(pdoc)
+
+                #Creating the doc_topic_label
+                doc_topic_label = np.stack([doc_topic,1-doc_topic],axis=-1).tolist()
+                topic_label_list.append(doc_topic_label)
+
+            #Assigning the topic label in the new column
+            cat_df[topic_col_name]=topic_label_list
+        
+        return all_cat_df
+
+    
+    def _get_topic_annotation_manual(self,pdoc):
+        '''
+        '''
+        #Should have high importance
+        pos_adjective = set([
+            "good","great","awesome","wonderful","terrific","graceful",
+            "ecstatic", "lucid", "extraordinary", "impressive", "spectacular",
+            "happy", "delicious"
+        ])
+        neg_adjective  = set([
+            "bad", "dreadful", "awful", "horrible", "horrific", "terrible",
+            "grim", "boring", "ghastly", "foul", "icky", "lousy", "unhappy",
+            "unworthy"
+        ])
+        negations = set([
+            "not", "didnt", "did", "was", "wasnt", "is", "isnt"
+        ])
+        adverbs = set([
+            "regularly", "mostly", "terribly", "happily", "briefly", "boldly", 
+            "solidly", "heavily", "interestingly", "unfortunately", "fortunately", 
+            "badly", "quickly", "incredibly"
+        ])
+
+        #Should have low importance
+        religion = set([ 
+            "islam", "jew", "jews", "fundamantalist", "hindu", "muslim", "christian", 
+            "atheist", "buddha", "jain", "sikh", "religion", "faith", "worship", 
+            "judaism", "hinduism", "christianity", "buddhism", "monk" 
+        ])
+
+        gender =set([ 
+            "he", "she", "it", "male", "female", "john", "kennedy", "victoria", 
+            "peter", "luna", "harry", "ron", "susan", "actor", "actress", "father",
+            "mother", "nurse", "firefighter", "warrior", "man", "women", "god",
+            "goddess"
+        ])
+
+        electronics = set([ 
+            "phone", "computer", "circuit", "battery", "television", "remote",
+            "headset", "charger", "telephone", "radio", "antenna", "tower", "signal",
+            "screen", "keboard", "mouse", "keypad", "desktop", "fan", "ac", "cooler",
+            "wire", "solder"
+        ])
+
+        pronoun = set([ 
+            "he", "she", "it", "they", "them","i", "we", "themselves", "thy","thou",
+        ])
+
+        kitchen = set([ 
+            "lipton", "tea", "taste", "food", "jam", "kitchen", "rice", "meal", "cook",
+            "cooker", "bowl", "herbs", "herb", "fruits", "vegetable", "apple", "orange",
+            "grapes", "guava"
+        ])
+
+        genre = set([ 
+            "horror", "comedy", "fantasy", "thriller", "rock", "pop", "romantic", "romcom",
+            "suspense", "war", "worldwar", "documentry", "fiction", 
+            "poetry", "novel", "mystery", "detective", "crime", "dystopian", "western", 
+            "history"
+        ])
+
+        topic_list = [
+            pos_adjective,neg_adjective,negations,adverbs,
+            religion,gender,electronics,pronoun,kitchen,genre
+        ]
+
+        #Now we will label the document
+        assert type(pdoc) == type([1,2]), "pdoc is not list of words"
+
+        #Now getting the topic distribution for this document
+        pdoc_set = set(pdoc)
+        topic_label = []
+        for topic_set in topic_list:
+            if len(pdoc_set.intersection(topic_set))!=0:
+                topic_label.append(1.0)
+            else:
+                topic_label.append(0.0)
+
+        return np.array(topic_label)
 
     def _save_topic_distiribution(self,model, vectorizer,fname, top_n=100):
         #Saving the topic distribution to a file
@@ -487,7 +592,7 @@ class DataHandleTransformer():
                 sentiment = 1 if d["overall"]>3 else 0
 
                 #Also we would like to get the topic for this document
-                doc_tokens,doclen = self._clean_the_document(d["reviewText"])
+                doc_tokens,doclen,token_list = self._clean_the_document(d["reviewText"])
 
                 # genre_words  = set(["science","tragedy","drama","comedy","fiction","fantasy","horror","cartoon"])
                 # topic=0
@@ -497,11 +602,11 @@ class DataHandleTransformer():
 
                 
                 if(len(neg_list)<num_sample and sentiment==0):
-                    processed_doc = d["reviewText"]#self._spacy_cleaner(d["reviewText"])
+                    processed_doc = token_list#self._spacy_cleaner(d["reviewText"])
                     neg_list.append((sentiment,d["reviewText"],processed_doc))
                     neg_doclen.append(len(d["reviewText"]))
                 elif (len(pos_list)<num_sample and sentiment==1):
-                    processed_doc = d["reviewText"]#self._spacy_cleaner(d["reviewText"])
+                    processed_doc = token_list#self._spacy_cleaner(d["reviewText"])
                     pos_list.append((sentiment,d["reviewText"],processed_doc))
                     pos_doclen.append(len(d["reviewText"]))
                 
@@ -551,10 +656,17 @@ class DataHandleTransformer():
 
 
         #Getting the topic for each of dataframe
-        all_cat_df = self._get_topic_labels(all_cat_df=all_cat_df,
+        # all_cat_df = self._get_topic_labels(all_cat_df=all_cat_df,
+        #                                     pdoc_name="pdoc",
+        #                                     num_topics=self.data_args["num_topics"],
+        #                                     topic_col_name="topic")
+
+        #Getting the manually labelled topic
+        all_cat_df = self._get_topic_labels_manual(
+                                            all_cat_df=all_cat_df,
                                             pdoc_name="pdoc",
-                                            num_topics=self.data_args["num_topics"],
-                                            topic_col_name="topic")
+                                            topic_col_name="topic",
+        )
 
 
         #Creating the zipped dataset
