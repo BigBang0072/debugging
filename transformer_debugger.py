@@ -435,7 +435,7 @@ if __name__=="__main__":
     parser.add_argument('-expt_num',dest="expt_name",type=str)
     parser.add_argument('-num_samples',dest="num_samples",type=int)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
-    parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float)
+    parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
     parser.add_argument('-train_bert',dest="train_bert",type=bool)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
     args=parser.parse_args()

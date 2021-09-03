@@ -490,6 +490,7 @@ class DataHandleTransformer():
             pos_adjective,neg_adjective,negations,adverbs,
             religion,gender,electronics,pronoun,kitchen,genre
         ]
+        self.data_args["num_topics"]=len(topic_list)
 
         #Now we will label the document
         assert type(pdoc) == type([1,2]), "pdoc is not list of words"
