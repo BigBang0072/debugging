@@ -336,6 +336,13 @@ def transformer_trainer(data_args,model_args):
     cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
                                                  save_weights_only=True,
                                                  verbose=1)
+    
+    #Loading the weight if we want to reuse the computation
+    if model_args["load_weight"]!=None:
+        load_path = "nlp_logs/{}/cp.ckpt".format(model_args["load_weight"])
+        load_dir = os.path.dirname(load_path)
+
+        classifier.load_weights(load_path)
 
 
     #Now fitting the model
@@ -439,6 +446,7 @@ if __name__=="__main__":
     parser.add_argument('-train_bert',dest="train_bert",type=bool)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
     parser.add_argument('-num_epochs',dest="num_epochs",type=int)
+    parser.add_argument("-load_weight",dest="load_weight",type=str,default=None)
     args=parser.parse_args()
     print(args)
 
@@ -464,6 +472,7 @@ if __name__=="__main__":
     model_args={}
     model_args["expt_name"]=args.expt_name
     data_args["expt_name"]=model_args["expt_name"]
+    model_args["load_weight"]=args.load_weight
     model_args["lr"]=0.001
     model_args["epochs"]=args.num_epochs
     model_args["valid_split"]=0.2
