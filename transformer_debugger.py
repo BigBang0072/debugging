@@ -438,6 +438,7 @@ if __name__=="__main__":
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
     parser.add_argument('-train_bert',dest="train_bert",type=bool)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
+    parser.add_argument('-num_epochs',dest="num_epochs",type=int)
     args=parser.parse_args()
     print(args)
 
@@ -464,7 +465,7 @@ if __name__=="__main__":
     model_args["expt_name"]=args.expt_name
     data_args["expt_name"]=model_args["expt_name"]
     model_args["lr"]=0.001
-    model_args["epochs"]=5
+    model_args["epochs"]=args.num_epochs
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
