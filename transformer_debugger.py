@@ -494,6 +494,10 @@ if __name__=="__main__":
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
     model_args["shuffle_topic_batch"]=False
 
+    #Creating the metadata folder
+    meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
+    os.makedirs(meta_folder,exist_ok=True)
+
     transformer_trainer(data_args,model_args)
     load_and_analyze_transformer(data_args,model_args)
 
