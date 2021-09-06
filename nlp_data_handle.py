@@ -423,8 +423,7 @@ class DataHandleTransformer():
             cat_df[topic_col_name]=topic_label_list
         
         return all_cat_df
-
-    
+   
     def _get_topic_annotation_manual(self,pdoc):
         '''
         '''
