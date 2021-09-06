@@ -359,14 +359,40 @@ def transformer_trainer(data_args,model_args):
     )
 
 
-def get_sorted_rank_correlation(sent_weights,topic_weights,topic_list,policy):
+def get_spuriousness_rank(classifier,policy):
+    #Getting the spuriousness of each dimension due to domain variation
+    sent_weights=[
+        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
+                        for cidx in range(len(classifier.data_args["cat_list"]))
+    ]
+    sent_weights = np.stack(sent_weights,axis=1)
+
+    #Now getting the importance weights of the topics
+    topic_weights=[
+        np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[tidx]).numpy())
+                        for tidx in range(len(classifier.data_args["topic_list"]))
+    ]
+
+    #Multiplying by validation accuracy to correct for presence of importance
+    topic_validation_accuracy = [ 
+        dict(
+            tidx=tidx,
+            vacc=classifier.topic_valid_acc_list[tidx].result().numpy()
+        )
+                for tidx in range(len(classifier.data_args["topic_list"]))
+    ]
+    print("Topic_validation Accuracy:")
+    mypp(topic_validation_accuracy)
+
+
     #Getting the spurious ranking (decreasing order)
     dim_std = np.std(sent_weights,axis=1)
+    dim_std_norm = np.linalg.norm(dim_std)
     dim_spurious_rank = np.argsort(-1*dim_std)
 
     #Now calculating the correlaiton
     topic_correlation = []
-    for tidx,tname in enumerate(topic_list):
+    for tidx,tname in enumerate(classifier.data_args["topic_list"]):
         #Getting the correlation
         topic_rank = np.argsort(-1*topic_weights[tidx])
         if policy=="weightedtau":
@@ -379,6 +405,28 @@ def get_sorted_rank_correlation(sent_weights,topic_weights,topic_list,policy):
             #correlation between the rank array (take abs)
             corr,_ = scipy.stats.spearmanr(dim_spurious_rank,topic_rank)
             topic_correlation.append((abs(corr),tname))
+        elif "dot" in policy:
+            #Getting dot product between the spuriousness vector and topic importance vector
+            topic_dot = np.sum(dim_std*topic_weights[tidx])
+
+            #Multiplying by validation accuracy to correct for presence of importance
+            if "weighted" in policy:
+                topic_vacc = topic_validation_accuracy[tidx]["vacc"]
+                topic_dot = topic_dot*topic_vacc
+
+            topic_correlation.append(topic_dot)
+        elif "cosine" in policy:
+            topic_norm = np.linalg.norm(topic_weights[tidx])
+            topic_cos = np.sum(dim_std*topic_weights[tidx])/(topic_norm*dim_std_norm)
+
+            #Multiplying by validation accuracy to correct for presence of importance
+            if "weighted" in policy:
+                topic_vacc = topic_validation_accuracy[tidx]["vacc"]
+                topic_cos = topic_cos*topic_vacc
+            
+            topic_correlation.append(topic_cos)
+        elif policy=="weighted_dot":
+            raise NotImplementedError()
         else:
             raise NotImplementedError()
         
@@ -399,26 +447,16 @@ def load_and_analyze_transformer(data_args,model_args):
     checkpoint_dir = os.path.dirname(checkpoint_path)
     
     
-    classifier.load_weights(checkpoint_path)
-
-
-    #Getting the variance in the diemnsion of weights
-    sent_weights=[
-        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
-                        for cidx in range(len(data_args["cat_list"]))
-    ]
-    sent_weights = np.stack(sent_weights,axis=1)
-
-    #Now getting the importance weights of the topics
-    topic_weights=[
-        np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[tidx]).numpy())
-                        for tidx in range(len(data_args["topic_list"]))
-    ]
+    classifier.load_weights(checkpoint_path)    
 
     #Printing the different correlation weights
-    get_sorted_rank_correlation(sent_weights,topic_weights,data_args["topic_list"],"weightedtau")
-    get_sorted_rank_correlation(sent_weights,topic_weights,data_args["topic_list"],"kendalltau")
-    get_sorted_rank_correlation(sent_weights,topic_weights,data_args["topic_list"],"spearmanr")
+    get_spuriousness_rank(classifier,"weightedtau")
+    get_spuriousness_rank(classifier,"kendalltau")
+    get_spuriousness_rank(classifier,"spearmanr")
+    get_spuriousness_rank(classifier,"dot")
+    get_spuriousness_rank(classifier,"weighted_dot")
+    get_spuriousness_rank(classifier,"cos")
+    get_spuriousness_rank(classifier,"weighted_cos")
 
 
     # dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)

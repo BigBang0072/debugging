@@ -210,6 +210,28 @@ topics: genre
 topics: adj
 
 ======================================================
+7 series 
+=========
+Defining the spuriousness measure
+=========
+
+sprious ranking:               [dim_i <=     | dim_j <=    <= dim_k ]
+Pick j based on some threshold on variance --> Mark them spurious
+
+
+topic 1 importance ranking :   [dim_x <=  | dim_y <=         <= dim_z]
+pick y : Say last 40% dimension 
+
+Then sprrious score :
+             num_of spurious dimension between y and z
+             /
+             num of spurious dimension
+
+
+
+
+
+
 
 
 
