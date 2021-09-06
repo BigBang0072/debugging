@@ -10,6 +10,7 @@ from tensorflow.keras import layers
 from transformers import TFBertModel,TFDistilBertModel
 
 import pdb
+import json
 import os
 import sys
 from pprint import pprint as mypp
@@ -317,6 +318,10 @@ class TransformerClassifier(keras.Model):
 def transformer_trainer(data_args,model_args):
     '''
     '''
+    #Dumping the model arguments
+    dump_arguments(data_args,data_args["expt_name"],"data_args")
+    dump_arguments(model_args,model_args["expt_name"],"model_args")
+
     #First of all creating the model
     classifier = TransformerClassifier(data_args,model_args)
 
@@ -436,6 +441,13 @@ def load_and_analyze_transformer(data_args,model_args):
     # pdb.set_trace()
 
 
+def dump_arguments(arg_dict,expt_name,fname):
+    #This function will dump the arguments in a file for tracking purpose
+    filepath = "nlp_logs/{}/{}.txt".format(expt_name,fname)
+    with open(filepath,"w") as whandle:
+        json.dump(arg_dict,whandle,indent="\t")
+    
+
 if __name__=="__main__":
     import argparse
     parser=argparse.ArgumentParser()
@@ -443,10 +455,12 @@ if __name__=="__main__":
     parser.add_argument('-num_samples',dest="num_samples",type=int)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
-    parser.add_argument('-train_bert',dest="train_bert",type=bool)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
     parser.add_argument('-num_epochs',dest="num_epochs",type=int)
     parser.add_argument("-load_weight",dest="load_weight",type=str,default=None)
+
+    parser.add_argument('--train_bert',default=False,action="store_true")
+
     args=parser.parse_args()
     print(args)
 
