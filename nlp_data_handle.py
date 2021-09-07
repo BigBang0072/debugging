@@ -450,6 +450,9 @@ class DataHandleTransformer():
 
                 #Now we will give the sample weight based on the label for each topic
                 topic_weight = topic_label_weights[topic_idx,topic_label]
+                #Reverting the weights to be opposite of class raito
+                topic_weight = 1 - topic_weight
+                
                 topic_weight_list.append(topic_weight)  #dim = (num_topic)
             
             #Now we will assign the label weights to this df
