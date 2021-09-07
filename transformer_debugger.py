@@ -414,7 +414,7 @@ def get_spuriousness_rank(classifier,policy):
                 topic_vacc = topic_validation_accuracy[tidx]["vacc"]
                 topic_dot = topic_dot*topic_vacc
 
-            topic_correlation.append(topic_dot)
+            topic_correlation.append((topic_dot,tname))
         elif "cosine" in policy:
             topic_norm = np.linalg.norm(topic_weights[tidx])
             topic_cos = np.sum(dim_std*topic_weights[tidx])/(topic_norm*dim_std_norm)
@@ -424,7 +424,7 @@ def get_spuriousness_rank(classifier,policy):
                 topic_vacc = topic_validation_accuracy[tidx]["vacc"]
                 topic_cos = topic_cos*topic_vacc
             
-            topic_correlation.append(topic_cos)
+            topic_correlation.append((topic_cos,tname))
         elif policy=="weighted_dot":
             raise NotImplementedError()
         else:

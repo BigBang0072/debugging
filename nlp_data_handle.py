@@ -408,7 +408,7 @@ class DataHandleTransformer():
         approach which we think are clean and have clear distinction ob being 
         spurious and causal.
         '''
-        for cat_df in all_cat_df.values():
+        for cat_name,cat_df in all_cat_df.items():
             topic_label_list = []
             for ctidx in range(cat_df.shape[0]):
                 pdoc = cat_df.iloc[ctidx][pdoc_name]
@@ -421,6 +421,12 @@ class DataHandleTransformer():
 
             #Assigning the topic label in the new column
             cat_df[topic_col_name]=topic_label_list
+
+            #Getting the topic distirbution within each of the category
+            topic_label_arr = np.sum(np.array(topic_label_list),axis=0).tolist()
+            print("Topic Distribution for cat: ",cat_name)
+            pp.print(topic_label_list)
+
         
         return all_cat_df
    
