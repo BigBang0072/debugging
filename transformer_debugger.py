@@ -467,8 +467,8 @@ def load_and_analyze_transformer(data_args,model_args):
     get_spuriousness_rank(classifier,"spearmanr")
     get_spuriousness_rank(classifier,"dot")
     get_spuriousness_rank(classifier,"weighted_dot")
-    get_spuriousness_rank(classifier,"cos")
-    get_spuriousness_rank(classifier,"weighted_cos")
+    get_spuriousness_rank(classifier,"cosine")
+    get_spuriousness_rank(classifier,"weighted_cosine")
 
 
     # dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)
