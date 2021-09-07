@@ -227,7 +227,7 @@ class TransformerClassifier(keras.Model):
         topic_label_all     =   tf.concat(topic,axis=0)
         input_idx           =   tf.concat(input_idx,axis=0)
         attn_mask           =   tf.concat(attn_mask,axis=0)
-        topic_weight        =   tf.concat(topic_weight,axis=0)
+        topic_weight_all    =   tf.concat(topic_weight,axis=0)
 
         #Shuffling the examples, incase the topic labels are skewed in a category
         if(self.model_args["shuffle_topic_batch"]):
@@ -249,7 +249,7 @@ class TransformerClassifier(keras.Model):
             topic_label = topic_label_all[iidx*batch_size:(iidx+1)*batch_size]
             topic_idx = input_idx[iidx*batch_size:(iidx+1)*batch_size]
             topic_mask = attn_mask[iidx*batch_size:(iidx+1)*batch_size]
-            topic_weight = topic_weight[iidx*batch_size:(iidx+1)*batch_size]
+            topic_weight = topic_weight_all[iidx*batch_size:(iidx+1)*batch_size]
 
             #Now we will iterate the training for each of the poic classifier
             for tidx,tname in enumerate(self.data_args["topic_list"]):

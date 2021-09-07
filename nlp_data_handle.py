@@ -452,7 +452,7 @@ class DataHandleTransformer():
                 topic_weight = topic_label_weights[topic_idx,topic_label]
                 #Reverting the weights to be opposite of class raito
                 topic_weight = 1 - topic_weight
-                topic_weight = np.expand_dims(topic_weight,axis=-1)
+                # topic_weight = np.expand_dims(topic_weight,axis=-1)
 
                 topic_weight_list.append(topic_weight)  #dim = (num_topic)
             
