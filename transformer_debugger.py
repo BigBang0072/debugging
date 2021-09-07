@@ -216,16 +216,18 @@ class TransformerClassifier(keras.Model):
         all_topic_data = [(
                             cat_dataset_list[cat]["topic"],
                             cat_dataset_list[cat]["input_idx"],
-                            cat_dataset_list[cat]["attn_mask"]
+                            cat_dataset_list[cat]["attn_mask"],
+                            cat_dataset_list[cat]["topic_weight"]
                     )
                         for cat in self.data_args["cat_list"]
         ]
         #Shuffling the topics for now (since one cat is ont topic for now)
-        topic,input_idx,attn_mask = zip(*all_topic_data)
+        topic,input_idx,attn_mask,topic_weight = zip(*all_topic_data)
 
         topic_label_all     =   tf.concat(topic,axis=0)
         input_idx           =   tf.concat(input_idx,axis=0)
         attn_mask           =   tf.concat(attn_mask,axis=0)
+        topic_weight        =   tf.concat(topic_weight,axis=0)
 
         #Shuffling the examples, incase the topic labels are skewed in a category
         if(self.model_args["shuffle_topic_batch"]):
@@ -247,6 +249,7 @@ class TransformerClassifier(keras.Model):
             topic_label = topic_label_all[iidx*batch_size:(iidx+1)*batch_size]
             topic_idx = input_idx[iidx*batch_size:(iidx+1)*batch_size]
             topic_mask = attn_mask[iidx*batch_size:(iidx+1)*batch_size]
+            topic_weight = topic_weight[iidx*batch_size:(iidx+1)*batch_size]
 
             #Now we will iterate the training for each of the poic classifier
             for tidx,tname in enumerate(self.data_args["topic_list"]):
@@ -258,18 +261,23 @@ class TransformerClassifier(keras.Model):
                 topic_label_train = topic_label[0:valid_idx,tidx]
                 topic_idx_train = topic_idx[0:valid_idx]
                 topic_mask_train = topic_mask[0:valid_idx]
+                topic_weight_train = topic_weight[0:valid_idx,tidx]
 
                 #Getting the validation data
                 topic_label_valid = topic_label[valid_idx:,tidx]
                 topic_idx_valid = topic_idx[valid_idx:]
                 topic_mask_valid = topic_mask[valid_idx:]
+                topic_weight_valid = topic_weight[valid_idx:,tidx]
 
                 with tf.GradientTape() as tape:
                     #Forward propagating the model
                     topic_train_prob = self.get_topic_pred_prob(topic_idx_train,topic_mask_train,tidx)
 
                     #Getting the loss for this classifier
-                    topic_loss = cxentropy_loss(topic_label_train,topic_train_prob)
+                    topic_loss = cxentropy_loss(topic_label_train,
+                                                topic_train_prob,
+                                                sample_weight=topic_weight_train,
+                    )
                     topic_total_loss += topic_loss
             
                 #Now we have total classification loss, lets update the gradient
@@ -284,7 +292,11 @@ class TransformerClassifier(keras.Model):
 
                 #For calculating the accuracy we need one single label instead of mixed prob.
                 topic_label_valid_MAX = tf.argmax(topic_label_valid,axis=-1)
-                self.topic_valid_acc_list[tidx].update_state(topic_label_valid_MAX,topic_valid_prob)
+                self.topic_valid_acc_list[tidx].update_state(
+                                                    topic_label_valid_MAX,
+                                                    topic_valid_prob,
+                                                    sample_weight=topic_weight_valid
+                                                )
         
         #Updating the metrics to track
         self.topic_pred_xentropy.update_state(topic_total_loss)
