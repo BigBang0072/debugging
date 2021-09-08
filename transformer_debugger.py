@@ -88,11 +88,20 @@ class TransformerClassifier(keras.Model):
             tf.keras.metrics.SparseCategoricalAccuracy(name="t{}_valid_acc".format(topic))
                 for topic in self.data_args["topic_list"]
         ]
+    
+    def reset_all_metrics(self):
+        self.sent_pred_xentropy.reset_state()
+        self.topic_pred_xentropy.reset_state()
+        for tidx in range(len(self.data_args["topic_list"])):
+            self.topic_valid_acc_list[tidx].reset_state()
+        for cidx in range(len(self.data_args["cat_list"])):
+            self.sent_valid_acc_list[cidx].reset_state()
 
     def compile(self, optimizer):
         super(TransformerClassifier, self).compile()
         self.optimizer = optimizer 
     
+    @tf.function
     def get_sentiment_pred_prob(self,idx_train,mask_train,cidx):     
         #Getting the bert activation
         bert_outputs=self.bert_model(
@@ -123,6 +132,7 @@ class TransformerClassifier(keras.Model):
 
         return cat_class_prob
     
+    @tf.function
     def get_topic_pred_prob(self,idx_train,mask_train,tidx): 
         # raise NotImplementedError   
         #Getting the bert activation
@@ -156,175 +166,201 @@ class TransformerClassifier(keras.Model):
 
         return topic_class_prob
     
-    def train_step(self,data):
+    @tf.function
+    def train_step(self,sidx,single_ds,task):
         '''
         This function will run one step of training for the classifier
         '''
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
-        cxentropy_loss = keras.losses.CategoricalCrossentropy(from_logits=False)
+        # cxentropy_loss = keras.losses.CategoricalCrossentropy(from_logits=False)
 
-        #Get the dataset for each category
-        cat_dataset_list = data
+        # #Get the dataset for each category
+        # cat_dataset_list = data
 
         #Keeping track of classification accuracy
         cat_accuracy_list = []
 
         #Now getting the classification loss one by one each category        
-        cat_total_loss = 0.0
-        for cidx,cat in enumerate(self.data_args["cat_list"]):
-            cat_label = cat_dataset_list[cat]["label"]
-            cat_idx = cat_dataset_list[cat]["input_idx"]
-            cat_mask = cat_dataset_list[cat]["attn_mask"]
+        # cat_total_loss = 0.0
+        # for cidx,cat in enumerate(self.data_args["cat_list"]):
+        label = single_ds["label"]
+        idx = single_ds["input_idx"]
+        mask = single_ds["attn_mask"]
 
-            #Taking aside a chunk of data for validation
-            valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
-            #Getting the train data
-            cat_label_train = cat_label[0:valid_idx]
-            cat_idx_train = cat_idx[0:valid_idx]
-            cat_mask_train = cat_mask[0:valid_idx]
+        #Getting the train data
+        label_train = label[0:valid_idx]
+        idx_train = idx[0:valid_idx]
+        mask_train = mask[0:valid_idx]
 
-            #Getting the validation data
-            cat_label_valid = cat_label[valid_idx:]
-            cat_idx_valid = cat_idx[valid_idx:]
-            cat_mask_valid = cat_mask[valid_idx:]
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        mask_valid = mask[valid_idx:]
 
+        if task=="sentiment":
             with tf.GradientTape() as tape:
                 #Forward propagating the model
-                cat_train_prob = self.get_sentiment_pred_prob(cat_idx_train,cat_mask_train,cidx)
-
+                train_prob = self.get_sentiment_pred_prob(idx_train,mask_train,sidx)
+                
                 #Getting the loss for this classifier
-                cat_loss = scxentropy_loss(cat_label_train,cat_train_prob)
-                cat_total_loss += cat_loss
+                loss = scxentropy_loss(label_train,train_prob)
+                # cat_total_loss += cat_loss
         
             #Now we have total classification loss, lets update the gradient
-            grads = tape.gradient(cat_loss,self.trainable_weights)
+            grads = tape.gradient(loss,self.trainable_weights)
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
 
             #Getting the validation accuracy for this category
-            cat_valid_prob = self.get_sentiment_pred_prob(cat_idx_valid,cat_mask_valid,cidx)
-            self.sent_valid_acc_list[cidx].update_state(cat_label_valid,cat_valid_prob)
+            valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,sidx)
+            self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
+    
+            #Updating the metrics to track
+            self.sent_pred_xentropy.update_state(loss)
+        elif task=="topic":
+            with tf.GradientTape() as tape:
+                #Forward propagating the model
+                train_prob = self.get_topic_pred_prob(idx_train,mask_train,sidx)
+                
+                #Getting the loss for this classifier
+                loss = scxentropy_loss(label_train,train_prob)
+                # cat_total_loss += cat_loss
         
-        #Updating the metrics to track
-        self.sent_pred_xentropy.update_state(cat_total_loss)
+            #Now we have total classification loss, lets update the gradient
+            grads = tape.gradient(loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+
+            #Getting the validation accuracy for this category
+            valid_prob = self.get_topic_pred_prob(idx_valid,mask_valid,sidx)
+            self.topic_valid_acc_list[sidx].update_state(label_valid,valid_prob)
+    
+            #Updating the metrics to track
+            self.topic_pred_xentropy.update_state(loss)
+        else:
+            raise NotImplementedError()
 
 
 
-        #Now we will train the topics for the dataset
-        all_topic_data = [(
-                            cat_dataset_list[cat]["topic"],
-                            cat_dataset_list[cat]["input_idx"],
-                            cat_dataset_list[cat]["attn_mask"],
-                            cat_dataset_list[cat]["topic_weight"]
-                    )
-                        for cat in self.data_args["cat_list"]
-        ]
-        #Shuffling the topics for now (since one cat is ont topic for now)
-        topic,input_idx,attn_mask,topic_weight = zip(*all_topic_data)
+        # #Now we will train the topics for the dataset
+        # all_topic_data = [(
+        #                     cat_dataset_list[cat]["topic"],
+        #                     cat_dataset_list[cat]["input_idx"],
+        #                     cat_dataset_list[cat]["attn_mask"],
+        #                     cat_dataset_list[cat]["topic_weight"]
+        #             )
+        #                 for cat in self.data_args["cat_list"]
+        # ]
+        # #Shuffling the topics for now (since one cat is ont topic for now)
+        # topic,input_idx,attn_mask,topic_weight = zip(*all_topic_data)
 
-        topic_label_all     =   tf.concat(topic,axis=0)
-        input_idx           =   tf.concat(input_idx,axis=0)
-        attn_mask           =   tf.concat(attn_mask,axis=0)
-        topic_weight_all    =   tf.concat(topic_weight,axis=0)
+        # topic_label_all     =   tf.concat(topic,axis=0)
+        # input_idx           =   tf.concat(input_idx,axis=0)
+        # attn_mask           =   tf.concat(attn_mask,axis=0)
+        # topic_weight_all    =   tf.concat(topic_weight,axis=0)
 
-        #Shuffling the examples, incase the topic labels are skewed in a category
-        if(self.model_args["shuffle_topic_batch"]):
-            #To shuffle, dont use random shuffle independently
-            num_samples = tf.shape(topic_label_all).numpy()[0]
-            perm_indices = np.expand_dims(np.random.permutation(num_samples),axis=-1)
+        # #Shuffling the examples, incase the topic labels are skewed in a category
+        # if(self.model_args["shuffle_topic_batch"]):
+        #     #To shuffle, dont use random shuffle independently
+        #     num_samples = tf.shape(topic_label_all).numpy()[0]
+        #     perm_indices = np.expand_dims(np.random.permutation(num_samples),axis=-1)
 
-            #Now we will gather the tensors using this perm indices
-            topic_label_all = tf.gather_nd(topic_label_all,indices=perm_indices)
-            input_idx       = tf.gather_nd(input_idx,indices=perm_indices)
-            attn_mask       = tf.gather_nd(attn_mask,indices=perm_indices)
+        #     #Now we will gather the tensors using this perm indices
+        #     topic_label_all = tf.gather_nd(topic_label_all,indices=perm_indices)
+        #     input_idx       = tf.gather_nd(input_idx,indices=perm_indices)
+        #     attn_mask       = tf.gather_nd(attn_mask,indices=perm_indices)
         
 
-        #Training the topic classifier in batches
-        topic_total_loss = 0.0
-        for iidx in range(len(self.data_args["cat_list"])):
-            #Sharding the topic data into batches (to keep the batch size equal to topic ones)
-            batch_size = self.data_args["batch_size"]
-            topic_label = topic_label_all[iidx*batch_size:(iidx+1)*batch_size]
-            topic_idx = input_idx[iidx*batch_size:(iidx+1)*batch_size]
-            topic_mask = attn_mask[iidx*batch_size:(iidx+1)*batch_size]
-            topic_weight = topic_weight_all[iidx*batch_size:(iidx+1)*batch_size]
+        # #Training the topic classifier in batches
+        # topic_total_loss = 0.0
+        # for iidx in range(len(self.data_args["cat_list"])):
+        #     #Sharding the topic data into batches (to keep the batch size equal to topic ones)
+        #     batch_size = self.data_args["batch_size"]
+        #     topic_label = topic_label_all[iidx*batch_size:(iidx+1)*batch_size]
+        #     topic_idx = input_idx[iidx*batch_size:(iidx+1)*batch_size]
+        #     topic_mask = attn_mask[iidx*batch_size:(iidx+1)*batch_size]
+        #     topic_weight = topic_weight_all[iidx*batch_size:(iidx+1)*batch_size]
 
-            #Now we will iterate the training for each of the poic classifier
-            for tidx,tname in enumerate(self.data_args["topic_list"]):
-                #Taking aside a chunk of data for validation
-                valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+        #     #Now we will iterate the training for each of the poic classifier
+        #     for tidx,tname in enumerate(self.data_args["topic_list"]):
+        #         #Taking aside a chunk of data for validation
+        #         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
-                tclass_factor = self.data_args["per_topic_class"]
-                #Getting the train data
-                topic_label_train = topic_label[0:valid_idx,tidx]
-                topic_idx_train = topic_idx[0:valid_idx]
-                topic_mask_train = topic_mask[0:valid_idx]
-                topic_weight_train = topic_weight[0:valid_idx,tidx]
+        #         tclass_factor = self.data_args["per_topic_class"]
+        #         #Getting the train data
+        #         topic_label_train = topic_label[0:valid_idx,tidx]
+        #         topic_idx_train = topic_idx[0:valid_idx]
+        #         topic_mask_train = topic_mask[0:valid_idx]
+        #         topic_weight_train = topic_weight[0:valid_idx,tidx]
 
-                #Getting the validation data
-                topic_label_valid = topic_label[valid_idx:,tidx]
-                topic_idx_valid = topic_idx[valid_idx:]
-                topic_mask_valid = topic_mask[valid_idx:]
-                topic_weight_valid = topic_weight[valid_idx:,tidx]
+        #         #Getting the validation data
+        #         topic_label_valid = topic_label[valid_idx:,tidx]
+        #         topic_idx_valid = topic_idx[valid_idx:]
+        #         topic_mask_valid = topic_mask[valid_idx:]
+        #         topic_weight_valid = topic_weight[valid_idx:,tidx]
 
-                with tf.GradientTape() as tape:
-                    #Forward propagating the model
-                    topic_train_prob = self.get_topic_pred_prob(topic_idx_train,topic_mask_train,tidx)
+        #         with tf.GradientTape() as tape:
+        #             #Forward propagating the model
+        #             topic_train_prob = self.get_topic_pred_prob(topic_idx_train,topic_mask_train,tidx)
 
-                    #Getting the loss for this classifier
-                    topic_loss = cxentropy_loss(topic_label_train,
-                                                topic_train_prob,
-                                                sample_weight=topic_weight_train,
-                    )
-                    topic_total_loss += topic_loss
+        #             #Getting the loss for this classifier
+        #             topic_loss = cxentropy_loss(topic_label_train,
+        #                                         topic_train_prob,
+        #                                         sample_weight=topic_weight_train,
+        #             )
+        #             topic_total_loss += topic_loss
             
-                #Now we have total classification loss, lets update the gradient
-                #TODO: BERT Model weight shouldn't be updated here. Correct this (used tf.stop_grad)
-                grads = tape.gradient(topic_loss,self.trainable_weights)
-                self.optimizer.apply_gradients(
-                    zip(grads,self.trainable_weights)
-                )
+        #         #Now we have total classification loss, lets update the gradient
+        #         #TODO: BERT Model weight shouldn't be updated here. Correct this (used tf.stop_grad)
+        #         grads = tape.gradient(topic_loss,self.trainable_weights)
+        #         self.optimizer.apply_gradients(
+        #             zip(grads,self.trainable_weights)
+        #         )
 
-                #Getting the validation accuracy for this category
-                topic_valid_prob = self.get_topic_pred_prob(topic_idx_valid,topic_mask_valid,tidx)
+        #         #Getting the validation accuracy for this category
+        #         topic_valid_prob = self.get_topic_pred_prob(topic_idx_valid,topic_mask_valid,tidx)
 
-                #For calculating the accuracy we need one single label instead of mixed prob.
-                topic_label_valid_MAX = tf.argmax(topic_label_valid,axis=-1)
-                self.topic_valid_acc_list[tidx].update_state(
-                                                    topic_label_valid_MAX,
-                                                    topic_valid_prob,
-                                                    sample_weight=topic_weight_valid
-                                                )
+        #         #For calculating the accuracy we need one single label instead of mixed prob.
+        #         topic_label_valid_MAX = tf.argmax(topic_label_valid,axis=-1)
+        #         self.topic_valid_acc_list[tidx].update_state(
+        #                                             topic_label_valid_MAX,
+        #                                             topic_valid_prob,
+        #                                             sample_weight=topic_weight_valid
+        #                                         )
         
-        #Updating the metrics to track
-        self.topic_pred_xentropy.update_state(topic_total_loss)
+        # #Updating the metrics to track
+        # self.topic_pred_xentropy.update_state(topic_total_loss)
 
 
-        #Getting the tracking results
-        track_dict={}
-        track_dict["xentropy_sent"]=self.sent_pred_xentropy.result()
-        track_dict["xentorpy_topic"]=self.topic_pred_xentropy.result()
+        # #Getting the tracking results
+        # track_dict={}
+        # track_dict["xentropy_sent"]=self.sent_pred_xentropy.result()
+        # track_dict["xentorpy_topic"]=self.topic_pred_xentropy.result()
 
-        #Function to all the accuracy to tracker
-        def add_accuracy_mertrics(track_dict,acc_prefix,list_name,acc_list):
-            for ttidx,ttname in enumerate(self.data_args[list_name]):
-                track_dict["{}_{}".format(acc_prefix,ttidx)]=acc_list[ttidx].result()
+        # #Function to all the accuracy to tracker
+        # def add_accuracy_mertrics(track_dict,acc_prefix,list_name,acc_list):
+        #     for ttidx,ttname in enumerate(self.data_args[list_name]):
+        #         track_dict["{}_{}".format(acc_prefix,ttidx)]=acc_list[ttidx].result()
         
-        #Adding the accuracies
-        add_accuracy_mertrics(track_dict=track_dict,
-                                acc_prefix="sent_vacc",
-                                list_name="cat_list",
-                                acc_list=self.sent_valid_acc_list
-        )
-        add_accuracy_mertrics(track_dict=track_dict,
-                                acc_prefix="topic_vacc",
-                                list_name="topic_list",
-                                acc_list=self.topic_valid_acc_list
-        )
+        # #Adding the accuracies
+        # add_accuracy_mertrics(track_dict=track_dict,
+        #                         acc_prefix="sent_vacc",
+        #                         list_name="cat_list",
+        #                         acc_list=self.sent_valid_acc_list
+        # )
+        # add_accuracy_mertrics(track_dict=track_dict,
+        #                         acc_prefix="topic_vacc",
+        #                         list_name="topic_list",
+        #                         acc_list=self.topic_valid_acc_list
+        # )
 
-        return track_dict
+        # return track_dict
+        return None
 
 
 def transformer_trainer(data_args,model_args):
@@ -344,15 +380,15 @@ def transformer_trainer(data_args,model_args):
 
     #Creating the dataset object
     data_handler = DataHandleTransformer(data_args)
-    dataset = data_handler.amazon_reviews_handler()
+    all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
 
-    checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
-    checkpoint_dir = os.path.dirname(checkpoint_path)
+    # checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
+    # checkpoint_dir = os.path.dirname(checkpoint_path)
 
-    # Create a callback that saves the model's weights
-    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
-                                                 save_weights_only=True,
-                                                 verbose=1)
+    # # Create a callback that saves the model's weights
+    # cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+    #                                              save_weights_only=True,
+    #                                              verbose=1)
     
     #Loading the weight if we want to reuse the computation
     if model_args["load_weight"]!=None:
@@ -363,12 +399,53 @@ def transformer_trainer(data_args,model_args):
 
 
     #Now fitting the model
-    classifier.fit(
-                        dataset,
-                        epochs=model_args["epochs"],
-                        callbacks=[cp_callback]
-                        # validation_split=model_args["valid_split"]
-    )
+    # classifier.fit(
+    #                     dataset,
+    #                     epochs=model_args["epochs"],
+    #                     callbacks=[cp_callback]
+    #                     # validation_split=model_args["valid_split"]
+    # )
+    #Writing the custom training loop
+    for eidx in range(model_args["epochs"]):
+        #Now first we will reset all the metrics
+        classifier.reset_all_metrics()
+        print("\n==============================================")
+        print("Starting Epoch: ",eidx)
+        print("==============================================")
+
+
+        #Next its time to train the classifier one by one
+        for cidx,(cat,cat_ds) in enumerate(all_cat_ds.items()):
+            #Trining theis classfifer for full one batch
+            for data_batch in cat_ds:
+                classifier.train_step(cidx,data_batch,"sentiment")
+
+            #Now we will print the metric for this category
+            print("cat:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
+                                            cat,
+                                            classifier.sent_pred_xentropy.result(),
+                                            classifier.sent_valid_acc_list[cidx].result(),
+                    )
+            )
+        
+        #Now its time to train the topics
+        for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
+            #Training the topic through all the batches
+            for data_batch in topic_ds:
+                classifier.train_step(tidx,data_batch,"topic")
+            
+            #Pringitn ghte metrics
+            print("topic:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
+                                            tname,
+                                            classifier.topic_pred_xentropy.result(),
+                                            classifier.topic_valid_acc_list[tidx].result(),
+                    )
+            )
+
+        #Saving the paramenters
+        checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],eidx)
+        classifier.save_weights(checkpoint_path)            
+
 
 
 def get_spuriousness_rank(classifier,policy):

@@ -402,13 +402,15 @@ class DataHandleTransformer():
         
         return all_cat_df
     
-    def _get_topic_labels_manual(self,all_cat_df,pdoc_name,topic_col_name,topic_weight_col_name):
+    def _get_topic_labels_manual(self,all_cat_df,doc_col_name,pdoc_name):
         '''
         Here we will try to manually annotate certain concepts using bag of words
         approach which we think are clean and have clear distinction ob being 
         spurious and causal.
         '''
         complete_topic_label_list = []
+        complete_topic_list = []
+        complete_doc_list = []
         for cat_name,cat_df in all_cat_df.items():
             topic_label_list = []
             for ctidx in range(cat_df.shape[0]):
@@ -416,52 +418,106 @@ class DataHandleTransformer():
                 #Getting the topic distriubiton
                 doc_topic = self._get_topic_annotation_manual(pdoc)
 
+                #Adding each of the topic and label separately
+                for topic_idx in range(doc_topic.shape[0]):
+                    #Adding the topic label
+                    if(doc_topic[topic_idx]==1.0):
+                        complete_topic_label_list.append(0)
+                    else:
+                        complete_topic_label_list.append(1)
+                    
+                    #Now adding the topic number and doc
+                    complete_topic_list.append(topic_idx)
+                    complete_doc_list.append(cat_df.iloc[ctidx][doc_col_name])
+
                 #Creating the doc_topic_label
-                doc_topic_label = np.stack([doc_topic,1-doc_topic],axis=-1).tolist()
-                topic_label_list.append(doc_topic_label)
-                complete_topic_label_list.append(doc_topic_label)
+                # doc_topic_label = np.stack([doc_topic,1-doc_topic],axis=-1).tolist()
+                # topic_label_list.append(doc_topic_label)
+                # complete_topic_label_list.append(doc_topic_label)
 
             #Assigning the topic label in the new column
-            cat_df[topic_col_name]=topic_label_list
+            # cat_df[topic_col_name]=topic_label_list
 
-            #Getting the topic distirbution within each of the category
-            topic_label_arr = np.sum(np.array(topic_label_list),axis=0).tolist()
-            print("Topic Distribution for cat: ",cat_name)
-            pp.pprint(topic_label_arr)
+            # #Getting the topic distirbution within each of the category
+            # topic_label_arr = np.sum(np.array(topic_label_list),axis=0).tolist()
+            # print("Topic Distribution for cat: ",cat_name)
+            # pp.pprint(topic_label_arr)
         
-        #Getting the complete topic label list
-        complete_topic_label_arr = np.sum(
-                                        np.array(complete_topic_label_list),
-                                        axis=0
-                                )
-        complete_topic_label_total = np.sum(complete_topic_label_arr,axis=-1,keepdims=True)
-        topic_label_weights = complete_topic_label_arr/complete_topic_label_total
-        pp.pprint("Topic Weights:")
-        pp.pprint(topic_label_weights)
+        #Now we have all the examples labelled with all the topic
+        merged_topic_df = pd.DataFrame(
+                                {
+                                    "topic":complete_topic_list,
+                                    "label":complete_topic_label_list,
+                                    doc_col_name:complete_doc_list
+                                }
+        )
 
-        #Assigning this weight list to all the dataframes
-        for cat_name,cat_df in all_cat_df.items():
-            print("Assignign the sample weight in cat_df: ",cat_name)
-            topic_weight_list= []
-            for ctidx in range(cat_df.shape[0]):
-                #Getting the label assigned to this example
-                topic_label = np.argmax(cat_df.iloc[ctidx][topic_col_name],axis=-1).tolist()
-                topic_idx = range(len(topic_label))
-
-                #Now we will give the sample weight based on the label for each topic
-                topic_weight = topic_label_weights[topic_idx,topic_label]
-                #Reverting the weights to be opposite of class raito
-                topic_weight = 1 - topic_weight
-                # topic_weight = np.expand_dims(topic_weight,axis=-1)
-
-                topic_weight_list.append(topic_weight)  #dim = (num_topic)
+        all_topic_df = {}
+        #Getting the topic dataframe
+        for tidx,topic_df in merged_topic_df.groupby("topic"):
+            all_topic_df[tidx]= self._get_topic_df(tidx,topic_df)
             
-            #Now we will assign the label weights to this df
-            cat_df[topic_weight_col_name]=topic_weight_list
+        
+        return all_topic_df
+
+        #Getting the complete topic label list
+        # complete_topic_label_arr = np.sum(
+        #                                 np.array(complete_topic_label_list),
+        #                                 axis=0
+        #                         )
+        # complete_topic_label_total = np.sum(complete_topic_label_arr,axis=-1,keepdims=True)
+        # topic_label_weights = complete_topic_label_arr/complete_topic_label_total
+        # pp.pprint("Topic Weights:")
+        # pp.pprint(topic_label_weights)
+
+        # #Assigning this weight list to all the dataframes
+        # for cat_name,cat_df in all_cat_df.items():
+        #     print("Assignign the sample weight in cat_df: ",cat_name)
+        #     topic_weight_list= []
+        #     for ctidx in range(cat_df.shape[0]):
+        #         #Getting the label assigned to this example
+        #         topic_label = np.argmax(cat_df.iloc[ctidx][topic_col_name],axis=-1).tolist()
+        #         topic_idx = range(len(topic_label))
+
+        #         #Now we will give the sample weight based on the label for each topic
+        #         topic_weight = topic_label_weights[topic_idx,topic_label]
+        #         #Reverting the weights to be opposite of class raito
+        #         topic_weight = 1 - topic_weight
+        #         # topic_weight = np.expand_dims(topic_weight,axis=-1)
+
+        #         topic_weight_list.append(topic_weight)  #dim = (num_topic)
+            
+        #     #Now we will assign the label weights to this df
+        #     cat_df[topic_weight_col_name]=topic_weight_list
 
 
         
-        return all_cat_df
+        # return all_cat_df
+    
+    def _get_topic_df(self,tidx,topic_df):
+        '''
+        This function will develop topic dataset for this topic
+        '''
+        class0_df = topic_df[topic_df["label"]==0]
+        class1_df = topic_df[topic_df["label"]==1]
+
+        num_class0 = class0_df.shape[0]
+        num_class1 = class1_df.shape[0]
+        min_num = min(num_class0,num_class1)
+        print("##############################")
+        print("class0:{}\tclass1:{}".format(num_class0,num_class1))
+
+        class0_df = class0_df.iloc[0:min_num]
+        class1_df = class1_df.iloc[0:min_num]
+
+        topic_df = pd.concat([class0_df,class1_df],axis=0,ignore_index=True)
+        topic_df = topic_df.sample(frac=1).reset_index(drop=True)
+
+        print("New topic df created: {}\tshape:{} ".format(tidx,topic_df.shape[0]))
+        print(topic_df.head())
+
+        #Now creating the dataset object from here
+        return topic_df
    
     def _get_topic_annotation_manual(self,pdoc):
         '''
@@ -560,7 +616,7 @@ class DataHandleTransformer():
                 whandle.write(write_string)
                 print("Topic:{} \t\t Component:{}".format(idx,feature_vector))
 
-    def _convert_df_to_dataset(self,df,doc_col_name,label_col_name,topic_col_name,topic_weight_col_name):
+    def _convert_df_to_dataset(self,df,doc_col_name,label_col_name):
         '''
         This function will conver the dataframe to a tensorflow dataset
         to be used as input for Transformer.
@@ -568,13 +624,13 @@ class DataHandleTransformer():
         #First of all parsing the review documents into tensors
         doc_list = []
         label_list = []
-        topic_list = []
-        topic_weight_list = []
+        # topic_list = []
+        # topic_weight_list = []
         for ridx in range(df.shape[0]):
             doc_list.append(df.iloc[ridx][doc_col_name])
             label_list.append(df.iloc[ridx][label_col_name])
-            topic_list.append(df.iloc[ridx][topic_col_name])
-            topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
+            # topic_list.append(df.iloc[ridx][topic_col_name])
+            # topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
         
         #Now we will parse the documents
         encoded_doc = self.tokenizer(
@@ -591,12 +647,15 @@ class DataHandleTransformer():
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
                                     label=np.array(label_list),
-                                    topic=np.array(topic_list),
-                                    topic_weight=np.array(topic_weight_list),
+                                    # topic=np.array(topic_list),
+                                    # topic_weight=np.array(topic_weight_list),
                                     input_idx = input_idx,
                                     attn_mask = attn_mask
                                 )
         )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
         return cat_dataset
 
@@ -704,11 +763,12 @@ class DataHandleTransformer():
         #                                     topic_col_name="topic")
 
         #Getting the manually labelled topic
-        all_cat_df = self._get_topic_labels_manual(
+        all_topic_df = self._get_topic_labels_manual(
                                             all_cat_df=all_cat_df,
+                                            doc_col_name="doc",
                                             pdoc_name="pdoc",
-                                            topic_col_name="topic",
-                                            topic_weight_col_name="topic_weight"
+                                            # topic_col_name="topic",
+                                            # topic_weight_col_name="topic_weight"
         )
 
 
@@ -721,12 +781,31 @@ class DataHandleTransformer():
                                         df=cat_df,
                                         doc_col_name="doc",
                                         label_col_name="label",
-                                        topic_col_name="topic",
-                                        topic_weight_col_name="topic_weight",
+                                        # topic_col_name="topic",
+                                        # topic_weight_col_name="topic_weight",
             )
             all_cat_ds[cat]=cat_ds
+        
+
+        #Creating the topic dataset
+        all_topic_ds = {}
+        for tidx in self.data_args["topic_list"]:
+            topic_df = all_topic_df[tidx]
+            #Getting the dataset object
+            topic_ds = self._convert_df_to_dataset(
+                                        df=topic_df,
+                                        doc_col_name="doc",
+                                        label_col_name="label",
+                                        # topic_col_name="topic",
+                                        # topic_weight_col_name="topic_weight",
+            )
+            all_topic_ds[cat]=topic_ds
+        
+
+        return all_cat_ds,all_topic_ds
+        
         #Merging into one dictionary
-        dataset = tf.data.Dataset.zip(all_cat_ds)
+        # dataset = tf.data.Dataset.zip(all_cat_ds)
         
         #Now its time to build a data loader for the transformer
         # def df_iterator(df,name):
@@ -794,9 +873,9 @@ class DataHandleTransformer():
         # )
 
 
-        dataset = dataset.shuffle(self.data_args["shuffle_size"])
-        dataset = dataset.batch(self.data_args["batch_size"])
-        return dataset
+        # dataset = dataset.shuffle(self.data_args["shuffle_size"])
+        # dataset = dataset.batch(self.data_args["batch_size"])
+        # return dataset
 
 
 if __name__=="__main__":
