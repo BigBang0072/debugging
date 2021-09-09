@@ -656,7 +656,7 @@ if __name__=="__main__":
     parser.add_argument("-load_weight_epoch",dest="load_weight_epoch",type=str,default=None)
     
     parser.add_argument("-gate_weight_exp",dest="gate_weight_exp",type=str,default=None)
-    parser.add_argument("-gate_weight_epoch",dest="gate_weight_epoch",type=str,default=None)
+    parser.add_argument("-gate_weight_epoch",dest="gate_weight_epoch",type=int,default=None)
     parser.add_argument("-gate_var_cutoff",dest="gate_var_cutoff",type=float,default=1.0) #all will be allowed for this
 
     parser.add_argument('--train_bert',default=False,action="store_true")
