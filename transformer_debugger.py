@@ -6,6 +6,7 @@ import scipy
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 from transformers import TFBertModel,TFDistilBertModel
 
@@ -101,8 +102,7 @@ class TransformerClassifier(keras.Model):
         super(TransformerClassifier, self).compile()
         self.optimizer = optimizer 
     
-    @tf.function
-    def get_sentiment_pred_prob(self,idx_train,mask_train,cidx):     
+    def get_sentiment_pred_prob(self,idx_train,mask_train,gate_tensor,cidx):     
         #Getting the bert activation
         bert_outputs=self.bert_model(
                     input_ids=idx_train,
@@ -126,14 +126,17 @@ class TransformerClassifier(keras.Model):
         num_tokens = tf.reduce_sum(m,axis=1,keepdims=True)
 
         avg_embedding = masked_sum / (num_tokens+1e-10)
+
+        #Now we will gate the dimension which are spurious
+        gated_avg_embedding = avg_embedding*gate_tensor
         
         #Now we will apply the dense layer for this category
-        cat_class_prob = self.cat_classifier_list[cidx](avg_embedding)
+        cat_class_prob = self.cat_classifier_list[cidx](gated_avg_embedding)
 
         return cat_class_prob
     
-    @tf.function
-    def get_topic_pred_prob(self,idx_train,mask_train,tidx): 
+
+    def get_topic_pred_prob(self,idx_train,mask_train,gate_tensor,tidx): 
         # raise NotImplementedError   
         #Getting the bert activation
         bert_outputs=self.bert_model(
@@ -160,14 +163,16 @@ class TransformerClassifier(keras.Model):
         num_tokens = tf.reduce_sum(m,axis=1,keepdims=True)
 
         avg_embedding = masked_sum / (num_tokens+1e-10)
+
+        #Now we will gate the dimension which are spurious
+        gated_avg_embedding = avg_embedding*gate_tensor
         
         #Now we will apply the dense layer for this topic
-        topic_class_prob = self.topic_classifier_list[tidx](avg_embedding)
+        topic_class_prob = self.topic_classifier_list[tidx](gated_avg_embedding)
 
         return topic_class_prob
     
-    @tf.function
-    def train_step(self,sidx,single_ds,task):
+    def train_step(self,sidx,single_ds,gate_tensor,task):
         '''
         This function will run one step of training for the classifier
         '''
@@ -203,7 +208,7 @@ class TransformerClassifier(keras.Model):
         if task=="sentiment":
             with tf.GradientTape() as tape:
                 #Forward propagating the model
-                train_prob = self.get_sentiment_pred_prob(idx_train,mask_train,sidx)
+                train_prob = self.get_sentiment_pred_prob(idx_train,mask_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
                 loss = scxentropy_loss(label_train,train_prob)
@@ -216,7 +221,7 @@ class TransformerClassifier(keras.Model):
             )
 
             #Getting the validation accuracy for this category
-            valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,sidx)
+            valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
             self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
@@ -224,7 +229,7 @@ class TransformerClassifier(keras.Model):
         elif task=="topic":
             with tf.GradientTape() as tape:
                 #Forward propagating the model
-                train_prob = self.get_topic_pred_prob(idx_train,mask_train,sidx)
+                train_prob = self.get_topic_pred_prob(idx_train,mask_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
                 loss = scxentropy_loss(label_train,train_prob)
@@ -237,7 +242,7 @@ class TransformerClassifier(keras.Model):
             )
 
             #Getting the validation accuracy for this category
-            valid_prob = self.get_topic_pred_prob(idx_valid,mask_valid,sidx)
+            valid_prob = self.get_topic_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
             self.topic_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
@@ -366,6 +371,9 @@ class TransformerClassifier(keras.Model):
 def transformer_trainer(data_args,model_args):
     '''
     '''
+    #First of all we will load the gate array we are truing to run gate experiemnt
+    gate_tensor = get_dimension_gate(data_args,model_args)
+
     #Dumping the model arguments
     dump_arguments(data_args,data_args["expt_name"],"data_args")
     dump_arguments(model_args,model_args["expt_name"],"model_args")
@@ -391,8 +399,11 @@ def transformer_trainer(data_args,model_args):
     #                                              verbose=1)
     
     #Loading the weight if we want to reuse the computation
-    if model_args["load_weight"]!=None:
-        load_path = "nlp_logs/{}/cp.ckpt".format(model_args["load_weight"])
+    if model_args["load_weight_exp"]!=None:
+        load_path = "nlp_logs/{}/cp_{}.ckpt".format(
+                                    model_args["load_weight_exp"],
+                                    model_args["load_weight_epoch"]
+        )
         load_dir = os.path.dirname(load_path)
 
         classifier.load_weights(load_path)
@@ -418,7 +429,7 @@ def transformer_trainer(data_args,model_args):
         for cidx,(cat,cat_ds) in enumerate(all_cat_ds.items()):
             #Trining theis classfifer for full one batch
             for data_batch in cat_ds:
-                classifier.train_step(cidx,data_batch,"sentiment")
+                classifier.train_step(cidx,data_batch,gate_tensor,"sentiment")
 
             #Now we will print the metric for this category
             print("cat:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
@@ -432,7 +443,7 @@ def transformer_trainer(data_args,model_args):
         for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
             #Training the topic through all the batches
             for data_batch in topic_ds:
-                classifier.train_step(tidx,data_batch,"topic")
+                classifier.train_step(tidx,data_batch,gate_tensor,"topic")
             
             #Pringitn ghte metrics
             print("topic:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
@@ -446,6 +457,60 @@ def transformer_trainer(data_args,model_args):
         checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],eidx)
         classifier.save_weights(checkpoint_path)            
 
+def get_dimension_gate(data_args,model_args):
+    '''
+    '''
+    #If we dont want to do any gating we will pass a constant tensor with one
+    if(model_args["gate_weight_exp"]==None):
+        all_ones = tf.constant(
+                        tf.ones([1,model_args["bemb_dim"]])
+        )
+
+        return all_ones
+
+    print("====================================================")
+    print("PREPARING THE GATE TO THE SHADOWS OF MORDOR")
+    print("====================================================")
+    #Loaidng the previous run from which we want to get dim variance
+    classifier = TransformerClassifier(data_args,model_args)
+    checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(
+                                    model_args["gate_weight_exp"],
+                                    model_args["gate_weight_epoch"]
+    )
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    classifier.load_weights(checkpoint_path)
+
+    #Getting the dim variance using the task importance
+    #Getting the spuriousness of each dimension due to domain variation
+    sent_weights=[
+        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
+                        for cidx in range(len(classifier.data_args["cat_list"]))
+    ]
+    sent_weights = np.stack(sent_weights,axis=1)
+    dim_std = np.std(sent_weights,axis=1)
+
+    #Now we will have a cutoff for the spurousness
+    cutoff_idx = int(dim_std.shape[0]*model_args["gate_var_cutoff"])
+    sorted_dim_idx = np.argsort(dim_std)[cutoff_idx]
+    cutoff_value = dim_std[sorted_dim_idx]
+    gate_arr = (dim_std<=cutoff_value)*1.0
+    gate_arr = np.expand_dims(gate_arr,axis=0)
+    print("cutoff_percent:{}\tcutoff_idx:{}\tcutoff_val:{}\tnum_alive:{}".format(
+                                model_args["gate_var_cutoff"],
+                                cutoff_idx,
+                                cutoff_value,
+                                np.sum(gate_arr)
+    ))
+
+    #Creating the gate tensor
+    gate_tensor = tf.constant(
+                        gate_arr,
+                        dtype=tf.float32
+    )
+
+    #Deleting the classifier for safely
+    del classifier
+    return gate_tensor
 
 
 def get_spuriousness_rank(classifier,policy):
@@ -532,7 +597,7 @@ def load_and_analyze_transformer(data_args,model_args):
     classifier = TransformerClassifier(data_args,model_args)
     
     
-    checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
+    checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],model_args["load_weight_epoch"])
     checkpoint_dir = os.path.dirname(checkpoint_path)
     
     
@@ -581,10 +646,18 @@ if __name__=="__main__":
     parser.add_argument('-expt_num',dest="expt_name",type=str)
     parser.add_argument('-num_samples',dest="num_samples",type=int)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
+    parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int)
+
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
     parser.add_argument('-num_epochs',dest="num_epochs",type=int)
-    parser.add_argument("-load_weight",dest="load_weight",type=str,default=None)
+    
+    parser.add_argument("-load_weight_exp",dest="load_weight_exp",type=str,default=None)
+    parser.add_argument("-load_weight_epoch",dest="load_weight_epoch",type=str,default=None)
+    
+    parser.add_argument("-gate_weight_exp",dest="gate_weight_exp",type=str,default=None)
+    parser.add_argument("-gate_weight_epoch",dest="gate_weight_epoch",type=str,default=None)
+    parser.add_argument("-gate_var_cutoff",dest="gate_var_cutoff",type=float,default=1.0) #all will be allowed for this
 
     parser.add_argument('--train_bert',default=False,action="store_true")
 
@@ -598,6 +671,7 @@ if __name__=="__main__":
     data_args["num_class"]=2
     data_args["max_len"]=200
     data_args["num_sample"]=args.num_samples
+    data_args["num_topic_samples"]=args.num_topic_samples
     data_args["batch_size"]=32
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
@@ -613,13 +687,17 @@ if __name__=="__main__":
     model_args={}
     model_args["expt_name"]=args.expt_name
     data_args["expt_name"]=model_args["expt_name"]
-    model_args["load_weight"]=args.load_weight
+    model_args["load_weight_exp"]=args.load_weight_exp
+    model_args["load_weight_epoch"]=args.load_weight_epoch
     model_args["lr"]=0.001
     model_args["epochs"]=args.num_epochs
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
     model_args["shuffle_topic_batch"]=False
+    model_args["gate_weight_exp"]=args.gate_weight_exp
+    model_args["gate_weight_epoch"]=args.gate_weight_exp
+    model_args["gate_var_cutoff"]=args.gate_var_cutoff
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])

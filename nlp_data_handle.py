@@ -498,14 +498,20 @@ class DataHandleTransformer():
         '''
         This function will develop topic dataset for this topic
         '''
+        #Shuffling the dataframe so that we have even dist from diff category of data
+        #But this should't matter much
+        # topic_df = topic_df.sample(frac=1).reset_index(drop=True)
+
         class0_df = topic_df[topic_df["label"]==0]
         class1_df = topic_df[topic_df["label"]==1]
 
         num_class0 = class0_df.shape[0]
         num_class1 = class1_df.shape[0]
         min_num = min(num_class0,num_class1)
+        if(self.data_args["num_topic_sample"]!=None):
+            min_num = min(self.data_args["num_topic_samples"],min_num)
         print("##############################")
-        print("class0:{}\tclass1:{}".format(num_class0,num_class1))
+        print("class0:{}\tclass1:{}\tmin_num:{}".format(num_class0,num_class1,min_num))
 
         class0_df = class0_df.iloc[0:min_num]
         class1_df = class1_df.iloc[0:min_num]
@@ -799,7 +805,7 @@ class DataHandleTransformer():
                                         # topic_col_name="topic",
                                         # topic_weight_col_name="topic_weight",
             )
-            all_topic_ds[cat]=topic_ds
+            all_topic_ds[tidx]=topic_ds
         
 
         return all_cat_ds,all_topic_ds
