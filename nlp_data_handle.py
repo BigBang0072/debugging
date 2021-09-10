@@ -508,7 +508,7 @@ class DataHandleTransformer():
         num_class0 = class0_df.shape[0]
         num_class1 = class1_df.shape[0]
         min_num = min(num_class0,num_class1)
-        if(self.data_args["num_topic_sample"]!=None):
+        if(self.data_args["num_topic_samples"]!=None):
             min_num = min(self.data_args["num_topic_samples"],min_num)
         print("##############################")
         print("class0:{}\tclass1:{}\tmin_num:{}".format(num_class0,num_class1,min_num))

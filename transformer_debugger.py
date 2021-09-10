@@ -589,7 +589,11 @@ def get_spuriousness_rank(classifier,policy):
     print("\ncorrelation_policy: ",policy)
     mypp(topic_correlation)
 
-    return topic_correlation
+    topic_correlation_dict = {}
+    for corr_val,tname in topic_correlation:
+        topic_correlation_dict[tname]=corr_val
+
+    return topic_correlation,topic_correlation_dict
 
 
 def load_and_analyze_transformer(data_args,model_args):
@@ -696,7 +700,7 @@ if __name__=="__main__":
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
     model_args["shuffle_topic_batch"]=False
     model_args["gate_weight_exp"]=args.gate_weight_exp
-    model_args["gate_weight_epoch"]=args.gate_weight_exp
+    model_args["gate_weight_epoch"]=args.gate_weight_epoch
     model_args["gate_var_cutoff"]=args.gate_var_cutoff
 
     #Creating the metadata folder
