@@ -135,7 +135,6 @@ class TransformerClassifier(keras.Model):
 
         return cat_class_prob
     
-
     def get_topic_pred_prob(self,idx_train,mask_train,gate_tensor,tidx): 
         # raise NotImplementedError   
         #Getting the bert activation
@@ -367,6 +366,28 @@ class TransformerClassifier(keras.Model):
         # return track_dict
         return None
 
+    def valid_step(self,sidx,single_ds,gate_tensor,acc_op):
+        '''
+        Given a single dataset we will get the validation score
+        (using the lower end of the dataset which was not used for training)
+        '''
+        label = single_ds["label"]
+        idx = single_ds["input_idx"]
+        mask = single_ds["attn_mask"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        mask_valid = mask[valid_idx:]
+
+        #Now we will make the forward pass
+        valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+        #Getting the validation accuracy
+        acc_op.update_state(label_valid,valid_prob)
+
 
 def transformer_trainer(data_args,model_args):
     '''
@@ -512,6 +533,82 @@ def get_dimension_gate(data_args,model_args):
     del classifier
     return gate_tensor
 
+def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
+    '''
+    Given a trained classifier for the task we will try to retreive the
+    OOD and INDO performance for all the classifier on the validation set
+
+    Remember we are using the validation as lower end of the batch and since
+    we dont shuffle the dataset suring training, the validation set are not
+    seen during training.
+
+    Output Contract:
+    {
+        domain 1 (classfier) : {
+                                    domain 1 (data): vacc
+                                    domain 2 (data): vacc
+                                    ...
+                                }
+        ...
+    }
+    '''
+    #First of all we will load the gate array we are truing to run gate experiemnt
+    gate_tensor = get_dimension_gate(data_args,model_args)
+
+    #First of all creating the model
+    classifier = TransformerClassifier(data_args,model_args)
+
+    #Now we will compile the model
+    classifier.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+
+    #Creating the dataset object
+    data_handler = DataHandleTransformer(data_args)
+    all_cat_ds,_ = data_handler.amazon_reviews_handler()
+
+    if model_args["load_weight_exp"]!=None:
+        load_path = "nlp_logs/{}/cp_{}.ckpt".format(
+                                    model_args["load_weight_exp"],
+                                    model_args["load_weight_epoch"]
+        )
+        load_dir = os.path.dirname(load_path)
+
+        classifier.load_weights(load_path)
+    
+
+    #Iterating over all the classifier
+    indo_vacc = {}
+    ood_vacc = defaultdict(list)
+    for cidx,cname in enumerate(data_args["cat_list"]):
+        #Iterating over all the dataset for both indo and OOD
+        for cat,cat_ds in all_cat_ds.items():
+            #Getting a new accuracy op for fear of updating old one
+            acc_op = tf.keras.metrics.sparse_categorical_accuracy()
+            acc_op.reset_state()
+
+            #Going over all the batches of this catefory for given classifier
+            for data_batch in cat_ds:
+                classifier.valid_step(cidx,data_batch,gate_tensor,acc_op)
+            
+            vacc = acc_op.result()
+
+            #Now assignign the accuracy to appropriate place
+            if cname==cat:
+                indo_vacc[cname]=vacc
+            else:
+                ood_vacc[cname].append((cat,vacc))
+
+    print("========================================")
+    print("Indomain Validation Accuracy:") 
+    mypp(indo_vacc)
+    print("OutOfDomain Validation Accuracy:")
+    mypp(ood_vacc)
+    print("========================================")
+    
+    #Now we have all the indo and ood validation accuracy
+    return indo_vacc,ood_vacc
+
 
 def get_spuriousness_rank(classifier,policy):
     #Getting the spuriousness of each dimension due to domain variation
@@ -611,11 +708,12 @@ def load_and_analyze_transformer(data_args,model_args):
     get_spuriousness_rank(classifier,"weightedtau")
     get_spuriousness_rank(classifier,"kendalltau")
     get_spuriousness_rank(classifier,"spearmanr")
-    get_spuriousness_rank(classifier,"dot")
-    get_spuriousness_rank(classifier,"weighted_dot")
-    get_spuriousness_rank(classifier,"cosine")
-    get_spuriousness_rank(classifier,"weighted_cosine")
+    _,corr_dict_dot     = get_spuriousness_rank(classifier,"dot")
+    _,corr_dict_wdot    = get_spuriousness_rank(classifier,"weighted_dot")
+    _,corr_dict_cos     = get_spuriousness_rank(classifier,"cosine")
+    _,corr_dict_wcos    = get_spuriousness_rank(classifier,"weighted_cosine")
 
+    return corr_dict_dot,corr_dict_cos
 
     # dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)
     # spurious_dims = np.argsort(dim_score)
