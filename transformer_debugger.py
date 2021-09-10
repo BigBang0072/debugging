@@ -386,7 +386,8 @@ class TransformerClassifier(keras.Model):
         #Now we will make the forward pass
         valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
         #Getting the validation accuracy
-        acc_op.update_state(label_valid,valid_prob)
+        acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
+        acc_op.update_state(acc)
 
 
 def transformer_trainer(data_args,model_args):
@@ -584,7 +585,7 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
         #Iterating over all the dataset for both indo and OOD
         for cat,cat_ds in all_cat_ds.items():
             #Getting a new accuracy op for fear of updating old one
-            acc_op = tf.keras.metrics.sparse_categorical_accuracy()
+            acc_op = keras.metrics.Mean(name="temp_acc_op")
             acc_op.reset_state()
 
             #Going over all the batches of this catefory for given classifier
