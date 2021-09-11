@@ -898,20 +898,21 @@ class DataHandleTransformer():
         #Taking out the parameters
         num_causal_nodes = self.data_args["num_causal_nodes"]
         num_child_nodes =self.data_args["num_child_nodes"]
-        num_samples = self.data_args["num_sample"]
+        num_samples = self.data_args["num_sample"]*10
         num_cat = len(self.data_args["cat_list"])
         batch_size = self.data_args["batch_size"]
         #Defining the seed
         np.random.seed(22)
 
         #Defining the causal graph elements first
+        noise_factor = 20
         #Causal part
-        causal_mean = np.random.randint(low=-10,high=11,size=(1,num_causal_nodes))
-        causal_std = np.random.uniform(low=0.0,high=1.0,size=(1,num_causal_nodes))
+        causal_mean = np.random.randint(low=-100,high=101,size=(1,num_causal_nodes))
+        causal_std = np.random.uniform(low=0.0,high=1.0,size=(1,num_causal_nodes))*noise_factor
 
         #Children part
-        child_mean = np.random.randint(low=-10,high=11,size=(1,num_child_nodes))
-        child_std = np.random.uniform(low=0.0,high=1.0,size=(1,num_child_nodes))
+        child_mean = np.random.randint(low=-100,high=101,size=(1,num_child_nodes))
+        child_std = np.random.uniform(low=0.0,high=1.0,size=(1,num_child_nodes))*noise_factor
         parent_coupling = np.random.choice([-1,1],size=(num_causal_nodes,num_child_nodes))
 
 
@@ -949,7 +950,17 @@ class DataHandleTransformer():
                                             )
             
             #Now its time to create the labels
-            data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes],axis=-1)) >=0 )
+            data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes]/noise_factor,axis=-1)) >=0 )
+            #Data could be balanced so balance it
+            class_0_X = data_X[(data_Y==0).tolist()][0:self.data_args["num_sample"]]
+            class_1_X = data_X[(data_Y==1).tolist()][0:self.data_args["num_sample"]]
+            data_X = np.concatenate([class_0_X,class_1_X],axis=0)
+            data_Y = np.array([0]*class_0_X.shape[0]+[1]*class_1_X.shape[0])
+            #Randomly permuting the data
+            perm = np.random.permutation(data_X.shape[0]).tolist()
+            data_X = data_X[perm]
+            data_Y = data_Y[perm]
+
             print("num_0:{}\tnum_1:{}".format(np.sum(data_Y),num_samples-np.sum(data_Y)))
 
             #Creating the tensorlfow dataset from this

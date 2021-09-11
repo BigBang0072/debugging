@@ -806,7 +806,7 @@ if __name__=="__main__":
     data_args["max_len"]=200
     data_args["num_sample"]=args.num_samples
     data_args["num_topic_samples"]=args.num_topic_samples
-    data_args["batch_size"]=args.num_samples
+    data_args["batch_size"]=64 #always keep small batch size#args.num_samples
     data_args["shuffle_size"]=data_args["batch_size"]*3
     data_args["cat_list"]=list(range(args.num_cat))#["arts","books","phones","clothes","groceries","movies","pets","tools"]
     data_args["num_topics"]=args.num_topics
