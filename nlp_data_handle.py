@@ -898,7 +898,7 @@ class DataHandleTransformer():
         #Taking out the parameters
         num_causal_nodes = self.data_args["num_causal_nodes"]
         num_child_nodes =self.data_args["num_child_nodes"]
-        num_samples = self.data_args["num_samples"]
+        num_samples = self.data_args["num_sample"]
         num_cat = len(self.data_args["cat_list"])
         batch_size = self.data_args["batch_size"]
         #Defining the seed
@@ -926,7 +926,7 @@ class DataHandleTransformer():
             #Now its time to create the childrens
             child_noise = np.random.randn(num_samples,num_child_nodes)*child_std + child_mean
             #Overall noise dataset
-            noise_X = np.concat([causal_noise,child_noise],axis=-1)
+            noise_X = np.concatenate([causal_noise,child_noise],axis=-1)
             
             #Now is the time to intervene on the nodes
             interv_index,interv_value = interv_config
@@ -937,9 +937,10 @@ class DataHandleTransformer():
 
                 #Adding the couping to places which dont have intervnetions
                 non_interv_child_index = [idx for idx in interv_index if idx>=num_causal_nodes]
+                non_interv_child_relative_index = [idx-num_causal_nodes for idx in non_interv_child_index]
                 data_X[:,non_interv_child_index] += np.matmul(
                                                 data_X[:,0:num_causal_nodes],
-                                                parent_coupling[:,non_interv_child_index]
+                                                parent_coupling[:,non_interv_child_relative_index]
                 )
             else:
                 data_X[:,num_causal_nodes:] += np.matmul(
@@ -965,7 +966,7 @@ class DataHandleTransformer():
         all_interv_loc=[]
         for deg in range(0,num_causal_nodes+num_child_nodes+1):
             index_list = range(num_causal_nodes+num_child_nodes)
-            all_interv_loc.append(list(combinations(index_list,deg)))
+            all_interv_loc += list(combinations(index_list,deg))
         
         #Now we will select give number of internvetion from here
         interv_loc_list = np.random.choice(all_interv_loc,replace=False,size=num_cat)
