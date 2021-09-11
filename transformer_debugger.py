@@ -53,8 +53,12 @@ class TransformerClassifier(keras.Model):
             self.cat_importance_weight_list.append(cat_imp_weight)
 
             #Creating a dense layer
-            cat_dense = layers.Dense(2,activation="softmax")
-            self.cat_classifier_list.append(cat_dense)
+            cat_layer_list = []
+            for hidx in range(3):
+                cat_layer_list.append(layers.Dense(50,activation="relu"))
+            # cat_dense = layers.Dense(2,activation="softmax")
+            cat_layer_list.append(layers.Dense(2,activation="softmax"))
+            self.cat_classifier_list.append(cat_layer_list)
         
         #Initializing the heads for the "interpretable" topics
         self.topic_classifier_list = []
@@ -173,12 +177,15 @@ class TransformerClassifier(keras.Model):
 
     def get_syn_pred_prob(self,input_tensor,gate_tensor,cidx):
         #First of all we have to gate the input tensor
-        gate_input_tensor = input_tensor * gate_tensor
+        X = input_tensor * gate_tensor
+
+        for cat_layer in self.cat_classifier_list[cidx]:
+            X = cat_layer(X)
 
         #Now we will apply the dense layer for this category
-        cat_class_prob = self.cat_classifier_list[cidx](gate_input_tensor)
+        # cat_class_prob = self.cat_classifier_list[cidx]()
 
-        return cat_class_prob
+        return X
 
     def train_step(self,sidx,single_ds,gate_tensor,task):
         '''

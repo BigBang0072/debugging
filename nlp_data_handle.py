@@ -949,13 +949,14 @@ class DataHandleTransformer():
                                             )
             
             #Now its time to create the labels
-            data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes],axis=-1)) >=0 ).astype(np.int32)
+            data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes],axis=-1)) >=0 )
+            print("num_0:{}\tnum_1:{}".format(np.sum(data_Y),num_samples-np.sum(data_Y)))
 
             #Creating the tensorlfow dataset from this
             dataset = tf.data.Dataset.from_tensor_slices(
                                             dict(
-                                                label=data_Y,
-                                                feture=data_X
+                                                label=data_Y.astype(np.int32),
+                                                feature=data_X.astype(np.float32)
                                             )
             )
 
@@ -995,6 +996,8 @@ class DataHandleTransformer():
 
             #Now we will create a dataset object from this
             all_cat_df[cidx]=cat_ds
+        
+        return all_cat_df
 
 
 
