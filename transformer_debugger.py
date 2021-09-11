@@ -584,6 +584,7 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
     for cidx,cname in enumerate(data_args["cat_list"]):
         #Iterating over all the dataset for both indo and OOD
         for cat,cat_ds in all_cat_ds.items():
+            print("Getting ood perf of :{}\t on:{}".format(cname,cat))
             #Getting a new accuracy op for fear of updating old one
             acc_op = keras.metrics.Mean(name="temp_acc_op")
             acc_op.reset_state()
@@ -592,13 +593,17 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
             for data_batch in cat_ds:
                 classifier.valid_step(cidx,data_batch,gate_tensor,acc_op)
             
-            vacc = acc_op.result()
+            vacc = acc_op.result().numpy()
 
             #Now assignign the accuracy to appropriate place
             if cname==cat:
                 indo_vacc[cname]=vacc
             else:
                 ood_vacc[cname].append((cat,vacc))
+        
+        print("Indomain VAcc: ",indo_vacc[cname])
+        print("Outof Domain Vacc: ")
+        mypp(ood_vacc[cname])
 
     print("========================================")
     print("Indomain Validation Accuracy:") 

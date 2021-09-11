@@ -195,4 +195,4 @@ python transformer_debugger.py -expt_num "9.1.1" -num_samples 4000 -num_topic_sa
 python transformer_debugger.py -expt_num "9.1.2" -num_samples 4000 -num_topic_samples 2400 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -gate_weight_exp "9.1" -gate_weight_epoch 2 -gate_var_cutoff 0.50
 
 python transformer_debugger.py -expt_num "9.2.1" -num_samples 8000 -num_topic_samples 4800 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -gate_weight_exp "9.2" -gate_weight_epoch 2 -gate_var_cutoff 0.75
-python transformer_debugger.py -expt_num "9.2.2" -num_samples 8000 -num_topic_samples 4800 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -gate_weight_exp "9.2" -gate_weight_epoch 2 -gate_var_cutoff 0.50
+python transformer_debugger.py -expt_num "9.2.2" -num_samples 8000 -num_topic_samples 4800 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -gate_weight_exp "9.2" -gate_weight_epoch 2 -gate_var_cutoff 0.25
