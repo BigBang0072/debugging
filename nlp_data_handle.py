@@ -961,7 +961,7 @@ class DataHandleTransformer():
             data_X = data_X[perm]
             data_Y = data_Y[perm]
 
-            print("num_0:{}\tnum_1:{}".format(np.sum(data_Y),num_samples-np.sum(data_Y)))
+            print("num_0:{}\tnum_1:{}".format(np.sum(data_Y),2*self.data_args["num_sample"]-np.sum(data_Y)))
 
             #Creating the tensorlfow dataset from this
             dataset = tf.data.Dataset.from_tensor_slices(

@@ -198,5 +198,16 @@ mkdir nlp_logs
 # python transformer_debugger.py -expt_num "9.2.2" -num_samples 8000 -num_topic_samples 4800 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -gate_weight_exp "9.2" -gate_weight_epoch 2 -gate_var_cutoff 0.25
 
 
-#Synthetic experiments
-python transformer_debugger.py -expt_num "syn.1.0" -num_samples 1000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+#Synthetic experiments (sample variantion)
+python transformer_debugger.py -expt_num "syn.1.0" -num_samples 500 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.1.1" -num_samples 1000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.1.2" -num_samples 2000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.1.3" -num_samples 4000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.1.4" -num_samples 8000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+
+#(topic variation)
+python transformer_debugger.py -expt_num "syn.2.1" -num_samples 1000 -num_epochs 10 -num_cat 2 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.2.2" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.2.3" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.2.4" -num_samples 1000 -num_epochs 10 -num_cat 16 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+python transformer_debugger.py -expt_num "syn.2.5" -num_samples 1000 -num_epochs 10 -num_cat 32 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
