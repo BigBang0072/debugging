@@ -170,7 +170,16 @@ class TransformerClassifier(keras.Model):
         topic_class_prob = self.topic_classifier_list[tidx](gated_avg_embedding)
 
         return topic_class_prob
-    
+
+    def get_syn_pred_prob(self,input_tensor,gate_tensor,cidx):
+        #First of all we have to gate the input tensor
+        gate_input_tensor = input_tensor * gate_tensor
+
+        #Now we will apply the dense layer for this category
+        cat_class_prob = self.cat_classifier_list[cidx](gate_input_tensor)
+
+        return cat_class_prob
+
     def train_step(self,sidx,single_ds,gate_tensor,task):
         '''
         This function will run one step of training for the classifier
@@ -187,27 +196,32 @@ class TransformerClassifier(keras.Model):
         #Now getting the classification loss one by one each category        
         # cat_total_loss = 0.0
         # for cidx,cat in enumerate(self.data_args["cat_list"]):
+        # label = single_ds["label"]
+        # idx = single_ds["input_idx"]
+        # mask = single_ds["attn_mask"]
+        input_tensor=single_ds["feature"]
         label = single_ds["label"]
-        idx = single_ds["input_idx"]
-        mask = single_ds["attn_mask"]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
         #Getting the train data
         label_train = label[0:valid_idx]
-        idx_train = idx[0:valid_idx]
-        mask_train = mask[0:valid_idx]
+        input_train = input_tensor[0:valid_idx]
+        # idx_train = idx[0:valid_idx]
+        # mask_train = mask[0:valid_idx]
 
         #Getting the validation data
         label_valid = label[valid_idx:]
-        idx_valid = idx[valid_idx:]
-        mask_valid = mask[valid_idx:]
+        input_valid = input_tensor[valid_idx:]
+        # idx_valid = idx[valid_idx:]
+        # mask_valid = mask[valid_idx:]
 
         if task=="sentiment":
             with tf.GradientTape() as tape:
                 #Forward propagating the model
-                train_prob = self.get_sentiment_pred_prob(idx_train,mask_train,gate_tensor,sidx)
+                # train_prob = self.get_sentiment_pred_prob(idx_train,mask_train,gate_tensor,sidx)
+                train_prob = self.get_syn_pred_prob(input_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
                 loss = scxentropy_loss(label_train,train_prob)
@@ -220,7 +234,8 @@ class TransformerClassifier(keras.Model):
             )
 
             #Getting the validation accuracy for this category
-            valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+            # valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+            valid_prob = self.get_syn_pred_prob(input_valid,gate_tensor,sidx)
             self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
@@ -410,7 +425,8 @@ def transformer_trainer(data_args,model_args):
 
     #Creating the dataset object
     data_handler = DataHandleTransformer(data_args)
-    all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    # all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    all_cat_ds = data_handler.create_synthetic_dataset()
 
     # checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
     # checkpoint_dir = os.path.dirname(checkpoint_path)
@@ -462,18 +478,18 @@ def transformer_trainer(data_args,model_args):
             )
         
         #Now its time to train the topics
-        for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
-            #Training the topic through all the batches
-            for data_batch in topic_ds:
-                classifier.train_step(tidx,data_batch,gate_tensor,"topic")
+        # for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
+        #     #Training the topic through all the batches
+        #     for data_batch in topic_ds:
+        #         classifier.train_step(tidx,data_batch,gate_tensor,"topic")
             
-            #Pringitn ghte metrics
-            print("topic:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
-                                            tname,
-                                            classifier.topic_pred_xentropy.result(),
-                                            classifier.topic_valid_acc_list[tidx].result(),
-                    )
-            )
+        #     #Pringitn ghte metrics
+        #     print("topic:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
+        #                                     tname,
+        #                                     classifier.topic_pred_xentropy.result(),
+        #                                     classifier.topic_valid_acc_list[tidx].result(),
+        #             )
+        #     )
 
         #Saving the paramenters
         checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],eidx)
@@ -753,8 +769,11 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('-expt_num',dest="expt_name",type=str)
     parser.add_argument('-num_samples',dest="num_samples",type=int)
-    parser.add_argument('-num_topics',dest="num_topics",type=int)
-    parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int)
+    parser.add_argument('-num_topics',dest="num_topics",type=int,default=None)
+    parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int,default=None)
+    parser.add_argument('-num_cat',dest="num_cat",type=int,default=None)
+    parser.add_argument('-num_causal_nodes',dest="num_causal_nodes",type=int)
+    parser.add_argument('-num_child_nodes',dest="num_child_nodes",type=int)
 
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
@@ -780,9 +799,9 @@ if __name__=="__main__":
     data_args["max_len"]=200
     data_args["num_sample"]=args.num_samples
     data_args["num_topic_samples"]=args.num_topic_samples
-    data_args["batch_size"]=32
+    data_args["batch_size"]=args.num_samples
     data_args["shuffle_size"]=data_args["batch_size"]*3
-    data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
+    data_args["cat_list"]=list(range(args.num_cat))#["arts","books","phones","clothes","groceries","movies","pets","tools"]
     data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
     data_args["per_topic_class"]=2 #Each of the topic is binary (later could have more)
@@ -790,6 +809,8 @@ if __name__=="__main__":
     data_args["lda_epochs"]=25
     data_args["min_df"]=0.0
     data_args["max_df"]=1.0
+    data_args["num_causal_nodes"]=args.num_causal_nodes
+    data_args["num_child_nodes"]=args.num_child_nodes
 
     #Defining the Model args
     model_args={}
@@ -801,7 +822,7 @@ if __name__=="__main__":
     model_args["epochs"]=args.num_epochs
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
-    model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
+    model_args["bemb_dim"] = args.num_causal_nodes+args.num_child_nodes        #The dimension of bert produced last layer
     model_args["shuffle_topic_batch"]=False
     model_args["gate_weight_exp"]=args.gate_weight_exp
     model_args["gate_weight_epoch"]=args.gate_weight_epoch

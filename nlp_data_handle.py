@@ -20,6 +20,7 @@ import pprint
 import pdb
 pp=pprint.PrettyPrinter(indent=4)
 import random
+from itertools import combinations
 
 from transformers import AutoTokenizer
 
@@ -882,6 +883,118 @@ class DataHandleTransformer():
         # dataset = dataset.shuffle(self.data_args["shuffle_size"])
         # dataset = dataset.batch(self.data_args["batch_size"])
         # return dataset
+    
+    def create_synthetic_dataset(self,):
+        '''
+        This will create synthetic dataset using which we will try to evaluate the 
+        idea since we will have ground truth available to us.
+
+        Return:
+        cat_ds_list:
+        topic_ds_list:
+
+        Same as the amazon review handler.
+        '''
+        #Taking out the parameters
+        num_causal_nodes = self.data_args["num_causal_nodes"]
+        num_child_nodes =self.data_args["num_child_nodes"]
+        num_samples = self.data_args["num_samples"]
+        num_cat = len(self.data_args["cat_list"])
+        batch_size = self.data_args["batch_size"]
+        #Defining the seed
+        np.random.seed(22)
+
+        #Defining the causal graph elements first
+        #Causal part
+        causal_mean = np.random.randint(low=-10,high=11,size=(1,num_causal_nodes))
+        causal_std = np.random.uniform(low=0.0,high=1.0,size=(1,num_causal_nodes))
+
+        #Children part
+        child_mean = np.random.randint(low=-10,high=11,size=(1,num_child_nodes))
+        child_std = np.random.uniform(low=0.0,high=1.0,size=(1,num_child_nodes))
+        parent_coupling = np.random.choice([-1,1],size=(num_causal_nodes,num_child_nodes))
+
+
+        def get_domain_dataset(
+            interv_config,causal_mean,causal_std,child_mean,child_std,parent_coupling,
+            num_causal_nodes,num_child_nodes):
+            '''
+            interv_config : [[index],[value]]
+            '''
+            #Creating the data for the causal nodes
+            causal_noise = np.random.randn(num_samples,num_causal_nodes)*causal_std + causal_mean
+            #Now its time to create the childrens
+            child_noise = np.random.randn(num_samples,num_child_nodes)*child_std + child_mean
+            #Overall noise dataset
+            noise_X = np.concat([causal_noise,child_noise],axis=-1)
+            
+            #Now is the time to intervene on the nodes
+            interv_index,interv_value = interv_config
+            data_X = noise_X
+
+            if len(interv_index)>0:
+                data_X[:,interv_index] += np.array([interv_value])
+
+                #Adding the couping to places which dont have intervnetions
+                non_interv_child_index = [idx for idx in interv_index if idx>=num_causal_nodes]
+                data_X[:,non_interv_child_index] += np.matmul(
+                                                data_X[:,0:num_causal_nodes],
+                                                parent_coupling[:,non_interv_child_index]
+                )
+            else:
+                data_X[:,num_causal_nodes:] += np.matmul(
+                                                    data_X[:,0:num_causal_nodes],
+                                                    parent_coupling
+                                            )
+            
+            #Now its time to create the labels
+            data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes],axis=-1)) >=0 ).astype(np.int32)
+
+            #Creating the tensorlfow dataset from this
+            dataset = tf.data.Dataset.from_tensor_slices(
+                                            dict(
+                                                label=data_Y,
+                                                feture=data_X
+                                            )
+            )
+
+            dataset = dataset.batch(batch_size)
+            return dataset
+        
+        #Now we will create multiple topics from here
+        all_interv_loc=[]
+        for deg in range(0,num_causal_nodes+num_child_nodes+1):
+            index_list = range(num_causal_nodes+num_child_nodes)
+            all_interv_loc.append(list(combinations(index_list,deg)))
+        
+        #Now we will select give number of internvetion from here
+        interv_loc_list = np.random.choice(all_interv_loc,replace=False,size=num_cat)
+        print("Intervention location selected for the topics:")
+        pp.pprint(interv_loc_list)
+
+        #Now generating the dataset for each of topics
+        all_cat_df = {}
+        for cidx in range(num_cat):
+            #Getting the interveniton config
+            interv_loc = interv_loc_list[cidx]
+            interv_val = np.random.randint(low=-20,high=21,size=len(interv_loc))
+            interv_config = (interv_loc,interv_val)
+
+            #Next lets generate the dataset for this topic
+            cat_ds = get_domain_dataset(
+                                        interv_config=interv_config,
+                                        causal_mean=causal_mean,
+                                        causal_std=causal_std,
+                                        child_mean=child_mean,
+                                        child_std=child_std,
+                                        parent_coupling=parent_coupling,
+                                        num_causal_nodes=num_causal_nodes,
+                                        num_child_nodes=num_child_nodes
+            )
+
+            #Now we will create a dataset object from this
+            all_cat_df[cidx]=cat_ds
+
 
 
 if __name__=="__main__":
