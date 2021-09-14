@@ -199,15 +199,36 @@ mkdir nlp_logs
 
 
 #Synthetic experiments (sample variantion)
-python transformer_debugger.py -expt_num "syn.1.0" -num_samples 500 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.1.1" -num_samples 1000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.1.2" -num_samples 2000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.1.3" -num_samples 4000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.1.4" -num_samples 8000 -num_epochs 10 -num_cat 10 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.5.0" -num_samples 500 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.5.1" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.5.2" -num_samples 2000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.5.3" -num_samples 4000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.5.4" -num_samples 8000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
 
 #(topic variation)
-python transformer_debugger.py -expt_num "syn.2.1" -num_samples 1000 -num_epochs 10 -num_cat 2 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.2.2" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.2.3" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.2.4" -num_samples 1000 -num_epochs 10 -num_cat 16 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
-python transformer_debugger.py -expt_num "syn.2.5" -num_samples 1000 -num_epochs 10 -num_cat 32 -num_causal_nodes 5 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.0" -num_samples 1000 -num_epochs 10 -num_cat 2 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.1" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.2" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.3" -num_samples 1000 -num_epochs 10 -num_cat 16 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.4" -num_samples 1000 -num_epochs 10 -num_cat 32 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.5" -num_samples 1000 -num_epochs 10 -num_cat 64 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.6" -num_samples 1000 -num_epochs 10 -num_cat 128 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.11.7" -num_samples 1000 -num_epochs 10 -num_cat 256 -num_causal_nodes 1 -num_child_nodes 8 -num_topics 1
+
+# python transformer_debugger.py -expt_num "syn.12.0" -num_samples 1000 -num_epochs 10 -num_cat 1 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.12.1" -num_samples 1000 -num_epochs 10 -num_cat 2 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.12.2" -num_samples 1000 -num_epochs 10 -num_cat 3 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.12.3" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.12.3" -num_samples 1000 -num_epochs 10 -num_cat 5 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.12.4" -num_samples 1000 -num_epochs 10 -num_cat 6 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.12.5" -num_samples 1000 -num_epochs 10 -num_cat 7 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.12.6" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+
+
+python transformer_debugger.py -expt_num "syn.13.0" -num_samples 1000 -num_epochs 10 -num_cat 2 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+python transformer_debugger.py -expt_num "syn.13.1" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+python transformer_debugger.py -expt_num "syn.13.2" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+python transformer_debugger.py -expt_num "syn.13.3" -num_samples 1000 -num_epochs 10 -num_cat 16 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+python transformer_debugger.py -expt_num "syn.13.4" -num_samples 1000 -num_epochs 10 -num_cat 32 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+
+

@@ -388,28 +388,35 @@ class TransformerClassifier(keras.Model):
         # return track_dict
         return None
 
-    def valid_step(self,sidx,single_ds,gate_tensor,acc_op):
+    def valid_step(self,sidx,single_ds,gate_tensor):
         '''
         Given a single dataset we will get the validation score
         (using the lower end of the dataset which was not used for training)
         '''
+#         label = single_ds["label"]
+#         idx = single_ds["input_idx"]
+#         mask = single_ds["attn_mask"]
+        input_tensor=single_ds["feature"]
         label = single_ds["label"]
-        idx = single_ds["input_idx"]
-        mask = single_ds["attn_mask"]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
         #Getting the validation data
+#         label_valid = label[valid_idx:]
+#         idx_valid = idx[valid_idx:]
+#         mask_valid = mask[valid_idx:]
+        input_valid = input_tensor[valid_idx:]
         label_valid = label[valid_idx:]
-        idx_valid = idx[valid_idx:]
-        mask_valid = mask[valid_idx:]
 
         #Now we will make the forward pass
-        valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+#         valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+        valid_prob = self.get_syn_pred_prob(input_valid,gate_tensor,sidx)
         #Getting the validation accuracy
-        acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
-        acc_op.update_state(acc)
+#         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
+#         acc_op.update_state(acc)
+        self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
+        
 
 
 def transformer_trainer(data_args,model_args):
@@ -475,6 +482,8 @@ def transformer_trainer(data_args,model_args):
             #Trining theis classfifer for full one batch
             for data_batch in cat_ds:
                 classifier.train_step(cidx,data_batch,gate_tensor,"sentiment")
+            
+#             pdb.set_trace()
 
             #Now we will print the metric for this category
             print("cat:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(

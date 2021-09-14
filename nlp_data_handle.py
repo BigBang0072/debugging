@@ -918,7 +918,7 @@ class DataHandleTransformer():
 
         def get_domain_dataset(
             interv_config,causal_mean,causal_std,child_mean,child_std,parent_coupling,
-            num_causal_nodes,num_child_nodes):
+            num_causal_nodes,num_child_nodes,only_spurious):
             '''
             interv_config : [[index],[value]]
             '''
@@ -926,15 +926,20 @@ class DataHandleTransformer():
             causal_noise = np.random.randn(num_samples,num_causal_nodes)*causal_std + causal_mean
             #Now its time to create the childrens
             child_noise = np.random.randn(num_samples,num_child_nodes)*child_std + child_mean
+            
             #Overall noise dataset
             noise_X = np.concatenate([causal_noise,child_noise],axis=-1)
             
             #Now is the time to intervene on the nodes
             interv_index,interv_value = interv_config
             data_X = noise_X
-
+            
+           
             if len(interv_index)>0:
-                data_X[:,interv_index] += np.array([interv_value])
+                 #Getting the noise which will at the intervened nodes
+                interv_noise = np.random.randn(num_samples,len(interv_index))*(noise_factor/5)
+            
+                data_X[:,interv_index] = np.array([interv_value]) + interv_noise
 
                 #Adding the couping to places which dont have intervnetions
                 non_interv_child_index = [idx for idx in interv_index if idx>=num_causal_nodes]
@@ -948,9 +953,25 @@ class DataHandleTransformer():
                                                     data_X[:,0:num_causal_nodes],
                                                     parent_coupling
                                             )
+            #Bringing the non linearity in the non causal nodes
+            data_X[:,num_causal_nodes:] = np.cos(data_X[:,num_causal_nodes:])
             
             #Now its time to create the labels
-            data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes]/noise_factor,axis=-1)) >=0 )
+#             data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes]/noise_factor,axis=-1)) >=0 )
+            
+            #Deciding on the cutoff value
+            causal_dim = 0
+            if causal_dim not in interv_index:
+                data_Y = data_X[:,causal_dim]>=causal_mean[0,causal_dim]
+            else:
+                raise NotImplementedError()
+                for idx in interv_index:
+                    if idx==causal_dim:
+                        data_Y = data_X[:,causal_dim]>=interv_value[idx]
+                        break
+    
+    
+    
             #Data could be balanced so balance it
             class_0_X = data_X[(data_Y==0).tolist()][0:self.data_args["num_sample"]]
             class_1_X = data_X[(data_Y==1).tolist()][0:self.data_args["num_sample"]]
@@ -960,6 +981,14 @@ class DataHandleTransformer():
             perm = np.random.permutation(data_X.shape[0]).tolist()
             data_X = data_X[perm]
             data_Y = data_Y[perm]
+            
+            #Flipping the dataset
+            flip_idx = np.random.choice(perm,size=int(0.25*len(perm)),replace=False).tolist()
+            print("Flipping the labels of: {} many variable".format(len(flip_idx)))
+            data_Y[flip_idx] = np.logical_not(data_Y[flip_idx]).astype(np.int32)
+            
+            if(only_spurious==True):
+                data_X[:,causal_dim]=0.0
 
             print("num_0:{}\tnum_1:{}".format(np.sum(data_Y),2*self.data_args["num_sample"]-np.sum(data_Y)))
 
@@ -976,21 +1005,21 @@ class DataHandleTransformer():
         
         #Now we will create multiple topics from here
         all_interv_loc=[]
-        for deg in range(0,num_causal_nodes+num_child_nodes+1):
-            index_list = range(num_causal_nodes+num_child_nodes)
+        for deg in range(0,num_child_nodes+1):
+            index_list = range(num_causal_nodes,num_causal_nodes+num_child_nodes)
             all_interv_loc += list(combinations(index_list,deg))
         
         #Now we will select give number of internvetion from here
-        interv_loc_list = np.random.choice(all_interv_loc,replace=False,size=num_cat)
+        interv_loc_list = np.random.choice(all_interv_loc,replace=False,size=num_cat-1)
         print("Intervention location selected for the topics:")
         pp.pprint(interv_loc_list)
 
         #Now generating the dataset for each of topics
         all_cat_df = {}
-        for cidx in range(num_cat):
+        for cidx in range(num_cat-1):
             #Getting the interveniton config
             interv_loc = interv_loc_list[cidx]
-            interv_val = np.random.randint(low=-20,high=21,size=len(interv_loc))
+            interv_val = np.random.randint(low=-200,high=200,size=len(interv_loc))
             interv_config = (interv_loc,interv_val)
 
             #Next lets generate the dataset for this topic
@@ -1002,11 +1031,28 @@ class DataHandleTransformer():
                                         child_std=child_std,
                                         parent_coupling=parent_coupling,
                                         num_causal_nodes=num_causal_nodes,
-                                        num_child_nodes=num_child_nodes
+                                        num_child_nodes=num_child_nodes,
+                                        only_spurious=False,
             )
 
             #Now we will create a dataset object from this
             all_cat_df[cidx]=cat_ds
+        
+        #Create a dataset with where we are just training on spurious features
+        sp_cat_ds = get_domain_dataset(
+                                interv_config=[(),()],
+                                causal_mean=causal_mean,
+                                causal_std=causal_std,
+                                child_mean=child_mean,
+                                child_std=child_std,
+                                parent_coupling=parent_coupling,
+                                num_causal_nodes=num_causal_nodes,
+                                num_child_nodes=num_child_nodes,
+                                only_spurious=True,
+        )
+
+        #Now we will create a dataset object from this (replacing the last one)
+        all_cat_df[num_cat-1]=sp_cat_ds
         
         return all_cat_df
 
