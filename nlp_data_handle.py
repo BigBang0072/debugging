@@ -1068,13 +1068,13 @@ class DataHandleTransformer():
         #Defining the seed
         np.random.seed(22)
 
-        def get_domain_dataset(sigma,num_causal_nodes,num_children_nodes,
+        def get_domain_dataset(sigma,num_causal_nodes,num_child_nodes,
                                 batch_size,num_samples,
                                 only_spurious):
             
             #Getting the data vector
-            sigma_vec = np.power([sigma],list(range(num_causal_nodes+num_children_nodes)))
-            data_X = np.random.randn(num_samples*10,num_causal_nodes+num_children_nodes) * sigma_vec
+            sigma_vec = np.power([sigma],list(range(num_causal_nodes+num_child_nodes)))
+            data_X = np.random.randn(num_samples*10,num_causal_nodes+num_child_nodes) * sigma_vec
 
             #Adding the causal parent to each of them
             causal_dim = 0

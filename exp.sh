@@ -225,10 +225,16 @@ mkdir nlp_logs
 # python transformer_debugger.py -expt_num "syn.12.6" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
 
 
-python transformer_debugger.py -expt_num "syn.13.0" -num_samples 1000 -num_epochs 10 -num_cat 2 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
-python transformer_debugger.py -expt_num "syn.13.1" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
-python transformer_debugger.py -expt_num "syn.13.2" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
-python transformer_debugger.py -expt_num "syn.13.3" -num_samples 1000 -num_epochs 10 -num_cat 16 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
-python transformer_debugger.py -expt_num "syn.13.4" -num_samples 1000 -num_epochs 10 -num_cat 32 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.13.0" -num_samples 1000 -num_epochs 10 -num_cat 2 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.13.1" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.13.2" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.13.3" -num_samples 1000 -num_epochs 10 -num_cat 16 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.13.4" -num_samples 1000 -num_epochs 10 -num_cat 32 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+
+python transformer_debugger.py -expt_num "syn.15.0" -num_samples 1000 -num_epochs 20 -num_cat 2 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+python transformer_debugger.py -expt_num "syn.15.1" -num_samples 1000 -num_epochs 20 -num_cat 3 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+python transformer_debugger.py -expt_num "syn.15.2" -num_samples 1000 -num_epochs 20 -num_cat 4 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+python transformer_debugger.py -expt_num "syn.15.3" -num_samples 1000 -num_epochs 20 -num_cat 5 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+python transformer_debugger.py -expt_num "syn.15.4" -num_samples 1000 -num_epochs 20 -num_cat 6 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
 
 
