@@ -1149,6 +1149,7 @@ class DataHandleTransformer():
                                 num_child_nodes=num_child_nodes,
                                 batch_size=batch_size,
                                 num_samples=num_samples,
+                                inject_spurious=True,
                                 only_spurious=True,
         )
 
