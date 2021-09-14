@@ -440,7 +440,7 @@ def transformer_trainer(data_args,model_args):
     #Creating the dataset object
     data_handler = DataHandleTransformer(data_args)
     # all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
-    all_cat_ds = data_handler.create_synthetic_dataset()
+    all_cat_ds = data_handler.create_synthetic_dataset2()
 
     # checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
     # checkpoint_dir = os.path.dirname(checkpoint_path)

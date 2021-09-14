@@ -1,4 +1,5 @@
 from collections import defaultdict
+from inspect import signature
 import numpy as np
 import pandas as pd 
 import tensorflow as tf
@@ -936,7 +937,7 @@ class DataHandleTransformer():
             
            
             if len(interv_index)>0:
-                 #Getting the noise which will at the intervened nodes
+                #Getting the noise which will at the intervened nodes
                 interv_noise = np.random.randn(num_samples,len(interv_index))*(noise_factor/5)
             
                 data_X[:,interv_index] = np.array([interv_value]) + interv_noise
@@ -957,7 +958,7 @@ class DataHandleTransformer():
             data_X[:,num_causal_nodes:] = np.cos(data_X[:,num_causal_nodes:])
             
             #Now its time to create the labels
-#             data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes]/noise_factor,axis=-1)) >=0 )
+            # data_Y = ( np.sin(np.sum(data_X[:,0:num_causal_nodes]/noise_factor,axis=-1)) >=0 )
             
             #Deciding on the cutoff value
             causal_dim = 0
@@ -1048,6 +1049,95 @@ class DataHandleTransformer():
                                 parent_coupling=parent_coupling,
                                 num_causal_nodes=num_causal_nodes,
                                 num_child_nodes=num_child_nodes,
+                                only_spurious=True,
+        )
+
+        #Now we will create a dataset object from this (replacing the last one)
+        all_cat_df[num_cat-1]=sp_cat_ds
+        
+        return all_cat_df
+    
+    def create_synthetic_dataset2(self,):
+        '''
+        '''
+        num_causal_nodes = self.data_args["num_causal_nodes"]
+        num_child_nodes =self.data_args["num_child_nodes"]
+        num_samples = self.data_args["num_sample"]
+        num_cat = len(self.data_args["cat_list"])
+        batch_size = self.data_args["batch_size"]
+        #Defining the seed
+        np.random.seed(22)
+
+        def get_domain_dataset(sigma,num_causal_nodes,num_children_nodes,
+                                batch_size,num_samples,
+                                only_spurious):
+            
+            #Getting the data vector
+            sigma_vec = np.power([sigma],list(range(num_causal_nodes+num_children_nodes)))
+            data_X = np.random.randn(num_samples*10,num_causal_nodes+num_children_nodes) * sigma_vec
+
+            #Adding the causal parent to each of them
+            causal_dim = 0
+            data_X[:,1:] += np.expand_dims(data_X[:,causal_dim],axis=-1)
+
+            #Now we will create the datalabel
+            data_Y  = data_X[:,causal_dim]>=0
+
+            #Data could be unbalanced so balance it
+            class_0_X = data_X[(data_Y==0).tolist()][0:num_samples]
+            class_1_X = data_X[(data_Y==1).tolist()][0:num_samples]
+            data_X = np.concatenate([class_0_X,class_1_X],axis=0)
+            data_Y = np.array([0]*class_0_X.shape[0]+[1]*class_1_X.shape[0])
+            #Randomly permuting the data
+            perm = np.random.permutation(data_X.shape[0]).tolist()
+            data_X = data_X[perm]
+            data_Y = data_Y[perm]
+            
+            #Flipping the dataset
+            flip_idx = np.random.choice(perm,size=int(0.25*len(perm)),replace=False).tolist()
+            print("Flipping the labels of: {} many variable".format(len(flip_idx)))
+            data_Y[flip_idx] = np.logical_not(data_Y[flip_idx]).astype(np.int32)
+            
+            if(only_spurious==True):
+                data_X[:,causal_dim]=0.0
+
+            print("num_0:{}\tnum_1:{}".format(np.sum(data_Y),2*self.data_args["num_sample"]-np.sum(data_Y)))
+
+            #Creating the tensorlfow dataset from this
+            dataset = tf.data.Dataset.from_tensor_slices(
+                                            dict(
+                                                label=data_Y.astype(np.int32),
+                                                feature=data_X.astype(np.float32)
+                                            )
+            )
+
+            dataset = dataset.batch(batch_size)
+            return dataset
+        
+        #Now generating the dataset for each of environment
+        sigma_environment = list(range(num_cat))
+        all_cat_df = {}
+        for cidx in range(num_cat-1):
+            #Next lets generate the dataset for this topic
+            cat_ds = get_domain_dataset(
+                                        sigma=sigma_environment[cidx],
+                                        num_causal_nodes=num_causal_nodes,
+                                        num_child_nodes=num_child_nodes,
+                                        batch_size=batch_size,
+                                        num_samples=num_samples,
+                                        only_spurious=False
+            )
+
+            #Now we will create a dataset object from this
+            all_cat_df[cidx]=cat_ds
+        
+        #Create a dataset with where we are just training on spurious features
+        sp_cat_ds = get_domain_dataset(
+                                sigma=1,
+                                num_causal_nodes=num_causal_nodes,
+                                num_child_nodes=num_child_nodes,
+                                batch_size=batch_size,
+                                num_samples=num_samples,
                                 only_spurious=True,
         )
 
