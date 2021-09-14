@@ -1070,6 +1070,7 @@ class DataHandleTransformer():
 
         def get_domain_dataset(sigma,num_causal_nodes,num_child_nodes,
                                 batch_size,num_samples,
+                                inject_spurious,
                                 only_spurious):
             
             #Getting the data vector
@@ -1097,6 +1098,14 @@ class DataHandleTransformer():
             flip_idx = np.random.choice(perm,size=int(0.25*len(perm)),replace=False).tolist()
             print("Flipping the labels of: {} many variable".format(len(flip_idx)))
             data_Y[flip_idx] = np.logical_not(data_Y[flip_idx]).astype(np.int32)
+
+            if inject_spurious==True:
+                #Now we will rig the dimension 1 to be same as dim 0 but with less flips
+                spurious_dim = 1
+                data_X[:,spurious_dim] = data_X[:,causal_dim]
+                #Next we will flip the dim 1 where we had flipped the label
+                reflip_idx = flip_idx[0:int(0.5*len(flip_idx))]
+                data_X[reflip_idx,spurious_dim] = (-1)*data_X[reflip_idx,spurious_dim]
             
             if(only_spurious==True):
                 data_X[:,causal_dim]=0.0
@@ -1118,6 +1127,7 @@ class DataHandleTransformer():
         sigma_environment = list(range(num_cat))
         all_cat_df = {}
         for cidx in range(num_cat-1):
+            inject_spurious = True if cidx%2==0 else False 
             #Next lets generate the dataset for this topic
             cat_ds = get_domain_dataset(
                                         sigma=sigma_environment[cidx],
@@ -1125,6 +1135,7 @@ class DataHandleTransformer():
                                         num_child_nodes=num_child_nodes,
                                         batch_size=batch_size,
                                         num_samples=num_samples,
+                                        inject_spurious=inject_spurious,
                                         only_spurious=False
             )
 
