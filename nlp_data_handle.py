@@ -1099,18 +1099,22 @@ class DataHandleTransformer():
             print("Flipping the labels of: {} many variable".format(len(flip_idx)))
             data_Y[flip_idx] = np.logical_not(data_Y[flip_idx]).astype(np.int32)
 
-            if inject_spurious==True:
+            if inject_spurious!=None:
                 #Now we will rig the dimension 1 to be same as dim 0 but with less flips
                 spurious_dim = 1
                 data_X[:,spurious_dim] = data_X[:,causal_dim]
                 #Next we will flip the dim 1 where we had flipped the label
-                reflip_idx = flip_idx[0:int(0.5*len(flip_idx))]
+                reflip_idx = flip_idx[0:int(inject_spurious*len(flip_idx))]
                 data_X[reflip_idx,spurious_dim] = (-1)*data_X[reflip_idx,spurious_dim]
             
             if(only_spurious==True):
                 data_X[:,causal_dim]=0.0
 
             print("num_0:{}\tnum_1:{}".format(np.sum(data_Y),2*self.data_args["num_sample"]-np.sum(data_Y)))
+
+            #Converting to appropriate data type
+            data_Y = data_Y.astype(np.int32)
+            data_X = data_X.astype(np.float32)
 
             #Creating the tensorlfow dataset from this
             dataset = tf.data.Dataset.from_tensor_slices(
@@ -1121,40 +1125,86 @@ class DataHandleTransformer():
             )
 
             dataset = dataset.batch(batch_size)
-            return dataset
+            return dataset,data_X,data_Y
         
-        #Now generating the dataset for each of environment
-        sigma_environment = list(range(num_cat))
+        #We will create all possible subsets as a feature for all the environments
+        all_subset_loc=[]
+        for deg in range(0,num_child_nodes+1):
+            index_list = range(0,num_causal_nodes+num_child_nodes)
+            all_subset_loc += list(combinations(index_list,deg))
+        
+        #Now we create the environment based on the subset
+        spuriousness_level = np.linspace(0.2,0.8,num_cat).tolist()
+        cat_list_names = []
         all_cat_df = {}
-        for cidx in range(num_cat-1):
-            inject_spurious = True if cidx%2==0 else False 
+        for cidx in range(num_cat):
             #Next lets generate the dataset for this topic
-            cat_ds = get_domain_dataset(
-                                        sigma=sigma_environment[cidx],
+            _,data_X,data_Y = get_domain_dataset(
+                                        sigma=1,
                                         num_causal_nodes=num_causal_nodes,
                                         num_child_nodes=num_child_nodes,
                                         batch_size=batch_size,
                                         num_samples=num_samples,
-                                        inject_spurious=inject_spurious,
+                                        inject_spurious=spuriousness_level[cidx],
                                         only_spurious=False
             )
+            #Now we will generate all the possible subsets of the feature
+            all_loc = set(range(0,num_causal_nodes+num_child_nodes))
+            for sub in all_subset_loc:
+                #Get the complement of the subset 
+                remove_loc                  = all_loc.difference(sub)
+                data_X_sub                  = data_X.copy()
+                data_X_sub[:,remove_loc]    = 0.0
+            
+                #Now creating the dataset for this
+                dataset = tf.data.Dataset.from_tensor_slices(
+                                            dict(
+                                                label=data_Y.astype(np.int32),
+                                                feature=data_X_sub.astype(np.float32)
+                                            )
+                )
+                dataset = dataset.batch(batch_size)
 
-            #Now we will create a dataset object from this
-            all_cat_df[cidx]=cat_ds
+                #Adding this to the cat_df 
+                all_cat_df[(spuriousness_level[cidx],sub)] = dataset
+                cat_list_names.append((spuriousness_level[cidx],sub))
+
+        #Updating the number of categories
+        self.data_args["cat_list"] = cat_list_names
+        
+        
+        #Now generating the dataset for each of environment
+        # sigma_environment = list(range(num_cat))
+        # all_cat_df = {}
+        # for cidx in range(num_cat-1):
+        #     inject_spurious = True if cidx%2==0 else False 
+        #     #Next lets generate the dataset for this topic
+        #     cat_ds = get_domain_dataset(
+        #                                 sigma=sigma_environment[cidx],
+        #                                 num_causal_nodes=num_causal_nodes,
+        #                                 num_child_nodes=num_child_nodes,
+        #                                 batch_size=batch_size,
+        #                                 num_samples=num_samples,
+        #                                 inject_spurious=inject_spurious,
+        #                                 only_spurious=False
+        #     )
+
+        #     #Now we will create a dataset object from this
+        #     all_cat_df[cidx]=cat_ds
         
         #Create a dataset with where we are just training on spurious features
-        sp_cat_ds = get_domain_dataset(
-                                sigma=1,
-                                num_causal_nodes=num_causal_nodes,
-                                num_child_nodes=num_child_nodes,
-                                batch_size=batch_size,
-                                num_samples=num_samples,
-                                inject_spurious=True,
-                                only_spurious=True,
-        )
+        # sp_cat_ds = get_domain_dataset(
+        #                         sigma=1,
+        #                         num_causal_nodes=num_causal_nodes,
+        #                         num_child_nodes=num_child_nodes,
+        #                         batch_size=batch_size,
+        #                         num_samples=num_samples,
+        #                         inject_spurious=True,
+        #                         only_spurious=True,
+        # )
 
-        #Now we will create a dataset object from this (replacing the last one)
-        all_cat_df[num_cat-1]=sp_cat_ds
+        # #Now we will create a dataset object from this (replacing the last one)
+        # all_cat_df[num_cat-1]=sp_cat_ds
         
         return all_cat_df
 

@@ -425,6 +425,13 @@ def transformer_trainer(data_args,model_args):
     #First of all we will load the gate array we are truing to run gate experiemnt
     gate_tensor = get_dimension_gate(data_args,model_args)
 
+    #Creating the dataset object
+    data_handler = DataHandleTransformer(data_args)
+    # all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    all_cat_ds = data_handler.create_synthetic_dataset2()
+    #Updating the cat list if any are present
+    data_args["cat_list"] = data_handler.data_args["cat_list"]
+
     #Dumping the model arguments
     dump_arguments(data_args,data_args["expt_name"],"data_args")
     dump_arguments(model_args,model_args["expt_name"],"model_args")
@@ -436,11 +443,6 @@ def transformer_trainer(data_args,model_args):
     classifier.compile(
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
-
-    #Creating the dataset object
-    data_handler = DataHandleTransformer(data_args)
-    # all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
-    all_cat_ds = data_handler.create_synthetic_dataset2()
 
     # checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
     # checkpoint_dir = os.path.dirname(checkpoint_path)
