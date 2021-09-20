@@ -1139,7 +1139,7 @@ class DataHandleTransformer():
         all_cat_df = {}
         for cidx in range(num_cat):
             #Next lets generate the dataset for this topic
-            _,data_X,data_Y = get_domain_dataset(
+            dataset,data_X,data_Y = get_domain_dataset(
                                         sigma=1,
                                         num_causal_nodes=num_causal_nodes,
                                         num_child_nodes=num_child_nodes,
@@ -1149,25 +1149,30 @@ class DataHandleTransformer():
                                         only_spurious=False
             )
             #Now we will generate all the possible subsets of the feature
-            all_loc = set(range(0,num_causal_nodes+num_child_nodes))
-            for sub in all_subset_loc:
-                #Get the complement of the subset 
-                remove_loc                  = tuple(all_loc.difference(sub))
-                data_X_sub                  = data_X.copy()
-                data_X_sub[:,remove_loc]    = 0.0
+            # all_loc = set(range(0,num_causal_nodes+num_child_nodes))
+            # for sub in all_subset_loc:
+            #     #Get the complement of the subset 
+            #     remove_loc                  = tuple(all_loc.difference(sub))
+            #     data_X_sub                  = data_X.copy()
+            #     data_X_sub[:,remove_loc]    = 0.0
             
-                #Now creating the dataset for this
-                dataset = tf.data.Dataset.from_tensor_slices(
-                                            dict(
-                                                label=data_Y.astype(np.int32),
-                                                feature=data_X_sub.astype(np.float32)
-                                            )
-                )
-                dataset = dataset.batch(batch_size)
+            #     #Now creating the dataset for this
+            #     dataset = tf.data.Dataset.from_tensor_slices(
+            #                                 dict(
+            #                                     label=data_Y.astype(np.int32),
+            #                                     feature=data_X_sub.astype(np.float32)
+            #                                 )
+            #     )
+            #     dataset = dataset.batch(batch_size)
 
-                #Adding this to the cat_df 
-                all_cat_df[(spuriousness_level[cidx],sub)] = dataset
-                cat_list_names.append((spuriousness_level[cidx],sub))
+            #     #Adding this to the cat_df 
+            #     all_cat_df[(spuriousness_level[cidx],sub)] = dataset
+            #     cat_list_names.append((spuriousness_level[cidx],sub))
+
+            #Currently we dont want to go via the subset route
+            cat_name = (spuriousness_level[cidx],)
+            all_cat_df[cat_name]=dataset
+            cat_list_names.append(cat_name)
 
         #Updating the number of categories
         self.data_args["cat_list"] = cat_list_names
