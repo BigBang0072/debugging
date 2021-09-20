@@ -1129,7 +1129,7 @@ class DataHandleTransformer():
         
         #We will create all possible subsets as a feature for all the environments
         all_subset_loc=[]
-        for deg in range(0,num_child_nodes+1):
+        for deg in range(0,num_causal_nodes+num_child_nodes+1):
             index_list = range(0,num_causal_nodes+num_child_nodes)
             all_subset_loc += list(combinations(index_list,deg))
         
@@ -1152,7 +1152,7 @@ class DataHandleTransformer():
             all_loc = set(range(0,num_causal_nodes+num_child_nodes))
             for sub in all_subset_loc:
                 #Get the complement of the subset 
-                remove_loc                  = all_loc.difference(sub)
+                remove_loc                  = list(all_loc.difference(sub))
                 data_X_sub                  = data_X.copy()
                 data_X_sub[:,remove_loc]    = 0.0
             

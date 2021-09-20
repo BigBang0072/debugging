@@ -232,10 +232,13 @@ mkdir nlp_logs
 # python transformer_debugger.py -expt_num "syn.13.4" -num_samples 1000 -num_epochs 10 -num_cat 32 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
 
 
-python transformer_debugger.py -expt_num "syn.16.0" -num_samples 1000 -num_epochs 30 -num_cat 3 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
-python transformer_debugger.py -expt_num "syn.16.1" -num_samples 1000 -num_epochs 30 -num_cat 5 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
-python transformer_debugger.py -expt_num "syn.16.2" -num_samples 1000 -num_epochs 30 -num_cat 7 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
-python transformer_debugger.py -expt_num "syn.16.3" -num_samples 1000 -num_epochs 30 -num_cat 9 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
-python transformer_debugger.py -expt_num "syn.16.4" -num_samples 1000 -num_epochs 30 -num_cat 11 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.16.0" -num_samples 1000 -num_epochs 30 -num_cat 3 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.16.1" -num_samples 1000 -num_epochs 30 -num_cat 5 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.16.2" -num_samples 1000 -num_epochs 30 -num_cat 7 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.16.3" -num_samples 1000 -num_epochs 30 -num_cat 9 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.16.4" -num_samples 1000 -num_epochs 30 -num_cat 11 -num_causal_nodes 1 -num_child_nodes 3 -num_topics 1
 
+
+python transformer_debugger.py -expt_num "syn.17.0" -num_samples 1000 -num_epochs 10 -num_cat 4 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+python transformer_debugger.py -expt_num "syn.17.1" -num_samples 10000 -num_epochs 10 -num_cat 6 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
 
