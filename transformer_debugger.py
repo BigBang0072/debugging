@@ -664,14 +664,6 @@ def evaluate_ood_indo_performance(data_args,model_args,only_indo=False):
 
 
 def get_spuriousness_rank(classifier,policy):
-    #Getting the classifier with the loaded weights and getting the ood accuracy
-    indo_vacc,ood_vacc,classifier = evaluate_ood_indo_performance(
-                                            classifier.data_args,
-                                            classifier.model_args,
-                                            only_indo=True
-    )
-
-
     #Now getting the importance weights of the topics
     topic_weights=[
         np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[tidx]).numpy())
@@ -784,15 +776,22 @@ def get_spuriousness_rank(classifier,policy):
 
 
 def load_and_analyze_transformer(data_args,model_args):
-    #First of all creating the model
-    classifier = TransformerClassifier(data_args,model_args)
+    # #First of all creating the model
+    # classifier = TransformerClassifier(data_args,model_args)
     
     
-    checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],model_args["load_weight_epoch"])
-    checkpoint_dir = os.path.dirname(checkpoint_path)
+    # checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],model_args["load_weight_epoch"])
+    # checkpoint_dir = os.path.dirname(checkpoint_path)
     
     
-    classifier.load_weights(checkpoint_path)    
+    # classifier.load_weights(checkpoint_path)
+
+    #Getting the classifier with the loaded weights and getting the ood accuracy
+    indo_vacc,ood_vacc,classifier = evaluate_ood_indo_performance(
+                                            data_args,
+                                            model_args,
+                                            only_indo=True
+    )    
 
     #Printing the different correlation weights
     get_spuriousness_rank(classifier,"weightedtau")
