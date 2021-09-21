@@ -385,7 +385,7 @@ class TransformerClassifier(keras.Model):
         # return track_dict
         return None
 
-    def valid_step(self,sidx,single_ds,gate_tensor,acc_op):
+    def valid_step(self,sidx,single_ds,gate_tensor,acc_op,task):
         '''
         Given a single dataset we will get the validation score
         (using the lower end of the dataset which was not used for training)
@@ -403,7 +403,13 @@ class TransformerClassifier(keras.Model):
         mask_valid = mask[valid_idx:]
 
         #Now we will make the forward pass
-        valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+        if task=="sentiment":
+            valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+        elif task=="topic":
+            valid_prob = self.get_topic_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+        else:
+            raise NotImplementedError()
+
         #Getting the validation accuracy
         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
         acc_op.update_state(acc)
@@ -555,7 +561,7 @@ def get_dimension_gate(data_args,model_args):
     del classifier
     return gate_tensor
 
-def evaluate_ood_indo_performance(data_args,model_args):
+def evaluate_ood_indo_performance(data_args,model_args,only_indo=False):
     '''
     Given a trained classifier for the task we will try to retreive the
     OOD and INDO performance for all the classifier on the validation set
@@ -587,7 +593,7 @@ def evaluate_ood_indo_performance(data_args,model_args):
 
     #Creating the dataset object
     data_handler = DataHandleTransformer(data_args)
-    all_cat_ds,_ = data_handler.amazon_reviews_handler()
+    all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
 
     if model_args["load_weight_exp"]!=None:
         load_path = "nlp_logs/{}/cp_{}.ckpt".format(
@@ -605,6 +611,10 @@ def evaluate_ood_indo_performance(data_args,model_args):
     for cidx,cname in enumerate(data_args["cat_list"]):
         #Iterating over all the dataset for both indo and OOD
         for cat,cat_ds in all_cat_ds.items():
+            #If we just want indomain accuracy
+            if(only_indo==True and cat!=cname):
+                continue
+            
             print("Getting ood perf of :{}\t on:{}".format(cname,cat))
             #Getting a new accuracy op for fear of updating old one
             acc_op = keras.metrics.Mean(name="temp_acc_op")
@@ -612,25 +622,41 @@ def evaluate_ood_indo_performance(data_args,model_args):
 
             #Going over all the batches of this catefory for given classifier
             for data_batch in cat_ds:
-                classifier.valid_step(cidx,data_batch,gate_tensor,acc_op)
+                classifier.valid_step(cidx,data_batch,gate_tensor,acc_op,"sentiment")
             
             vacc = acc_op.result().numpy()
 
             #Now assignign the accuracy to appropriate place
             if cname==cat:
                 indo_vacc[cname]=vacc
-            else:
-                ood_vacc[cname].append((cat,vacc))
+            ood_vacc[cname].append((cat,vacc))
         
         print("Indomain VAcc: ",indo_vacc[cname])
         print("Outof Domain Vacc: ")
         mypp(ood_vacc[cname])
+    
+    #Also we need to get the indomain accuracy of the topics
+    topic_indo_vacc={}
+    for tidx,tname in enumerate(data_args["topic_list"]):
+        print("Getting indo perf of :{}".format(tname))
+        #Getting a new accuracy op for fear of updating old one
+        acc_op = keras.metrics.Mean(name="temp_acc_op")
+        acc_op.reset_state()
+
+        #Going over all the batches of this catefory for given classifier
+        for data_batch in all_topic_ds[tname]:
+            classifier.valid_step(tidx,data_batch,gate_tensor,acc_op,"topic")
+        
+        vacc = acc_op.result().numpy()
+        topic_indo_vacc[tname]=vacc 
 
     print("========================================")
     print("Indomain Validation Accuracy:") 
     mypp(indo_vacc)
     print("OutOfDomain Validation Accuracy:")
     mypp(ood_vacc)
+    print("OutOfDomain Topic Validation Accuracy:")
+    mypp(topic_indo_vacc)
     print("========================================")
     
     #Now we have all the indo and ood validation accuracy
@@ -641,7 +667,8 @@ def get_spuriousness_rank(classifier,policy):
     #Getting the classifier with the loaded weights and getting the ood accuracy
     indo_vacc,ood_vacc,classifier = evaluate_ood_indo_performance(
                                             classifier.data_args,
-                                            classifier.model_args
+                                            classifier.model_args,
+                                            only_indo=True
     )
 
 
@@ -653,7 +680,7 @@ def get_spuriousness_rank(classifier,policy):
     new_topic_weights = []
     for tidx in range(len(classifier.data_args["topic_list"])):
         timp_weight = np.expand_dims(topic_weights[tidx],axis=0)
-        tfirst_weight = np.abs(classifier.topic_classifier_list[tidx][0].get_weights()[0].T)
+        tfirst_weight = np.abs(classifier.topic_classifier_list[tidx].get_weights()[0].T)
         
         new_timp_weight = np.sum(tfirst_weight*timp_weight,axis=0)
         new_topic_weights.append(new_timp_weight)
@@ -674,7 +701,7 @@ def get_spuriousness_rank(classifier,policy):
     new_sent_weights = []
     for cidx in range(len(classifier.data_args["cat_list"])):
         cimp_weight = np.expand_dims(sent_weights[cidx],axis=0)
-        cfirst_weight = np.abs(classifier.cat_classifier_list[cidx][0].get_weights()[0].T)
+        cfirst_weight = np.abs(classifier.cat_classifier_list[cidx].get_weights()[0].T)
         # cfirst_weight = classifier.cat_classifier_list[cidx][0].get_weights()[0].T
         # print("imp:{}\tfirst:{}".format(cimp_weight.shape,cfirst_weight.shape))
         
