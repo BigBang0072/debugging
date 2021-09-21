@@ -488,7 +488,7 @@ def transformer_trainer(data_args,model_args):
                 classifier.train_step(tidx,data_batch,gate_tensor,"topic")
             
             #Pringitn ghte metrics
-            print("topic:{}\tceloss:{:0.5f}\tl1_loss{:0.5f}\tvacc:{:0.5f}".format(
+            print("topic:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
                                             tname,
                                             classifier.topic_pred_xentropy.result(),
                                             classifier.topic_l1_loss_list[tidx].result(),
@@ -555,7 +555,7 @@ def get_dimension_gate(data_args,model_args):
     del classifier
     return gate_tensor
 
-def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
+def evaluate_ood_indo_performance(data_args,model_args):
     '''
     Given a trained classifier for the task we will try to retreive the
     OOD and INDO performance for all the classifier on the validation set
@@ -634,22 +634,58 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
     print("========================================")
     
     #Now we have all the indo and ood validation accuracy
-    return indo_vacc,ood_vacc
+    return indo_vacc,ood_vacc,classifier
 
 
 def get_spuriousness_rank(classifier,policy):
-    #Getting the spuriousness of each dimension due to domain variation
-    sent_weights=[
-        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
-                        for cidx in range(len(classifier.data_args["cat_list"]))
-    ]
-    sent_weights = np.stack(sent_weights,axis=1)
+    #Getting the classifier with the loaded weights and getting the ood accuracy
+    indo_vacc,ood_vacc,classifier = evaluate_ood_indo_performance(
+                                            classifier.data_args,
+                                            classifier.model_args
+    )
+
 
     #Now getting the importance weights of the topics
     topic_weights=[
         np.squeeze(tf.sigmoid(classifier.topic_importance_weight_list[tidx]).numpy())
                         for tidx in range(len(classifier.data_args["topic_list"]))
     ]
+    new_topic_weights = []
+    for tidx in range(len(classifier.data_args["topic_list"])):
+        timp_weight = np.expand_dims(topic_weights[tidx],axis=0)
+        tfirst_weight = np.abs(classifier.topic_classifier_list[tidx][0].get_weights()[0].T)
+        
+        new_timp_weight = np.sum(tfirst_weight*timp_weight,axis=0)
+        new_topic_weights.append(new_timp_weight)
+    
+    topic_weights = new_topic_weights
+
+
+
+
+
+
+    #Getting the spuriousness of each dimension due to domain variation
+    sent_weights=[
+        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
+                        for cidx in range(len(classifier.data_args["cat_list"]))
+    ]
+    #Getting the flow based weights
+    new_sent_weights = []
+    for cidx in range(len(classifier.data_args["cat_list"])):
+        cimp_weight = np.expand_dims(sent_weights[cidx],axis=0)
+        cfirst_weight = np.abs(classifier.cat_classifier_list[cidx][0].get_weights()[0].T)
+        # cfirst_weight = classifier.cat_classifier_list[cidx][0].get_weights()[0].T
+        # print("imp:{}\tfirst:{}".format(cimp_weight.shape,cfirst_weight.shape))
+        
+        new_cimp_weight = np.sum(cfirst_weight*cimp_weight,axis=0)
+        new_sent_weights.append(new_cimp_weight)
+    
+    sent_weights = new_sent_weights
+    sent_weights = np.stack(sent_weights,axis=1)
+
+
+
 
     #Multiplying by validation accuracy to correct for presence of importance
     topic_validation_accuracy = [ 
