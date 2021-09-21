@@ -54,8 +54,8 @@ class TransformerClassifier(keras.Model):
 
             #Creating a dense layer
             cat_layer_list = []
-#             for hidx in range(3):
-#                 cat_layer_list.append(layers.Dense(50,activation="relu"))
+            # for hidx in range(3):
+            #     cat_layer_list.append(layers.Dense(50,activation="relu"))
             # cat_dense = layers.Dense(2,activation="softmax")
             cat_layer_list.append(layers.Dense(2,activation="softmax"))
             self.cat_classifier_list.append(cat_layer_list)
@@ -84,6 +84,10 @@ class TransformerClassifier(keras.Model):
         self.sent_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
         self.sent_valid_acc_list = [
             tf.keras.metrics.SparseCategoricalAccuracy(name="c{}_valid_acc".format(cat))
+                for cat in self.data_args["cat_list"]
+        ]
+        self.sent_l1_loss_list = [ 
+            tf.keras.metrics.Mean(name="c{}_l1_loss".format(cat))
                 for cat in self.data_args["cat_list"]
         ]
 
@@ -231,11 +235,16 @@ class TransformerClassifier(keras.Model):
                 train_prob = self.get_syn_pred_prob(input_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
-                loss = scxentropy_loss(label_train,train_prob)
+                xentropy_loss = scxentropy_loss(label_train,train_prob)
                 # cat_total_loss += cat_loss
+
+                #Adding the L1 loss on the importance weight
+                l1_loss = tf.reduce_sum(tf.abs(self.cat_importance_weight_list[sidx]))
+
+                total_loss = xentropy_loss + self.model_args["l1_lambda"]*l1_loss
         
             #Now we have total classification loss, lets update the gradient
-            grads = tape.gradient(loss,self.trainable_weights)
+            grads = tape.gradient(total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
@@ -246,7 +255,8 @@ class TransformerClassifier(keras.Model):
             self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
-            self.sent_pred_xentropy.update_state(loss)
+            self.sent_pred_xentropy.update_state(xentropy_loss)
+            self.sent_l1_loss_list[sidx].update_state(l1_loss)
         elif task=="topic":
             with tf.GradientTape() as tape:
                 #Forward propagating the model
@@ -493,9 +503,10 @@ def transformer_trainer(data_args,model_args):
 #             pdb.set_trace()
 
             #Now we will print the metric for this category
-            print("cat:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
+            print("cat:{}\tceloss:{:0.5f}\tl1loss:{:0.5f}\tvacc:{:0.5f}".format(
                                             cat,
                                             classifier.sent_pred_xentropy.result(),
+                                            classifier.sent_l1_loss_list[cidx].result(),
                                             classifier.sent_valid_acc_list[cidx].result(),
                     )
             )
@@ -614,9 +625,9 @@ def evaluate_ood_indo_performance(data_args,model_args,num_cat,expt_name,expt_ep
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
 
-#     #Creating the dataset object
-#     data_handler = DataHandleTransformer(data_args)
-#     all_cat_ds,_ = data_handler.amazon_reviews_handler()
+    #Creating the dataset object
+    # data_handler = DataHandleTransformer(data_args)
+    # all_cat_ds,_ = data_handler.amazon_reviews_handler()
 
     if model_args["load_weight_exp"]!=None:
         load_path = "nlp_logs/{}/cp_{}.ckpt".format(
@@ -808,6 +819,7 @@ if __name__=="__main__":
     parser.add_argument('-num_cat',dest="num_cat",type=int,default=None)
     parser.add_argument('-num_causal_nodes',dest="num_causal_nodes",type=int)
     parser.add_argument('-num_child_nodes',dest="num_child_nodes",type=int)
+    parser.add_argument('-l1_lambda', dest='l1_lambda',type=float,default=0.0)
 
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
@@ -855,6 +867,7 @@ if __name__=="__main__":
     model_args["lr"]=0.001
     model_args["epochs"]=args.num_epochs
     model_args["valid_split"]=0.2
+    model_args["l1_lambda"]=args.l1_lambda
     model_args["train_bert"]=args.train_bert
     model_args["bemb_dim"] = args.num_causal_nodes+args.num_child_nodes        #The dimension of bert produced last layer
     model_args["shuffle_topic_batch"]=False
