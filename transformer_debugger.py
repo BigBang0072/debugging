@@ -239,7 +239,7 @@ class TransformerClassifier(keras.Model):
                 # cat_total_loss += cat_loss
 
                 #Adding the L1 loss on the importance weight
-                l1_loss = tf.reduce_sum(tf.abs(self.cat_importance_weight_list[sidx]))
+                l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.cat_importance_weight_list[sidx])))
 
                 total_loss = xentropy_loss + self.model_args["l1_lambda"]*l1_loss
         
@@ -403,9 +403,9 @@ class TransformerClassifier(keras.Model):
         Given a single dataset we will get the validation score
         (using the lower end of the dataset which was not used for training)
         '''
-#         label = single_ds["label"]
-#         idx = single_ds["input_idx"]
-#         mask = single_ds["attn_mask"]
+        # label = single_ds["label"]
+        # idx = single_ds["input_idx"]
+        # mask = single_ds["attn_mask"]
         input_tensor=single_ds["feature"]
         label = single_ds["label"]
 
@@ -413,22 +413,22 @@ class TransformerClassifier(keras.Model):
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
         #Getting the validation data
-#         label_valid = label[valid_idx:]
-#         idx_valid = idx[valid_idx:]
-#         mask_valid = mask[valid_idx:]
+        # label_valid = label[valid_idx:]
+        # idx_valid = idx[valid_idx:]
+        # mask_valid = mask[valid_idx:]
         input_valid = input_tensor[valid_idx:]
         label_valid = label[valid_idx:]
 
         #Now we will make the forward pass
-#         valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+        # valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
         valid_prob = self.get_syn_pred_prob(input_valid,gate_tensor,sidx)
         #Getting the validation accuracy
         if acc_op!=None:
             acc_op.update_state(label_valid,valid_prob)
-#             if(acc.shape[0]==0):
-#                 return
-#             acc_op.update_state(acc)
-#             print("partial_acc: ",acc)
+            # if(acc.shape[0]==0):
+            #     return
+            # acc_op.update_state(acc)
+            # print("partial_acc: ",acc)
         else:
             self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
         
@@ -500,7 +500,7 @@ def transformer_trainer(data_args,model_args):
             for data_batch in cat_ds:
                 classifier.train_step(cidx,data_batch,gate_tensor,"sentiment")
             
-#             pdb.set_trace()
+            # pdb.set_trace()
 
             #Now we will print the metric for this category
             print("cat:{}\tceloss:{:0.5f}\tl1loss:{:0.5f}\tvacc:{:0.5f}".format(
