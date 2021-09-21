@@ -243,7 +243,18 @@ mkdir nlp_logs
 # python transformer_debugger.py -expt_num "syn.17.1" -num_samples 10000 -num_epochs 10 -num_cat 6 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
 
 #New spurous dimension findinf approach based on validation gap
-python transformer_debugger.py -expt_num "syn.18.0" -num_samples 1000 -num_epochs 10 -num_cat 6 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.18.0" -num_samples 1000 -num_epochs 10 -num_cat 6 -num_causal_nodes 1 -num_child_nodes 2 -num_topics 1
 #Randomizing the spurious location and number of dimension
-python transformer_debugger.py -expt_num "syn.18.1" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.18.1" -num_samples 1000 -num_epochs 10 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1
+# python transformer_debugger.py -expt_num "syn.18.2" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 0.1
+# python transformer_debugger.py -expt_num "syn.18.3" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 1.0
+# python transformer_debugger.py -expt_num "syn.18.4" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 10.0
+# python transformer_debugger.py -expt_num "syn.18.5" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 50.0
+# python transformer_debugger.py -expt_num "syn.18.6" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 100.0
+
+python transformer_debugger.py -expt_num "syn.19.0" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 0.1
+python transformer_debugger.py -expt_num "syn.19.1" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 1.0
+python transformer_debugger.py -expt_num "syn.19.2" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 10.0
+python transformer_debugger.py -expt_num "syn.19.3" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 50.0
+python transformer_debugger.py -expt_num "syn.19.4" -num_samples 1000 -num_epochs 50 -num_cat 8 -num_causal_nodes 1 -num_child_nodes 5 -num_topics 1 -l1_lambda 100.0
 
