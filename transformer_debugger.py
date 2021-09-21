@@ -82,12 +82,20 @@ class TransformerClassifier(keras.Model):
             tf.keras.metrics.SparseCategoricalAccuracy(name="c{}_valid_acc".format(cat))
                 for cat in self.data_args["cat_list"]
         ]
+        self.sent_l1_loss_list = [ 
+            tf.keras.metrics.Mean(name="c{}_l1_loss".format(cat))
+                for cat in self.data_args["cat_list"]
+        ]
 
         #Initilaizing the trackers for topics classifier
         self.topic_pred_xentropy = keras.metrics.Mean(name="topic_pred_x")
         self.topic_valid_acc_list = [
             tf.keras.metrics.SparseCategoricalAccuracy(name="t{}_valid_acc".format(topic))
                 for topic in self.data_args["topic_list"]
+        ]
+        self.topic_l1_loss_list = [ 
+            tf.keras.metrics.Mean(name="t{}_l1_loss".format(cat))
+                for cat in self.data_args["cat_list"]
         ]
     
     def reset_all_metrics(self):
@@ -210,11 +218,15 @@ class TransformerClassifier(keras.Model):
                 train_prob = self.get_sentiment_pred_prob(idx_train,mask_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
-                loss = scxentropy_loss(label_train,train_prob)
+                xentropy_loss = scxentropy_loss(label_train,train_prob)
                 # cat_total_loss += cat_loss
+
+                l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.cat_importance_weight_list[sidx])))
+
+                total_loss = xentropy_loss + self.model_args["l1_lambda"]*l1_loss
         
             #Now we have total classification loss, lets update the gradient
-            grads = tape.gradient(loss,self.trainable_weights)
+            grads = tape.gradient(total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
@@ -224,18 +236,24 @@ class TransformerClassifier(keras.Model):
             self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
-            self.sent_pred_xentropy.update_state(loss)
+            self.sent_pred_xentropy.update_state(xentropy_loss)
+            self.sent_l1_loss_list[sidx].update_state(l1_loss)
         elif task=="topic":
             with tf.GradientTape() as tape:
                 #Forward propagating the model
                 train_prob = self.get_topic_pred_prob(idx_train,mask_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
-                loss = scxentropy_loss(label_train,train_prob)
+                xentropy_loss = scxentropy_loss(label_train,train_prob)
                 # cat_total_loss += cat_loss
+                
+                l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.topic_importance_weight_list[sidx])))
+
+                total_loss = xentropy_loss + self.model_args["l1_lambda"]*l1_loss
+                
         
             #Now we have total classification loss, lets update the gradient
-            grads = tape.gradient(loss,self.trainable_weights)
+            grads = tape.gradient(total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
@@ -245,7 +263,8 @@ class TransformerClassifier(keras.Model):
             self.topic_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
-            self.topic_pred_xentropy.update_state(loss)
+            self.topic_pred_xentropy.update_state(xentropy_loss)
+            self.topic_l1_loss_list[sidx].update_state(l1_loss)
         else:
             raise NotImplementedError()
 
@@ -454,9 +473,10 @@ def transformer_trainer(data_args,model_args):
                 classifier.train_step(cidx,data_batch,gate_tensor,"sentiment")
 
             #Now we will print the metric for this category
-            print("cat:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
+            print("cat:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
                                             cat,
                                             classifier.sent_pred_xentropy.result(),
+                                            classifier.sent_l1_loss_list[cidx].result(),
                                             classifier.sent_valid_acc_list[cidx].result(),
                     )
             )
@@ -468,9 +488,10 @@ def transformer_trainer(data_args,model_args):
                 classifier.train_step(tidx,data_batch,gate_tensor,"topic")
             
             #Pringitn ghte metrics
-            print("topic:{}\tceloss:{:0.5f}\tvacc:{:0.5f}".format(
+            print("topic:{}\tceloss:{:0.5f}\tl1_loss{:0.5f}\tvacc:{:0.5f}".format(
                                             tname,
                                             classifier.topic_pred_xentropy.result(),
+                                            classifier.topic_l1_loss_list[tidx].result(),
                                             classifier.topic_valid_acc_list[tidx].result(),
                     )
             )
@@ -755,6 +776,7 @@ if __name__=="__main__":
     parser.add_argument('-num_samples',dest="num_samples",type=int)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int)
+    parser.add_argument('-l1_lambda',dest="l1_lambda",type=float)
 
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
@@ -799,6 +821,7 @@ if __name__=="__main__":
     model_args["load_weight_epoch"]=args.load_weight_epoch
     model_args["lr"]=0.001
     model_args["epochs"]=args.num_epochs
+    model_args["l1_lambda"]=args.l1_lambda
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
