@@ -1071,10 +1071,11 @@ class DataHandleTransformer():
         def get_domain_dataset(sigma,num_causal_nodes,num_child_nodes,
                                 batch_size,num_samples,
                                 inject_spurious,
+                                spurious_dim,
                                 only_spurious):
             
             #Getting the data vector
-            sigma_vec = np.power([sigma],list(range(num_causal_nodes+num_child_nodes)))
+            sigma_vec = np.power([sigma],[0]*num_causal_nodes+[1]*num_child_nodes)
             data_X = np.random.randn(num_samples*10,num_causal_nodes+num_child_nodes) * sigma_vec
 
             #Adding the causal parent to each of them
@@ -1101,7 +1102,7 @@ class DataHandleTransformer():
 
             if inject_spurious!=None:
                 #Now we will rig the dimension 1 to be same as dim 0 but with less flips
-                spurious_dim = 1
+                spurious_dim = spurious_dim
                 data_X[:,spurious_dim] = data_X[:,causal_dim]
                 #Next we will flip the dim 1 where we had flipped the label
                 reflip_idx = flip_idx[0:int(inject_spurious*len(flip_idx))]
@@ -1134,18 +1135,24 @@ class DataHandleTransformer():
             all_subset_loc += list(combinations(index_list,deg))
         
         #Now we create the environment based on the subset
-        spuriousness_level = np.linspace(0.2,0.8,num_cat).tolist()
+        spuriousness_level = np.linspace(0.0,0.8,num_cat).tolist()
+        #Getting a random dim of spurousness
+        spurious_dim_list = np.random.choice(
+                                                range(num_causal_nodes,num_causal_nodes+num_child_nodes),
+                                                num_cat,
+                                            )
         cat_list_names = []
         all_cat_df = {}
         for cidx in range(num_cat):
             #Next lets generate the dataset for this topic
             dataset,data_X,data_Y = get_domain_dataset(
-                                        sigma=1,
+                                        sigma=5,
                                         num_causal_nodes=num_causal_nodes,
                                         num_child_nodes=num_child_nodes,
                                         batch_size=batch_size,
                                         num_samples=num_samples,
                                         inject_spurious=spuriousness_level[cidx],
+                                        spurious_dim = spurious_dim_list[cidx],
                                         only_spurious=False
             )
             #Now we will generate all the possible subsets of the feature
@@ -1170,7 +1177,7 @@ class DataHandleTransformer():
             #     cat_list_names.append((spuriousness_level[cidx],sub))
 
             #Currently we dont want to go via the subset route
-            cat_name = (spuriousness_level[cidx],)
+            cat_name = (spuriousness_level[cidx],int(spurious_dim_list[cidx]))
             all_cat_df[cat_name]=dataset
             cat_list_names.append(cat_name)
 

@@ -54,8 +54,8 @@ class TransformerClassifier(keras.Model):
 
             #Creating a dense layer
             cat_layer_list = []
-            for hidx in range(3):
-                cat_layer_list.append(layers.Dense(50,activation="relu"))
+#             for hidx in range(3):
+#                 cat_layer_list.append(layers.Dense(50,activation="relu"))
             # cat_dense = layers.Dense(2,activation="softmax")
             cat_layer_list.append(layers.Dense(2,activation="softmax"))
             self.cat_classifier_list.append(cat_layer_list)
@@ -388,7 +388,7 @@ class TransformerClassifier(keras.Model):
         # return track_dict
         return None
 
-    def valid_step(self,sidx,single_ds,gate_tensor):
+    def valid_step(self,sidx,single_ds,gate_tensor,acc_op=None):
         '''
         Given a single dataset we will get the validation score
         (using the lower end of the dataset which was not used for training)
@@ -413,9 +413,14 @@ class TransformerClassifier(keras.Model):
 #         valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
         valid_prob = self.get_syn_pred_prob(input_valid,gate_tensor,sidx)
         #Getting the validation accuracy
-#         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
-#         acc_op.update_state(acc)
-        self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
+        if acc_op!=None:
+            acc_op.update_state(label_valid,valid_prob)
+#             if(acc.shape[0]==0):
+#                 return
+#             acc_op.update_state(acc)
+#             print("partial_acc: ",acc)
+        else:
+            self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
         
 
 
@@ -568,7 +573,7 @@ def get_dimension_gate(data_args,model_args):
     del classifier
     return gate_tensor
 
-def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
+def evaluate_ood_indo_performance(data_args,model_args,num_cat,expt_name,expt_epoch):
     '''
     Given a trained classifier for the task we will try to retreive the
     OOD and INDO performance for all the classifier on the validation set
@@ -587,8 +592,19 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
         ...
     }
     '''
+    #Updating the category number
+    data_args["cat_list"]=list(range(num_cat))
+    
     #First of all we will load the gate array we are truing to run gate experiemnt
     gate_tensor = get_dimension_gate(data_args,model_args)
+    
+    #Creating the dataset object
+    data_handler = DataHandleTransformer(data_args)
+    # all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    all_cat_ds = data_handler.create_synthetic_dataset2()
+    #Updating the cat list if any are present
+    data_args["cat_list"] = data_handler.data_args["cat_list"]
+    
 
     #First of all creating the model
     classifier = TransformerClassifier(data_args,model_args)
@@ -598,9 +614,9 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
 
-    #Creating the dataset object
-    data_handler = DataHandleTransformer(data_args)
-    all_cat_ds,_ = data_handler.amazon_reviews_handler()
+#     #Creating the dataset object
+#     data_handler = DataHandleTransformer(data_args)
+#     all_cat_ds,_ = data_handler.amazon_reviews_handler()
 
     if model_args["load_weight_exp"]!=None:
         load_path = "nlp_logs/{}/cp_{}.ckpt".format(
@@ -620,7 +636,7 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
         for cat,cat_ds in all_cat_ds.items():
             print("Getting ood perf of :{}\t on:{}".format(cname,cat))
             #Getting a new accuracy op for fear of updating old one
-            acc_op = keras.metrics.Mean(name="temp_acc_op")
+            acc_op =  tf.keras.metrics.SparseCategoricalAccuracy(name="temp_sacc")
             acc_op.reset_state()
 
             #Going over all the batches of this catefory for given classifier
@@ -632,8 +648,8 @@ def evaluate_ood_indo_performance(data_args,model_args,expt_name,expt_epoch):
             #Now assignign the accuracy to appropriate place
             if cname==cat:
                 indo_vacc[cname]=vacc
-            else:
-                ood_vacc[cname].append((cat,vacc))
+            #Adding all the performance here
+            ood_vacc[cname].append((cat,vacc))
         
         print("Indomain VAcc: ",indo_vacc[cname])
         print("Outof Domain Vacc: ")
