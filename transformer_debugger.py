@@ -95,7 +95,7 @@ class TransformerClassifier(keras.Model):
         ]
         self.topic_l1_loss_list = [ 
             tf.keras.metrics.Mean(name="t{}_l1_loss".format(cat))
-                for cat in self.data_args["cat_list"]
+                for cat in self.data_args["topic_list"]
         ]
     
     def reset_all_metrics(self):
