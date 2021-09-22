@@ -420,6 +420,9 @@ def transformer_trainer(data_args,model_args):
     '''
     #First of all we will load the gate array we are truing to run gate experiemnt
     gate_tensor = get_dimension_gate(data_args,model_args)
+    #Saving the gate tensor 
+    gate_fpath = "nlp_logs/{}/gate_tensor".format(model_args["expt_name"])
+    np.savez(gate_fpath,gate_tensor=gate_tensor.numpy())
 
     #Dumping the model arguments
     dump_arguments(data_args,data_args["expt_name"],"data_args")
@@ -506,6 +509,88 @@ def transformer_trainer(data_args,model_args):
         checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],eidx)
         classifier.save_weights(checkpoint_path)            
 
+def get_sent_imp_weights(classifier):
+    '''
+    This function will give us the importance score for each of the dimensions
+    of the task classifier.
+    '''
+    sent_weights=[
+        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
+                        for cidx in range(len(classifier.data_args["cat_list"]))
+    ]
+    #Getting the flow based weights
+    new_sent_weights = []
+    for cidx in range(len(classifier.data_args["cat_list"])):
+        cimp_weight = np.expand_dims(sent_weights[cidx],axis=0)
+        cfirst_weight = np.abs(classifier.cat_classifier_list[cidx].get_weights()[0].T)
+        # cfirst_weight = classifier.cat_classifier_list[cidx][0].get_weights()[0].T
+        # print("imp:{}\tfirst:{}".format(cimp_weight.shape,cfirst_weight.shape))
+        
+        new_cimp_weight = np.sum(cfirst_weight*cimp_weight,axis=0)
+        new_sent_weights.append(new_cimp_weight)
+    
+    sent_weights = new_sent_weights
+    sent_weights = np.stack(sent_weights,axis=1)
+
+    return sent_weights
+
+def get_topic_imp_weights(classifier):
+    raise NotImplementedError()
+
+def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
+    '''
+    This function will use the drop in the performance idea to get the dimension 
+    which are spirous i.e whose importance weiths saw a net negative decrease
+    in the importance weight.
+    '''
+    global_imp_diff = np.zeros(sent_weights.shape[0])
+    for cidx,cat in enumerate(classifier.data_args["cat_list"]):
+        cat_vacc = ood_vacc[cat][cat]
+        #First we will get the weighted drop in imp from this domain
+        cat_imp_diff = np.zeros(sent_weights.shape[0])
+        for nidx,nat in enumerate(classifier.data_args["cat_list"]):
+            nat_vacc = ood_vacc[cat][nat]
+            vacc_delta = nat_vacc - cat_vacc 
+
+            #Skipping if the there is not drop in perf or same category as nat
+            if vacc_delta>=0 or cat==nat:
+                continue
+
+            #Now we need to get the drop in performance
+            temp_imp_diff = np.abs(vacc_delta)\
+                                *(sent_weights[:,nidx]-sent_weights[:,cidx])
+            #Now we dont know the positive drops are spurious or causal so remove them
+            temp_imp_diff = temp_imp_diff*(temp_imp_diff<=0.0)
+
+            #Now adding the contribution to the 
+            cat_imp_diff += temp_imp_diff
+        
+        #Adding the differnet to the global diff
+        global_imp_diff += cat_imp_diff
+    
+    #Now we have the effective drop in the importance
+    threshold_criteria=model_args["gate_var_cutoff"]
+    if threshold_criteria=="neg":
+        cutoff_value=0.0
+        gate_arr = (global_imp_diff>=0.0)*1.0 #they will become 1 and rest as zero i.e gated
+    elif type(threshold_criteria)==type(22.0):
+        #Getting the top negetive ones
+        zero_upto = int(float(threshold_criteria)*global_imp_diff.shape[0])
+        cutoff_value = np.sort(global_imp_diff)[zero_upto]
+
+        gate_arr = (global_imp_diff>cutoff_value)*1.0
+    
+    #Creating the final gate array
+    gate_arr = np.expand_dims(gate_arr,axis=0)
+    print("cutoff_percent:{}\tcutoff_val:{}\tnum_alive:{}".format(
+                                model_args["gate_var_cutoff"],
+                                cutoff_value,
+                                np.sum(gate_arr)
+    ))
+
+    return gate_arr
+
+
 def get_dimension_gate(data_args,model_args):
     '''
     '''
@@ -521,35 +606,35 @@ def get_dimension_gate(data_args,model_args):
     print("PREPARING THE GATE TO THE SHADOWS OF MORDOR")
     print("====================================================")
     #Loaidng the previous run from which we want to get dim variance
-    classifier = TransformerClassifier(data_args,model_args)
-    checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(
-                                    model_args["gate_weight_exp"],
-                                    model_args["gate_weight_epoch"]
+    indo_vacc,ood_vacc,classifier = evaluate_ood_indo_performance(
+                                                    data_args=data_args,
+                                                    model_args=model_args,
+                                                    purpose="gate",
+                                                    only_indo=False,
     )
-    checkpoint_dir = os.path.dirname(checkpoint_path)
-    classifier.load_weights(checkpoint_path)
+
+    #Getting the importaance score for each of the dimension
+    sent_weights = get_sent_imp_weights(classifier)
 
     #Getting the dim variance using the task importance
     #Getting the spuriousness of each dimension due to domain variation
-    sent_weights=[
-        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
-                        for cidx in range(len(classifier.data_args["cat_list"]))
-    ]
-    sent_weights = np.stack(sent_weights,axis=1)
-    dim_std = np.std(sent_weights,axis=1)
+    # dim_std = np.std(sent_weights,axis=1)
+
+    #Using the performance drop idea for spuriousness clacluation
+    gate_arr = get_feature_spuriousness(classifier,ood_vacc,sent_weights)
 
     #Now we will have a cutoff for the spurousness
-    cutoff_idx = int(dim_std.shape[0]*model_args["gate_var_cutoff"])
-    sorted_dim_idx = np.argsort(dim_std)[cutoff_idx]
-    cutoff_value = dim_std[sorted_dim_idx]
-    gate_arr = (dim_std<=cutoff_value)*1.0
-    gate_arr = np.expand_dims(gate_arr,axis=0)
-    print("cutoff_percent:{}\tcutoff_idx:{}\tcutoff_val:{}\tnum_alive:{}".format(
-                                model_args["gate_var_cutoff"],
-                                cutoff_idx,
-                                cutoff_value,
-                                np.sum(gate_arr)
-    ))
+    # cutoff_idx = int(dim_std.shape[0]*model_args["gate_var_cutoff"])
+    # sorted_dim_idx = np.argsort(dim_std)[cutoff_idx]
+    # cutoff_value = dim_std[sorted_dim_idx]
+    # gate_arr = (dim_std<=cutoff_value)*1.0
+    # gate_arr = np.expand_dims(gate_arr,axis=0)
+    # print("cutoff_percent:{}\tcutoff_idx:{}\tcutoff_val:{}\tnum_alive:{}".format(
+    #                             model_args["gate_var_cutoff"],
+    #                             cutoff_idx,
+    #                             cutoff_value,
+    #                             np.sum(gate_arr)
+    # ))
 
     #Creating the gate tensor
     gate_tensor = tf.constant(
@@ -561,7 +646,7 @@ def get_dimension_gate(data_args,model_args):
     del classifier
     return gate_tensor
 
-def evaluate_ood_indo_performance(data_args,model_args,only_indo=False):
+def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     '''
     Given a trained classifier for the task we will try to retreive the
     OOD and INDO performance for all the classifier on the validation set
@@ -581,7 +666,7 @@ def evaluate_ood_indo_performance(data_args,model_args,only_indo=False):
     }
     '''
     #First of all we will load the gate array we are truing to run gate experiemnt
-    gate_tensor = get_dimension_gate(data_args,model_args)
+    # gate_tensor = None #get_dimension_gate(data_args,model_args)
 
     #First of all creating the model
     classifier = TransformerClassifier(data_args,model_args)
@@ -595,19 +680,44 @@ def evaluate_ood_indo_performance(data_args,model_args,only_indo=False):
     data_handler = DataHandleTransformer(data_args)
     all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
 
-    if model_args["load_weight_exp"]!=None:
+    if purpose=="load":
         load_path = "nlp_logs/{}/cp_{}.ckpt".format(
                                     model_args["load_weight_exp"],
                                     model_args["load_weight_epoch"]
         )
         load_dir = os.path.dirname(load_path)
-
         classifier.load_weights(load_path)
+
+        #Loading the gate tensor
+        gate_fpath = "nlp_logs/{}/gate_tensor".format(model_args["load_weight_exp"])
+        gate_arr = np.load(gate_fpath)["gate_tensor"]
+        gate_tensor = tf.constant(
+                        gate_arr,
+                        dtype=tf.float32
+        )
+
+    elif purpose=="gate":
+        checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(
+                                    model_args["gate_weight_exp"],
+                                    model_args["gate_weight_epoch"]
+        )
+        checkpoint_dir = os.path.dirname(checkpoint_path)
+        classifier.load_weights(checkpoint_path)
+
+        #Here generally we will use the non-gated experiemnts to generally all will be ones
+        print("Warning! All the gates are open")
+        gate_arr = np.ones((1,model_args["bemb_dim"]))
+        gate_tensor = tf.constant(
+                        gate_arr,
+                        dtype=tf.float32
+        )
+    else:
+        raise NotImplementedError()
     
 
     #Iterating over all the classifier
     indo_vacc = {}
-    ood_vacc = defaultdict(list)
+    ood_vacc = defaultdict(dict)
     for cidx,cname in enumerate(data_args["cat_list"]):
         #Iterating over all the dataset for both indo and OOD
         for cat,cat_ds in all_cat_ds.items():
@@ -629,7 +739,7 @@ def evaluate_ood_indo_performance(data_args,model_args,only_indo=False):
             #Now assignign the accuracy to appropriate place
             if cname==cat:
                 indo_vacc[cname]=vacc
-            ood_vacc[cname].append((cat,vacc))
+            ood_vacc[cname][cat]=vacc
         
         print("Indomain VAcc: ",indo_vacc[cname])
         print("Outof Domain Vacc: ")
@@ -662,7 +772,6 @@ def evaluate_ood_indo_performance(data_args,model_args,only_indo=False):
     #Now we have all the indo and ood validation accuracy
     return indo_vacc,ood_vacc,classifier
 
-
 def get_spuriousness_rank(classifier,policy):
     #Now getting the importance weights of the topics
     topic_weights=[
@@ -680,30 +789,8 @@ def get_spuriousness_rank(classifier,policy):
     topic_weights = new_topic_weights
 
 
-
-
-
-
     #Getting the spuriousness of each dimension due to domain variation
-    sent_weights=[
-        np.squeeze(tf.sigmoid(classifier.cat_importance_weight_list[cidx]).numpy())
-                        for cidx in range(len(classifier.data_args["cat_list"]))
-    ]
-    #Getting the flow based weights
-    new_sent_weights = []
-    for cidx in range(len(classifier.data_args["cat_list"])):
-        cimp_weight = np.expand_dims(sent_weights[cidx],axis=0)
-        cfirst_weight = np.abs(classifier.cat_classifier_list[cidx].get_weights()[0].T)
-        # cfirst_weight = classifier.cat_classifier_list[cidx][0].get_weights()[0].T
-        # print("imp:{}\tfirst:{}".format(cimp_weight.shape,cfirst_weight.shape))
-        
-        new_cimp_weight = np.sum(cfirst_weight*cimp_weight,axis=0)
-        new_sent_weights.append(new_cimp_weight)
-    
-    sent_weights = new_sent_weights
-    sent_weights = np.stack(sent_weights,axis=1)
-
-
+    sent_weights = get_sent_imp_weights(classifier)
 
 
     #Multiplying by validation accuracy to correct for presence of importance
@@ -774,7 +861,6 @@ def get_spuriousness_rank(classifier,policy):
 
     return topic_correlation,topic_correlation_dict
 
-
 def load_and_analyze_transformer(data_args,model_args):
     # #First of all creating the model
     # classifier = TransformerClassifier(data_args,model_args)
@@ -822,7 +908,6 @@ def load_and_analyze_transformer(data_args,model_args):
     # upto_index = num_spurious
     # spuriousness_percentage = len(set(spurious_dims2).intersection(set(topic_imp_dims[-1*upto_index:])))/upto_index
     # pdb.set_trace()
-
 
 def dump_arguments(arg_dict,expt_name,fname):
     #This function will dump the arguments in a file for tracking purpose
