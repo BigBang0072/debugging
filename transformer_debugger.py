@@ -545,6 +545,7 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
     in the importance weight.
     '''
     global_imp_diff = np.zeros(sent_weights.shape[0])
+    cat_imp_diff_dict = {}
     for cidx,cat in enumerate(classifier.data_args["cat_list"]):
         cat_vacc = ood_vacc[cat][cat]
         #First we will get the weighted drop in imp from this domain
@@ -566,6 +567,9 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
             #Now adding the contribution to the 
             cat_imp_diff += temp_imp_diff
         
+        #Getting the cat specific imp diff for analysis
+        cat_imp_diff_dict[cat]=cat_imp_diff
+        
         #Adding the differnet to the global diff
         global_imp_diff += cat_imp_diff
     
@@ -580,6 +584,8 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
         cutoff_value = np.sort(global_imp_diff)[zero_upto]
 
         gate_arr = (global_imp_diff>cutoff_value)*1.0
+
+        #Another stratgy could be not to make the gate binary, rather sigmoid(imp_diff)
     
     #Creating the final gate array
     gate_arr = np.expand_dims(gate_arr,axis=0)
@@ -588,6 +594,13 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
                                 cutoff_value,
                                 np.sum(gate_arr)
     ))
+
+    #We can directly print the correlation of the 
+    print("Correlation of gate array and cat_imp_diff")
+    print("Closer to zero --> more spurious dimension removed")
+    for cidx,cat in enumerate(classifier.data_args["cat_list"]):
+        negativity_left = np.sum(gate_arr*cat_imp_diff_dict[cat])
+        print("Cat:{}\tNegLeft:{:0.6f}".format(cat,negativity_left))
 
     return gate_arr
 
