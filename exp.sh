@@ -199,14 +199,60 @@ mkdir nlp_logs
 
 
 #Testing the L1 loss
-python transformer_debugger.py -expt_num "10.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 # 0.6k/topic *2
-python transformer_debugger.py -expt_num "10.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0
-python transformer_debugger.py -expt_num "10.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0
-python transformer_debugger.py -expt_num "10.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0
-python transformer_debugger.py -expt_num "10.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 100.0
+# python transformer_debugger.py -expt_num "10.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0" -load_weight_epoch 2 # 0.6k/topic *2
+# python transformer_debugger.py -expt_num "10.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1" -load_weight_epoch 2
+# python transformer_debugger.py -expt_num "10.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2" -load_weight_epoch 2
+# python transformer_debugger.py -expt_num "10.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3" -load_weight_epoch 2
+# python transformer_debugger.py -expt_num "10.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 100.0 -load_weight_exp "10.4" -load_weight_epoch 2
 
-python transformer_debugger.py -expt_num "11.0" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 # 0.6k/topic *2
-python transformer_debugger.py -expt_num "11.1" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0
-python transformer_debugger.py -expt_num "11.2" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0
-python transformer_debugger.py -expt_num "11.3" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0
-python transformer_debugger.py -expt_num "11.4" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 100.0
+#Gating the previous experiment with new spuriousness score based on perf drop
+# python transformer_debugger.py -expt_num "10.0.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -gate_weight_exp "10.0" -gate_weight_epoch 2 -gate_var_cutoff "neg"
+# python transformer_debugger.py -expt_num "10.0.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -gate_weight_exp "10.0" -gate_weight_epoch 2 -gate_var_cutoff "0.1"
+# python transformer_debugger.py -expt_num "10.0.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.2" -load_weight_epoch 2
+
+
+# python transformer_debugger.py -expt_num "10.0.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -gate_weight_exp "10.0" -gate_weight_epoch 2 -gate_var_cutoff "0.4"
+# python transformer_debugger.py -expt_num "10.0.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.3" -load_weight_epoch 2
+
+python transformer_debugger.py -expt_num "10.0.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+python transformer_debugger.py -expt_num "10.0.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+python transformer_debugger.py -expt_num "10.0.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+python transformer_debugger.py -expt_num "10.0.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+
+
+
+
+python transformer_debugger.py -expt_num "10.1.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+python transformer_debugger.py -expt_num "10.1.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
+python transformer_debugger.py -expt_num "10.1.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+python transformer_debugger.py -expt_num "10.1.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
+python transformer_debugger.py -expt_num "10.1.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+python transformer_debugger.py -expt_num "10.1.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+
+
+python transformer_debugger.py -expt_num "10.2.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+python transformer_debugger.py -expt_num "10.2.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
+python transformer_debugger.py -expt_num "10.2.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+python transformer_debugger.py -expt_num "10.2.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
+python transformer_debugger.py -expt_num "10.2.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+python transformer_debugger.py -expt_num "10.2.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+
+
+python transformer_debugger.py -expt_num "10.3.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+python transformer_debugger.py -expt_num "10.3.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
+python transformer_debugger.py -expt_num "10.3.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+python transformer_debugger.py -expt_num "10.3.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
+python transformer_debugger.py -expt_num "10.3.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+python transformer_debugger.py -expt_num "10.3.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+
+
+# python transformer_debugger.py -expt_num "10.2.gate" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -gate_weight_exp "10.2" -gate_weight_epoch 2 -gate_var_cutoff "neg"
+# python transformer_debugger.py -expt_num "10.3.gate" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -gate_weight_exp "10.3" -gate_weight_epoch 2 -gate_var_cutoff "neg"
+# python transformer_debugger.py -expt_num "10.4.gate" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 100.0 -gate_weight_exp "10.4" -gate_weight_epoch 2 -gate_var_cutoff "neg"
+
+
+# python transformer_debugger.py -expt_num "11.0" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 # 0.6k/topic *2
+# python transformer_debugger.py -expt_num "11.1" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0
+# python transformer_debugger.py -expt_num "11.2" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0
+# python transformer_debugger.py -expt_num "11.3" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0
+# python transformer_debugger.py -expt_num "11.4" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 100.0
