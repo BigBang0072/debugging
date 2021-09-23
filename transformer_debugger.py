@@ -449,14 +449,15 @@ def transformer_trainer(data_args,model_args):
     #                                              verbose=1)
     
     #Loading the weight if we want to reuse the computation
-    if model_args["load_weight_exp"]!=None:
-        load_path = "nlp_logs/{}/cp_{}.ckpt".format(
-                                    model_args["load_weight_exp"],
-                                    model_args["load_weight_epoch"]
-        )
-        load_dir = os.path.dirname(load_path)
+    #Switching off this facility for now, will resume later once we are good on toy example
+    # if model_args["load_weight_exp"]!=None:
+    #     load_path = "nlp_logs/{}/cp_{}.ckpt".format(
+    #                                 model_args["load_weight_exp"],
+    #                                 model_args["load_weight_epoch"]
+    #     )
+    #     load_dir = os.path.dirname(load_path)
 
-        classifier.load_weights(load_path)
+    #     classifier.load_weights(load_path)
 
 
     #Now fitting the model
@@ -573,7 +574,7 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
     if threshold_criteria=="neg":
         cutoff_value=0.0
         gate_arr = (global_imp_diff>=0.0)*1.0 #they will become 1 and rest as zero i.e gated
-    elif type(threshold_criteria)==type(22.0):
+    else:
         #Getting the top negetive ones
         zero_upto = int(float(threshold_criteria)*global_imp_diff.shape[0])
         cutoff_value = np.sort(global_imp_diff)[zero_upto]
@@ -689,7 +690,7 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
         classifier.load_weights(load_path)
 
         #Loading the gate tensor
-        gate_fpath = "nlp_logs/{}/gate_tensor".format(model_args["load_weight_exp"])
+        gate_fpath = "nlp_logs/{}/gate_tensor.npz".format(model_args["load_weight_exp"])
         gate_arr = np.load(gate_fpath)["gate_tensor"]
         gate_tensor = tf.constant(
                         gate_arr,
@@ -874,9 +875,10 @@ def load_and_analyze_transformer(data_args,model_args):
 
     #Getting the classifier with the loaded weights and getting the ood accuracy
     indo_vacc,ood_vacc,classifier = evaluate_ood_indo_performance(
-                                            data_args,
-                                            model_args,
-                                            only_indo=True
+                                            data_args=data_args,
+                                            model_args=model_args,
+                                            only_indo=False,
+                                            purpose="load",
     )    
 
     #Printing the different correlation weights
@@ -934,7 +936,7 @@ if __name__=="__main__":
     
     parser.add_argument("-gate_weight_exp",dest="gate_weight_exp",type=str,default=None)
     parser.add_argument("-gate_weight_epoch",dest="gate_weight_epoch",type=int,default=None)
-    parser.add_argument("-gate_var_cutoff",dest="gate_var_cutoff",type=float,default=1.0) #all will be allowed for this
+    parser.add_argument("-gate_var_cutoff",dest="gate_var_cutoff",type=str)
 
     parser.add_argument('--train_bert',default=False,action="store_true")
 

@@ -21,6 +21,10 @@ import pdb
 pp=pprint.PrettyPrinter(indent=4)
 import random
 
+#Setting the random seed
+random.seed(22)
+np.random.seed(22)
+
 from transformers import AutoTokenizer
 
 class DataHandler():
@@ -517,7 +521,7 @@ class DataHandleTransformer():
         class1_df = class1_df.iloc[0:min_num]
 
         topic_df = pd.concat([class0_df,class1_df],axis=0,ignore_index=True)
-        topic_df = topic_df.sample(frac=1).reset_index(drop=True)
+        topic_df = topic_df.sample(frac=1,random_state=22).reset_index(drop=True)
 
         print("New topic df created: {}\tshape:{} ".format(tidx,topic_df.shape[0]))
         print(topic_df.head())
