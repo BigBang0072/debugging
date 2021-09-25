@@ -168,9 +168,11 @@ class TransformerClassifier(keras.Model):
 
         #Now we will get the topic embedding one by one and weight them
         topic_embedding_list = []
-        for tidx in range(self.model_args["topic_list"]):
+        for tidx in range(len(self.data_args["topic_list"])):
             #Getting the topic_embedding
             _,topic_emb = self.get_topic_pred_prob(bert_seq_output,mask_train,gate_tensor,tidx)
+            topic_embedding_list.append(topic_emb)
+
         #Concatenating all of them in one place
         all_topic_embedding = tf.stack(topic_embedding_list,axis=-1)
 
@@ -290,7 +292,7 @@ class TransformerClassifier(keras.Model):
             )
 
             #Getting the validation accuracy for this category
-            valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+            valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
             self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
@@ -327,7 +329,7 @@ class TransformerClassifier(keras.Model):
                                                     idx_valid,
                                                     mask_valid,
             )
-            valid_prob = self.get_topic_pred_prob(bert_seq_output_valid,mask_valid,gate_tensor,sidx)
+            valid_prob,_ = self.get_topic_pred_prob(bert_seq_output_valid,mask_valid,gate_tensor,sidx)
             self.topic_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
@@ -539,6 +541,12 @@ def transformer_trainer(data_args,model_args):
 
     #First of all we have to train our own topic classifier
     for eidx in range(model_args["epochs"]):
+        #Now first we will reset all the metrics
+        classifier.reset_all_metrics()
+        print("\n==============================================")
+        print("Starting Epoch: ",eidx)
+        print("==============================================")
+
         #Now its time to train the topics
         for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
             #Training the topic through all the batches
@@ -598,7 +606,7 @@ def get_cat_temb_importance_weight_variance(classifier):
     ]
 
     #Getting the topic importance score
-    cat_topic_imp_weights = np.stack(cat_topic_imp_weights)
+    cat_topic_imp_weights = np.stack(cat_topic_imp_weights,axis=-1)
     cat_topic_imp_mean = np.mean(cat_topic_imp_weights,axis=-1)
     cat_topic_imp_std  = np.std(cat_topic_imp_weights,axis=-1)
     topic_metric_list=[]
@@ -610,7 +618,7 @@ def get_cat_temb_importance_weight_variance(classifier):
             )
         )
 
-        topic_metric_list((tidx,cat_topic_imp_mean[tidx],cat_topic_imp_std[tidx]))
+        topic_metric_list.append((tidx,cat_topic_imp_mean[tidx],cat_topic_imp_std[tidx]))
     
     topic_metric_list.sort(key=lambda x:x[-1])
     mypp(topic_metric_list)
