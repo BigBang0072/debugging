@@ -599,8 +599,15 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
     print("Correlation of gate array and cat_imp_diff")
     print("Closer to zero --> more spurious dimension removed")
     for cidx,cat in enumerate(classifier.data_args["cat_list"]):
+        initial_negativity = np.sum(cat_imp_diff_dict[cat])
         negativity_left = np.sum(gate_arr*cat_imp_diff_dict[cat])
-        print("Cat:{}\tNegLeft:{:0.6f}".format(cat,negativity_left))
+        print("Cat:{}\tInitial:{:0.6f}\tNegLeft:{:0.6f}\tDelta:{:0.6f}".format(
+                                            cat,
+                                            initial_negativity,
+                                            negativity_left,
+                                            negativity_left-initial_negativity,
+                )
+            )
 
     return gate_arr
 
