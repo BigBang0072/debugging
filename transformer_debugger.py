@@ -716,6 +716,7 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
     for cidx,cat in enumerate(classifier.data_args["cat_list"]):
         initial_negativity = np.sum(cat_imp_diff_dict[cat])
         negativity_left = np.sum(gate_arr*cat_imp_diff_dict[cat])
+        print("\n=========================================================")
         print("Cat:{}\tInitial:{:0.6f}\tNegLeft:{:0.6f}\tDelta:{:0.6f}".format(
                                             cat,
                                             initial_negativity,
@@ -723,6 +724,24 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
                                             negativity_left-initial_negativity,
                 )
             )
+        #Printing the spurious dimension in this domain
+        print("dimension spuriousness score:")
+        dim_wise_diff = [
+                (didx,cat_imp_diff_dict[cat][didx]) 
+                        for didx in range(cat_imp_diff_dict[cat].shape[0])
+        ]
+        dim_wise_diff.sort(key=lambda x:x[-1])
+        mypp(dim_wise_diff)
+    
+    #Printing the global differnet dimension wise
+    dim_wise_diff = [
+                (didx,global_imp_diff[didx])
+                    for didx in range(global_imp_diff.shape[0])
+    ]
+    dim_wise_diff.sort(key=lambda x: x[-1])
+    print("\n==============================================")
+    print("Global imp difference: Spuriousness Score:")
+    mypp(dim_wise_diff)
 
     return gate_arr
 
