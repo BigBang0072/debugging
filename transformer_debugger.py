@@ -41,6 +41,7 @@ class TransformerClassifier(keras.Model):
         #Initializing the heads for each classifier (Domain Sntiment)
         self.cat_classifier_list = []
         self.cat_importance_weight_list = []
+        self.cat_temb_importance_weight_list = []
         for cat in self.data_args["cat_list"]:
             #Creating the imporatance paramaters for each classifier
             cat_imp_weight = tf.Variable(
@@ -52,12 +53,22 @@ class TransformerClassifier(keras.Model):
             )
             self.cat_importance_weight_list.append(cat_imp_weight)
 
+            #Creating the topic embedding weights to be used by classifier
+            cat_temb_imp_weight = tf.Variable(
+                tf.random_normal_initializer(mean=0.0,stddev=1.0)(
+                                shape=[1,1,len(model_args["topic_list"])]
+                ),
+                trainable=True
+            )
+            self.cat_temb_importance_weight_list.append(cat_temb_imp_weight)
+
             #Creating a dense layer
             cat_dense = layers.Dense(2,activation="softmax")
             self.cat_classifier_list.append(cat_dense)
         
         #Initializing the heads for the "interpretable" topics
         self.topic_classifier_list = []
+        self.topic_embedding_layer_list = []
         self.topic_importance_weight_list = []
         for topic in self.data_args["topic_list"]:
             #Creating the imporatance paramaters for each classifier
@@ -69,6 +80,10 @@ class TransformerClassifier(keras.Model):
                 trainable=True
             )
             self.topic_importance_weight_list.append(topic_imp_weight)
+
+            #Creating the topic embedding layers (will be applied before the final activation)
+            topic_embed_layer = layers.Dense(self.data_args["temb_dim"])
+            self.topic_embedding_layer_list.append(topic_embed_layer)
 
             #Creating a dense layer
             topic_dense = layers.Dense(self.data_args["per_topic_class"],activation="softmax")
@@ -143,14 +158,50 @@ class TransformerClassifier(keras.Model):
 
         return cat_class_prob
     
-    def get_topic_pred_prob(self,idx_train,mask_train,gate_tensor,tidx): 
-        # raise NotImplementedError   
-        #Getting the bert activation
+    def get_sentiment_pred_prob_topic_basis(self,idx_train,mask_train,gate_tensor,cidx):
+        '''
+        Here we will try to get the task prediciton using the topic basis
+        i.e the embedding in the topic space to do the sentiment classifiecation
+        '''
+        #Getting the bert representation
+        bert_seq_output = self.get_bert_representation(idx_train,mask_train)
+
+        #Now we will get the topic embedding one by one and weight them
+        topic_embedding_list = []
+        for tidx in range(self.model_args["topic_list"]):
+            #Getting the topic_embedding
+            _,topic_emb = self.get_topic_pred_prob(bert_seq_output,mask_train,gate_tensor,tidx)
+        #Concatenating all of them in one place
+        all_topic_embedding = tf.stack(topic_embedding_list,axis=-1)
+
+        #Geting the avg topic embedding
+        avg_topic_embedding = all_topic_embedding*self.cat_temb_importance_weight_list[cidx]
+        avg_topic_embedding = tf.reduce_mean(avg_topic_embedding,axis=-1)
+
+        #Now we will apply our cat classifier
+        cat_class_prob = self.cat_classifier_list[cidx](avg_topic_embedding)
+
+        return cat_class_prob
+
+    def get_bert_representation(self,idx_train,mask_train):
+        '''
+        '''
         bert_outputs=self.bert_model(
                     input_ids=idx_train,
                     attention_mask=mask_train
         )
         bert_seq_output = bert_outputs.last_hidden_state
+
+        return bert_seq_output
+
+    def get_topic_pred_prob(self,bert_seq_output,mask_train,gate_tensor,tidx): 
+        # raise NotImplementedError   
+        # #Getting the bert activation
+        # bert_seq_output = self.get_bert_representation(
+        #                             idx_train=idx_train,
+        #                             mask_train=mask_train,
+        # )
+        
         #Stopping the gradient update in case of bert training
         bert_seq_output = tf.stop_gradient(bert_seq_output)
 
@@ -173,11 +224,17 @@ class TransformerClassifier(keras.Model):
 
         #Now we will gate the dimension which are spurious
         gated_avg_embedding = avg_embedding*gate_tensor
+
+        #Applying the hidden layer on this BERT embedding
+        topic_embedding = self.topic_embedding_layer_list[tidx](gated_avg_embedding)
+        #Next we will normalize the embedding to the norm
+        if(self.model_args["normalize_temb"]==True):
+            topic_embedding = tf.math.l2_normalize(topic_embedding,axis=-1)
         
         #Now we will apply the dense layer for this topic
-        topic_class_prob = self.topic_classifier_list[tidx](gated_avg_embedding)
+        topic_class_prob = self.topic_classifier_list[tidx](topic_embedding)
 
-        return topic_class_prob
+        return topic_class_prob,topic_embedding
     
     def train_step(self,sidx,single_ds,gate_tensor,task):
         '''
@@ -213,9 +270,10 @@ class TransformerClassifier(keras.Model):
         mask_valid = mask[valid_idx:]
 
         if task=="sentiment":
+            #First of all we need to get the topic embedding from all the 
             with tf.GradientTape() as tape:
                 #Forward propagating the model
-                train_prob = self.get_sentiment_pred_prob(idx_train,mask_train,gate_tensor,sidx)
+                train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
                 xentropy_loss = scxentropy_loss(label_train,train_prob)
@@ -240,8 +298,14 @@ class TransformerClassifier(keras.Model):
             self.sent_l1_loss_list[sidx].update_state(l1_loss)
         elif task=="topic":
             with tf.GradientTape() as tape:
+                #Getting the bert representation
+                bert_seq_output = self.get_bert_representation(
+                                                    idx_train=idx_train,
+                                                    mask_train=mask_train,
+                )
+
                 #Forward propagating the model
-                train_prob = self.get_topic_pred_prob(idx_train,mask_train,gate_tensor,sidx)
+                train_prob,_ = self.get_topic_pred_prob(bert_seq_output,mask_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
                 xentropy_loss = scxentropy_loss(label_train,train_prob)
@@ -468,6 +532,29 @@ def transformer_trainer(data_args,model_args):
     #                     # validation_split=model_args["valid_split"]
     # )
     #Writing the custom training loop
+
+    #First of all we have to train our own topic classifier
+    for eidx in range(model_args["epochs"]):
+        #Now its time to train the topics
+        for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
+            #Training the topic through all the batches
+            for data_batch in topic_ds:
+                classifier.train_step(tidx,data_batch,gate_tensor,"topic")
+            
+            #Pringitn ghte metrics
+            print("topic:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
+                                            tname,
+                                            classifier.topic_pred_xentropy.result(),
+                                            classifier.topic_l1_loss_list[tidx].result(),
+                                            classifier.topic_valid_acc_list[tidx].result(),
+                    )
+            )
+
+        #Saving the paramenters
+        checkpoint_path = "nlp_logs/{}/cp_topic_{}.ckpt".format(model_args["expt_name"],eidx)
+        classifier.save_weights(checkpoint_path)
+    
+
     for eidx in range(model_args["epochs"]):
         #Now first we will reset all the metrics
         classifier.reset_all_metrics()
@@ -490,25 +577,40 @@ def transformer_trainer(data_args,model_args):
                                             classifier.sent_valid_acc_list[cidx].result(),
                     )
             )
-        
-        #Now its time to train the topics
-        for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
-            #Training the topic through all the batches
-            for data_batch in topic_ds:
-                classifier.train_step(tidx,data_batch,gate_tensor,"topic")
-            
-            #Pringitn ghte metrics
-            print("topic:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
-                                            tname,
-                                            classifier.topic_pred_xentropy.result(),
-                                            classifier.topic_l1_loss_list[tidx].result(),
-                                            classifier.topic_valid_acc_list[tidx].result(),
-                    )
-            )
 
         #Saving the paramenters
-        checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(model_args["expt_name"],eidx)
-        classifier.save_weights(checkpoint_path)            
+        checkpoint_path = "nlp_logs/{}/cp_cat_{}.ckpt".format(model_args["expt_name"],eidx)
+        classifier.save_weights(checkpoint_path)
+    
+    #Printing the variance of the importance weight
+    get_cat_temb_importance_weight_variance(classifier)
+
+
+def get_cat_temb_importance_weight_variance(classifier):
+    #Getting the topic importance
+    cat_topic_imp_weights = [
+        np.squeeze(classifier.cat_temb_importance_weight_list[cidx].numpy())
+            for cidx in range(len(classifier.data_args["cat_list"]))
+    ]
+
+    #Getting the topic importance score
+    cat_topic_imp_weights = np.stack(cat_topic_imp_weights)
+    cat_topic_imp_mean = np.mean(cat_topic_imp_weights,axis=-1)
+    cat_topic_imp_std  = np.std(cat_topic_imp_weights,axis=-1)
+    topic_metric_list=[]
+    for tidx in range(len(classifier.data_args["topic_list"])):
+        print("topic:{}\tmean:{:0.5f}\tstd:{:0.5f}".format(
+                                            tidx,
+                                            cat_topic_imp_mean[tidx],
+                                            cat_topic_imp_std[tidx],
+            )
+        )
+
+        topic_metric_list((tidx,cat_topic_imp_mean[tidx],cat_topic_imp_std[tidx]))
+    
+    topic_metric_list.sort(key=lambda x:x[-1])
+    mypp(topic_metric_list)
+
 
 def get_sent_imp_weights(classifier):
     '''
@@ -947,6 +1049,9 @@ if __name__=="__main__":
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int)
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float)
 
+    parser.add_argument("-temb_dim",dest="temb_dim",type=int)
+    parser.add_argument("--normalize_temb",default=False,action="store_true")
+
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
     parser.add_argument('-transformer',dest="transformer",type=str,default="bert-base-uncased")
     parser.add_argument('-num_epochs',dest="num_epochs",type=int)
@@ -994,6 +1099,8 @@ if __name__=="__main__":
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
     model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
+    model_args["temb_dim"] = args.temb_dim
+    model_args["normalize_temb"] = args.normalize_temb
     model_args["shuffle_topic_batch"]=False
     model_args["gate_weight_exp"]=args.gate_weight_exp
     model_args["gate_weight_epoch"]=args.gate_weight_epoch
