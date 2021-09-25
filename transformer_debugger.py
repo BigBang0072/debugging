@@ -177,7 +177,8 @@ class TransformerClassifier(keras.Model):
         all_topic_embedding = tf.stack(topic_embedding_list,axis=-1)
 
         #Geting the avg topic embedding
-        avg_topic_embedding = all_topic_embedding*self.cat_temb_importance_weight_list[cidx]
+        cat_temb_imp_weight = tf.sigmoid(self.cat_temb_importance_weight_list[cidx])
+        avg_topic_embedding = all_topic_embedding*cat_temb_imp_weight
         avg_topic_embedding = tf.reduce_mean(avg_topic_embedding,axis=-1)
 
         #Now we will apply our cat classifier
@@ -601,7 +602,7 @@ def transformer_trainer(data_args,model_args):
 def get_cat_temb_importance_weight_variance(classifier):
     #Getting the topic importance
     cat_topic_imp_weights = [
-        np.squeeze(classifier.cat_temb_importance_weight_list[cidx].numpy())
+        np.squeeze(tf.sigmoid(classifier.cat_temb_importance_weight_list[cidx]).numpy())
             for cidx in range(len(classifier.data_args["cat_list"]))
     ]
 
