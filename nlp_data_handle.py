@@ -406,7 +406,7 @@ class DataHandleTransformer():
         
         return all_cat_df
     
-    def _get_topic_labels_manual(self,all_cat_df,doc_col_name,pdoc_name):
+    def _get_topic_labels_manual(self,all_cat_df,doc_col_name,pdoc_name,label_col_name):
         '''
         Here we will try to manually annotate certain concepts using bag of words
         approach which we think are clean and have clear distinction ob being 
@@ -415,12 +415,19 @@ class DataHandleTransformer():
         complete_topic_label_list = []
         complete_topic_list = []
         complete_doc_list = []
+        new_all_cat_df = {}
         for cat_name,cat_df in all_cat_df.items():
             topic_label_list = []
+            cat_topic_feature_list = [] #using topic as a feature
+            cat_label_list = []
             for ctidx in range(cat_df.shape[0]):
                 pdoc = cat_df.iloc[ctidx][pdoc_name]
                 #Getting the topic distriubiton
                 doc_topic = self._get_topic_annotation_manual(pdoc)
+
+                #Saving the topic labels as a feature
+                cat_topic_feature_list.append(doc_topic)
+                cat_label_list.append(cat_df.iloc[ctidx][label_col_name])
 
                 #Adding each of the topic and label separately
                 for topic_idx in range(doc_topic.shape[0]):
@@ -446,6 +453,15 @@ class DataHandleTransformer():
             # topic_label_arr = np.sum(np.array(topic_label_list),axis=0).tolist()
             # print("Topic Distribution for cat: ",cat_name)
             # pp.pprint(topic_label_arr)
+
+            #Creating the new dataframe for the cat
+            new_cat_df = pd.DataFrame(
+                            {
+                                "topic_feature":cat_topic_feature_list,
+                                "label":cat_label_list
+                            }
+            )
+            new_all_cat_df[cat_name]=new_cat_df
         
         #Now we have all the examples labelled with all the topic
         merged_topic_df = pd.DataFrame(
@@ -462,7 +478,7 @@ class DataHandleTransformer():
             all_topic_df[tidx]= self._get_topic_df(tidx,topic_df)
             
         
-        return all_topic_df
+        return all_topic_df,new_all_cat_df
 
         #Getting the complete topic label list
         # complete_topic_label_arr = np.sum(
@@ -643,15 +659,15 @@ class DataHandleTransformer():
             # topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
         
         #Now we will parse the documents
-        encoded_doc = self.tokenizer(
-                                    doc_list,
-                                    padding='max_length',
-                                    truncation=True,
-                                    max_length=self.data_args["max_len"],
-                                    return_tensors="tf"
-            )
-        input_idx = encoded_doc["input_ids"]
-        attn_mask = encoded_doc["attention_mask"]
+        # encoded_doc = self.tokenizer(
+        #                             doc_list,
+        #                             padding='max_length',
+        #                             truncation=True,
+        #                             max_length=self.data_args["max_len"],
+        #                             return_tensors="tf"
+        #     )
+        # input_idx = encoded_doc["input_ids"]
+        # attn_mask = encoded_doc["attention_mask"]
 
         #Creating the dataset for this category
         cat_dataset = tf.data.Dataset.from_tensor_slices(
@@ -659,8 +675,9 @@ class DataHandleTransformer():
                                     label=np.array(label_list),
                                     # topic=np.array(topic_list),
                                     # topic_weight=np.array(topic_weight_list),
-                                    input_idx = input_idx,
-                                    attn_mask = attn_mask
+                                    # input_idx = input_idx,
+                                    # attn_mask = attn_mask
+                                    doc_col_name=np.array(doc_list)
                                 )
         )
 
@@ -773,10 +790,11 @@ class DataHandleTransformer():
         #                                     topic_col_name="topic")
 
         #Getting the manually labelled topic
-        all_topic_df = self._get_topic_labels_manual(
+        all_topic_df,new_all_cat_df = self._get_topic_labels_manual(
                                             all_cat_df=all_cat_df,
                                             doc_col_name="doc",
                                             pdoc_name="pdoc",
+                                            label_col_name="label",
                                             # topic_col_name="topic",
                                             # topic_weight_col_name="topic_weight"
         )
@@ -785,11 +803,11 @@ class DataHandleTransformer():
         #Creating the zipped dataset
         all_cat_ds = {}
         for cat in self.data_args["cat_list"]:
-            cat_df = all_cat_df[cat]
+            cat_df = new_all_cat_df[cat]
             #Getting the dataset object
             cat_ds = self._convert_df_to_dataset(
                                         df=cat_df,
-                                        doc_col_name="doc",
+                                        doc_col_name="topic_feature",
                                         label_col_name="label",
                                         # topic_col_name="topic",
                                         # topic_weight_col_name="topic_weight",
@@ -799,17 +817,17 @@ class DataHandleTransformer():
 
         #Creating the topic dataset
         all_topic_ds = {}
-        for tidx in self.data_args["topic_list"]:
-            topic_df = all_topic_df[tidx]
-            #Getting the dataset object
-            topic_ds = self._convert_df_to_dataset(
-                                        df=topic_df,
-                                        doc_col_name="doc",
-                                        label_col_name="label",
-                                        # topic_col_name="topic",
-                                        # topic_weight_col_name="topic_weight",
-            )
-            all_topic_ds[tidx]=topic_ds
+        # for tidx in self.data_args["topic_list"]:
+        #     topic_df = all_topic_df[tidx]
+        #     #Getting the dataset object
+        #     topic_ds = self._convert_df_to_dataset(
+        #                                 df=topic_df,
+        #                                 doc_col_name="doc",
+        #                                 label_col_name="label",
+        #                                 # topic_col_name="topic",
+        #                                 # topic_weight_col_name="topic_weight",
+        #     )
+        #     all_topic_ds[tidx]=topic_ds
         
 
         return all_cat_ds,all_topic_ds

@@ -185,6 +185,13 @@ class TransformerClassifier(keras.Model):
         cat_class_prob = self.cat_classifier_list[cidx](avg_topic_embedding)
 
         return cat_class_prob
+    
+    def get_sentiment_pred_prob_topic_direct(self,topic_feature,cidx):
+        #Simply we will apply the cat classifier on top of this
+        weighted_feature = self.cat_importance_weight_list[cidx]*topic_feature
+        pred_prob = self.cat_classifier_list[cidx](weighted_feature)
+
+        return pred_prob
 
     def get_bert_representation(self,idx_train,mask_train):
         '''
@@ -256,8 +263,8 @@ class TransformerClassifier(keras.Model):
         # cat_total_loss = 0.0
         # for cidx,cat in enumerate(self.data_args["cat_list"]):
         label = single_ds["label"]
-        idx = single_ds["input_idx"]
-        mask = single_ds["attn_mask"]
+        idx = single_ds["topic_feature"]
+        # mask = single_ds["attn_mask"]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
@@ -265,19 +272,20 @@ class TransformerClassifier(keras.Model):
         #Getting the train data
         label_train = label[0:valid_idx]
         idx_train = idx[0:valid_idx]
-        mask_train = mask[0:valid_idx]
+        # mask_train = mask[0:valid_idx]
 
         #Getting the validation data
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
-        mask_valid = mask[valid_idx:]
+        # mask_valid = mask[valid_idx:]
 
         if task=="sentiment":
             #First of all we need to get the topic embedding from all the 
             with tf.GradientTape() as tape:
                 #Forward propagating the model
-                train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
-                
+                # train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
+                train_prob = self.get_sentiment_pred_prob_topic_direct(idx_train,sidx)
+
                 #Getting the loss for this classifier
                 xentropy_loss = scxentropy_loss(label_train,train_prob)
                 # cat_total_loss += cat_loss
@@ -293,7 +301,8 @@ class TransformerClassifier(keras.Model):
             )
 
             #Getting the validation accuracy for this category
-            valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
+            # valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
+            valid_prob = self.get_sentiment_pred_prob_topic_direct(idx_valid,sidx)
             self.sent_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
@@ -462,8 +471,8 @@ class TransformerClassifier(keras.Model):
         (using the lower end of the dataset which was not used for training)
         '''
         label = single_ds["label"]
-        idx = single_ds["input_idx"]
-        mask = single_ds["attn_mask"]
+        idx = single_ds["topic_feature"]
+        # mask = single_ds["attn_mask"]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
@@ -471,11 +480,12 @@ class TransformerClassifier(keras.Model):
         #Getting the validation data
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
-        mask_valid = mask[valid_idx:]
+        # mask_valid = mask[valid_idx:]
 
         #Now we will make the forward pass
         if task=="sentiment":
-            valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+            # valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+            valid_prob = self.get_sentiment_pred_prob_topic_direct(idx_valid,sidx)
         elif task=="topic":
             valid_prob = self.get_topic_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
         else:
@@ -541,31 +551,31 @@ def transformer_trainer(data_args,model_args):
     #Writing the custom training loop
 
     #First of all we have to train our own topic classifier
-    for eidx in range(model_args["epochs"]):
-        #Now first we will reset all the metrics
-        classifier.reset_all_metrics()
-        print("\n==============================================")
-        print("Starting Epoch: ",eidx)
-        print("==============================================")
+    # for eidx in range(model_args["epochs"]):
+    #     #Now first we will reset all the metrics
+    #     classifier.reset_all_metrics()
+    #     print("\n==============================================")
+    #     print("Starting Epoch: ",eidx)
+    #     print("==============================================")
 
-        #Now its time to train the topics
-        for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
-            #Training the topic through all the batches
-            for data_batch in topic_ds:
-                classifier.train_step(tidx,data_batch,gate_tensor,"topic")
+    #     #Now its time to train the topics
+    #     for tidx,(tname,topic_ds) in enumerate(all_topic_ds.items()):
+    #         #Training the topic through all the batches
+    #         for data_batch in topic_ds:
+    #             classifier.train_step(tidx,data_batch,gate_tensor,"topic")
             
-            #Pringitn ghte metrics
-            print("topic:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
-                                            tname,
-                                            classifier.topic_pred_xentropy.result(),
-                                            classifier.topic_l1_loss_list[tidx].result(),
-                                            classifier.topic_valid_acc_list[tidx].result(),
-                    )
-            )
+    #         #Pringitn ghte metrics
+    #         print("topic:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
+    #                                         tname,
+    #                                         classifier.topic_pred_xentropy.result(),
+    #                                         classifier.topic_l1_loss_list[tidx].result(),
+    #                                         classifier.topic_valid_acc_list[tidx].result(),
+    #                 )
+    #         )
 
-        #Saving the paramenters
-        checkpoint_path = "nlp_logs/{}/cp_topic_{}.ckpt".format(model_args["expt_name"],eidx)
-        classifier.save_weights(checkpoint_path)
+    #     #Saving the paramenters
+    #     checkpoint_path = "nlp_logs/{}/cp_topic_{}.ckpt".format(model_args["expt_name"],eidx)
+    #     classifier.save_weights(checkpoint_path)
     
 
     for eidx in range(model_args["epochs"]):
@@ -836,7 +846,7 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
 
     if purpose=="load":
-        load_path = "nlp_logs/{}/cp_{}.ckpt".format(
+        load_path = "nlp_logs/{}/cp_cat_{}.ckpt".format(
                                     model_args["load_weight_exp"],
                                     model_args["load_weight_epoch"]
         )
@@ -901,27 +911,27 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
         mypp(ood_vacc[cname])
     
     #Also we need to get the indomain accuracy of the topics
-    topic_indo_vacc={}
-    for tidx,tname in enumerate(data_args["topic_list"]):
-        print("Getting indo perf of :{}".format(tname))
-        #Getting a new accuracy op for fear of updating old one
-        acc_op = keras.metrics.Mean(name="temp_acc_op")
-        acc_op.reset_state()
+    # topic_indo_vacc={}
+    # for tidx,tname in enumerate(data_args["topic_list"]):
+    #     print("Getting indo perf of :{}".format(tname))
+    #     #Getting a new accuracy op for fear of updating old one
+    #     acc_op = keras.metrics.Mean(name="temp_acc_op")
+    #     acc_op.reset_state()
 
-        #Going over all the batches of this catefory for given classifier
-        for data_batch in all_topic_ds[tname]:
-            classifier.valid_step(tidx,data_batch,gate_tensor,acc_op,"topic")
+    #     #Going over all the batches of this catefory for given classifier
+    #     for data_batch in all_topic_ds[tname]:
+    #         classifier.valid_step(tidx,data_batch,gate_tensor,acc_op,"topic")
         
-        vacc = acc_op.result().numpy()
-        topic_indo_vacc[tname]=vacc 
+    #     vacc = acc_op.result().numpy()
+    #     topic_indo_vacc[tname]=vacc 
 
     print("========================================")
     print("Indomain Validation Accuracy:") 
     mypp(indo_vacc)
     print("OutOfDomain Validation Accuracy:")
     mypp(ood_vacc)
-    print("OutOfDomain Topic Validation Accuracy:")
-    mypp(topic_indo_vacc)
+    # print("OutOfDomain Topic Validation Accuracy:")
+    # mypp(topic_indo_vacc)
     print("========================================")
     
     #Now we have all the indo and ood validation accuracy
@@ -1033,7 +1043,12 @@ def load_and_analyze_transformer(data_args,model_args):
                                             model_args=model_args,
                                             only_indo=False,
                                             purpose="load",
-    )    
+    )
+
+    #Getting the spuriousness score using the drop in importance idea
+    sent_weights = get_sent_imp_weights(classifier)
+    gate_arr = get_feature_spuriousness(classifier,ood_vacc,sent_weights)
+
 
     #Printing the different correlation weights
     get_spuriousness_rank(classifier,"weightedtau")
@@ -1130,7 +1145,7 @@ if __name__=="__main__":
     model_args["l1_lambda"]=args.l1_lambda
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
-    model_args["bemb_dim"] = 768        #The dimension of bert produced last layer
+    model_args["bemb_dim"] = len(data_args["topic_list"]) #The dimension of bert produced last layer
     model_args["temb_dim"] = args.temb_dim
     model_args["normalize_temb"] = args.normalize_temb
     model_args["shuffle_topic_batch"]=False
