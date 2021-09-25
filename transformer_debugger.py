@@ -56,7 +56,7 @@ class TransformerClassifier(keras.Model):
             #Creating the topic embedding weights to be used by classifier
             cat_temb_imp_weight = tf.Variable(
                 tf.random_normal_initializer(mean=0.0,stddev=1.0)(
-                                shape=[1,1,len(model_args["topic_list"])]
+                                shape=[1,1,len(data_args["topic_list"])]
                 ),
                 trainable=True
             )
@@ -82,7 +82,7 @@ class TransformerClassifier(keras.Model):
             self.topic_importance_weight_list.append(topic_imp_weight)
 
             #Creating the topic embedding layers (will be applied before the final activation)
-            topic_embed_layer = layers.Dense(self.data_args["temb_dim"])
+            topic_embed_layer = layers.Dense(self.model_args["temb_dim"])
             self.topic_embedding_layer_list.append(topic_embed_layer)
 
             #Creating a dense layer
@@ -299,13 +299,13 @@ class TransformerClassifier(keras.Model):
         elif task=="topic":
             with tf.GradientTape() as tape:
                 #Getting the bert representation
-                bert_seq_output = self.get_bert_representation(
+                bert_seq_output_train = self.get_bert_representation(
                                                     idx_train=idx_train,
                                                     mask_train=mask_train,
                 )
 
                 #Forward propagating the model
-                train_prob,_ = self.get_topic_pred_prob(bert_seq_output,mask_train,gate_tensor,sidx)
+                train_prob,_ = self.get_topic_pred_prob(bert_seq_output_train,mask_train,gate_tensor,sidx)
                 
                 #Getting the loss for this classifier
                 xentropy_loss = scxentropy_loss(label_train,train_prob)
@@ -323,7 +323,11 @@ class TransformerClassifier(keras.Model):
             )
 
             #Getting the validation accuracy for this category
-            valid_prob = self.get_topic_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+            bert_seq_output_valid = self.get_bert_representation(
+                                                    idx_valid,
+                                                    mask_valid,
+            )
+            valid_prob = self.get_topic_pred_prob(bert_seq_output_valid,mask_valid,gate_tensor,sidx)
             self.topic_valid_acc_list[sidx].update_state(label_valid,valid_prob)
     
             #Updating the metrics to track
@@ -1111,7 +1115,7 @@ if __name__=="__main__":
     os.makedirs(meta_folder,exist_ok=True)
 
     transformer_trainer(data_args,model_args)
-    load_and_analyze_transformer(data_args,model_args)
+    # load_and_analyze_transformer(data_args,model_args)
 
 
             
