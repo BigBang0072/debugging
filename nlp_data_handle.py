@@ -642,7 +642,7 @@ class DataHandleTransformer():
                 whandle.write(write_string)
                 print("Topic:{} \t\t Component:{}".format(idx,feature_vector))
 
-    def _convert_df_to_dataset(self,df,doc_col_name,label_col_name):
+    def _convert_df_to_dataset(self,df,doc_col_name,label_col_name,mask_feature_dims):
         '''
         This function will conver the dataframe to a tensorflow dataset
         to be used as input for Transformer.
@@ -669,6 +669,12 @@ class DataHandleTransformer():
         # input_idx = encoded_doc["input_ids"]
         # attn_mask = encoded_doc["attention_mask"]
 
+        #Creating the feature array
+        topic_feature = np.array(doc_list).astype(np.float32)
+        #Makging this feature array to simulate the subset selection
+        topic_feature[:,mask_feature_dims] = 0.0
+
+
         #Creating the dataset for this category
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
@@ -677,7 +683,7 @@ class DataHandleTransformer():
                                     # topic_weight=np.array(topic_weight_list),
                                     # input_idx = input_idx,
                                     # attn_mask = attn_mask
-                                    doc_col_name=np.array(doc_list)
+                                    topic_feature=topic_feature
                                 )
         )
 
@@ -809,6 +815,7 @@ class DataHandleTransformer():
                                         df=cat_df,
                                         doc_col_name="topic_feature",
                                         label_col_name="label",
+                                        mask_feature_dims=self.data_args["mask_feature_dims"]
                                         # topic_col_name="topic",
                                         # topic_weight_col_name="topic_weight",
             )

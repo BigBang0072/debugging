@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from tensorflow._api.v2 import data
 import scipy
 
 
@@ -606,7 +607,7 @@ def transformer_trainer(data_args,model_args):
         classifier.save_weights(checkpoint_path)
     
     #Printing the variance of the importance weight
-    get_cat_temb_importance_weight_variance(classifier)
+    # get_cat_temb_importance_weight_variance(classifier)
 
 
 def get_cat_temb_importance_weight_variance(classifier):
@@ -934,6 +935,20 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     # mypp(topic_indo_vacc)
     print("========================================")
     
+    #Getting the overall OOD difference
+    print("Getting the overall OOD drop!")
+    overall_drop = 0.0
+    for cat in classifier.data_args["cat_list"]:
+        cat_drop = 0.0
+        for dcat in classifier.data_args["cat_list"]:
+            drop = ood_vacc[dcat] - ood_vacc[cat]
+            if drop<0:
+                cat_drop+=drop 
+        print("cat:{}\tdrop:{}".format(cat,cat_drop))
+        overall_drop+=cat_drop
+    print("Overall Drop:",overall_drop)
+
+
     #Now we have all the indo and ood validation accuracy
     return indo_vacc,ood_vacc,classifier
 
@@ -1133,6 +1148,7 @@ if __name__=="__main__":
     data_args["lda_epochs"]=25
     data_args["min_df"]=0.0
     data_args["max_df"]=1.0
+    data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
 
     #Defining the Model args
     model_args={}
