@@ -981,16 +981,16 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
 
     #Saving these in the results
     ood_meta_dict = {}
-    ood_meta_dict["overall_ood_drop"]       = np.sum(all_drop_list)
-    ood_meta_dict["mean_ood_drop"]          = np.mean(all_drop_list)
+    ood_meta_dict["overall_ood_drop"]       = float(np.sum(all_drop_list))
+    ood_meta_dict["mean_ood_drop"]          = float(np.mean(all_drop_list))
 
-    ood_meta_dict["overall_ood_std"]        = np.std(all_delta_list)
+    ood_meta_dict["overall_ood_std"]        = float(np.std(all_delta_list))
 
-    ood_meta_dict["mean_all_vacc"]          = np.mean(all_ood_vacc)
-    ood_meta_dict["mean_indo_vacc"]         = np.mean(all_indo_vacc)
+    ood_meta_dict["mean_all_vacc"]          = float(np.mean(all_ood_vacc))
+    ood_meta_dict["mean_indo_vacc"]         = float(np.mean(all_indo_vacc))
 
-    ood_meta_dict["avg_vacc_by_avg_drop"]   = np.mean(all_ood_vacc)/abs(np.mean(all_drop_list))
-    ood_meta_dict["avg_vacc_by_sum_drop"]   = np.mean(all_ood_vacc)/abs(np.sum(all_drop_list))
+    ood_meta_dict["avg_vacc_by_avg_drop"]   = float(np.mean(all_ood_vacc)/abs(np.mean(all_drop_list)))
+    ood_meta_dict["avg_vacc_by_sum_drop"]   = float(np.mean(all_ood_vacc)/abs(np.sum(all_drop_list)))
 
     
     #Now we have all the indo and ood validation accuracy
@@ -1180,33 +1180,6 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
         #Adding the experiment config
         all_expt_config.append(config)
     
-    #Creating the worker kernel
-    def worker_kernel(problem_config):
-        expt_main_path = problem_config["data_args"]["expt_meta_path"]
-        #Getting the arguments
-        data_args = problem_config["data_args"]
-        model_args = problem_config["model_args"]
-        #Starting the training phase
-        transformer_trainer(data_args,model_args)
-
-        #Now starting the validation run
-        data_args["load_weight_path"]=data_args["expt_meta_path"]
-        data_args["load_weight_epoch"]=model_args["epochs"]-1
-        ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
-
-        #Adding the result to the config
-        problem_config["ood_meta_dict"]=ood_meta_dict
-
-        #Dumping the result in one json
-        import json
-        fname = "{}/results_{}.json".format(
-                                data_args["expt_meta_path"],
-                                problem_config["alive_feature_dims"]
-        )
-        with open(fname,"w") as fp:
-            json.dump(problem_config,fp,indent="\t")
-        
-        return problem_config
 
     #Now we will start the parallel experiment
     ncpus = int(3.0/4.0*multiprocessing.cpu_count())
@@ -1214,6 +1187,34 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
             production = p.map(worker_kernel,all_expt_config)
     
     return 
+
+#Creating the worker kernel
+def worker_kernel(problem_config):
+    expt_main_path = problem_config["data_args"]["expt_meta_path"]
+    #Getting the arguments
+    data_args = problem_config["data_args"]
+    model_args = problem_config["model_args"]
+    #Starting the training phase
+    transformer_trainer(data_args,model_args)
+
+    #Now starting the validation run
+    data_args["load_weight_path"]=expt_main_path
+    model_args["load_weight_epoch"]=model_args["epochs"]-1
+    ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
+
+    #Adding the result to the config
+    problem_config["ood_meta_dict"]=ood_meta_dict
+
+    #Dumping the result in one json
+    import json
+    fname = "{}/results_{}.json".format(
+                            data_args["expt_meta_path"],
+                            problem_config["alive_feature_dims"]
+    )
+    with open(fname,"w") as fp:
+        json.dump(problem_config,fp,indent="\t")
+    
+    return problem_config
        
 
 if __name__=="__main__":
@@ -1288,7 +1289,8 @@ if __name__=="__main__":
     os.makedirs(meta_folder,exist_ok=True)
     data_args["expt_meta_path"]=meta_folder
 
-    transformer_trainer(data_args,model_args)
+    run_parallel_jobs_subset_exp(data_args,model_args)
+    # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
 
 

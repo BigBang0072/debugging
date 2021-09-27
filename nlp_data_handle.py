@@ -46,6 +46,10 @@ class DataHandler():
     def __init__(self,data_args):
         '''
         '''
+        #Setting the random seed
+        random.seed(22)
+        np.random.seed(22)
+
         self.data_args = data_args
 
         #Initializing the word2index dict (unknown word at first)
