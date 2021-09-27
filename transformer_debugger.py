@@ -938,15 +938,22 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     #Getting the overall OOD difference
     print("Getting the overall OOD drop!")
     overall_drop = 0.0
+    all_delta_list=[]
     for cat in classifier.data_args["cat_list"]:
         cat_drop = 0.0
         for dcat in classifier.data_args["cat_list"]:
-            drop = ood_vacc[dcat] - ood_vacc[cat]
+            drop = ood_vacc[cat][dcat] - ood_vacc[cat][cat]
+            #Getting all the domain delta
+            if cat!=dcat:
+                all_delta_list.append(drop)
+            
+            #Just adding the drop
             if drop<0:
                 cat_drop+=drop 
         print("cat:{}\tdrop:{}".format(cat,cat_drop))
         overall_drop+=cat_drop
     print("Overall Drop:",overall_drop)
+    print("Overall variance in the OOD performace:",np.std(all_delta_list))
 
 
     #Now we have all the indo and ood validation accuracy
