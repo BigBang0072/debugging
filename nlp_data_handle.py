@@ -812,18 +812,18 @@ class DataHandleTransformer():
 
         #Creating the zipped dataset
         all_cat_ds = {}
-        for cat in self.data_args["cat_list"]:
-            cat_df = new_all_cat_df[cat]
-            #Getting the dataset object
-            cat_ds = self._convert_df_to_dataset(
-                                        df=cat_df,
-                                        doc_col_name="topic_feature",
-                                        label_col_name="label",
-                                        mask_feature_dims=self.data_args["mask_feature_dims"]
-                                        # topic_col_name="topic",
-                                        # topic_weight_col_name="topic_weight",
-            )
-            all_cat_ds[cat]=cat_ds
+        # for cat in self.data_args["cat_list"]:
+        #     cat_df = new_all_cat_df[cat]
+        #     #Getting the dataset object
+        #     cat_ds = self._convert_df_to_dataset(
+        #                                 df=cat_df,
+        #                                 doc_col_name="topic_feature",
+        #                                 label_col_name="label",
+        #                                 mask_feature_dims=self.data_args["mask_feature_dims"]
+        #                                 # topic_col_name="topic",
+        #                                 # topic_weight_col_name="topic_weight",
+        #     )
+        #     all_cat_ds[cat]=cat_ds
         
 
         #Creating the topic dataset
@@ -841,7 +841,7 @@ class DataHandleTransformer():
         #     all_topic_ds[tidx]=topic_ds
         
 
-        return all_cat_ds,all_topic_ds
+        return all_cat_ds,all_topic_ds,new_all_cat_df
         
         #Merging into one dictionary
         # dataset = tf.data.Dataset.zip(all_cat_ds)

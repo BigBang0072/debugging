@@ -519,8 +519,8 @@ def transformer_trainer(data_args,model_args):
     np.savez(gate_fpath,gate_tensor=gate_tensor.numpy())
 
     #Dumping the model arguments
-    dump_arguments(data_args,data_args["expt_meta_path"],"data_args")
-    dump_arguments(model_args,data_args["expt_meta_path"],"model_args")
+    # dump_arguments(data_args,data_args["expt_meta_path"],"data_args")
+    # dump_arguments(model_args,data_args["expt_meta_path"],"model_args")
 
     #First of all creating the model
     classifier = TransformerClassifier(data_args,model_args)
