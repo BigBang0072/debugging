@@ -16,6 +16,9 @@ import json
 import os
 import sys
 from pprint import pprint as mypp
+from itertools import combinations
+from multiprocessing import Pool
+import multiprocessing
 
 
 from nlp_data_handle import *
@@ -31,13 +34,13 @@ class TransformerClassifier(keras.Model):
         self.model_args = model_args
 
         #Now initializing the layers to be used
-        if "distil" in data_args["transformer_name"]:
-            self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
-        else:
-            self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
-        if model_args["train_bert"]==False:
-            for layer in self.bert_model.layers:
-                layer.trainable = False
+        # if "distil" in data_args["transformer_name"]:
+        #     self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
+        # else:
+        #     self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
+        # if model_args["train_bert"]==False:
+        #     for layer in self.bert_model.layers:
+        #         layer.trainable = False
 
         #Initializing the heads for each classifier (Domain Sntiment)
         self.cat_classifier_list = []
@@ -500,15 +503,24 @@ class TransformerClassifier(keras.Model):
 def transformer_trainer(data_args,model_args):
     '''
     '''
+    #Creating the metadata folder
+    data_args["expt_meta_path"] = "{}/{}".format(
+                                            data_args["expt_meta_path"],
+                                            model_args["expt_name"]
+    )
+    os.makedirs(data_args["expt_meta_path"],exist_ok=True)
+
     #First of all we will load the gate array we are truing to run gate experiemnt
     gate_tensor = get_dimension_gate(data_args,model_args)
     #Saving the gate tensor 
-    gate_fpath = "nlp_logs/{}/gate_tensor".format(model_args["expt_name"])
+    gate_fpath = "{}/gate_tensor".format(
+                                        data_args["expt_meta_path"]
+    )
     np.savez(gate_fpath,gate_tensor=gate_tensor.numpy())
 
     #Dumping the model arguments
-    dump_arguments(data_args,data_args["expt_name"],"data_args")
-    dump_arguments(model_args,model_args["expt_name"],"model_args")
+    dump_arguments(data_args,data_args["expt_meta_path"],"data_args")
+    dump_arguments(model_args,data_args["expt_meta_path"],"model_args")
 
     #First of all creating the model
     classifier = TransformerClassifier(data_args,model_args)
@@ -603,7 +615,7 @@ def transformer_trainer(data_args,model_args):
             )
 
         #Saving the paramenters
-        checkpoint_path = "nlp_logs/{}/cp_cat_{}.ckpt".format(model_args["expt_name"],eidx)
+        checkpoint_path = "{}/cp_cat_{}.ckpt".format(data_args["expt_meta_path"],eidx)
         classifier.save_weights(checkpoint_path)
     
     #Printing the variance of the importance weight
@@ -847,15 +859,15 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
 
     if purpose=="load":
-        load_path = "nlp_logs/{}/cp_cat_{}.ckpt".format(
-                                    model_args["load_weight_exp"],
+        load_path = "{}/cp_cat_{}.ckpt".format(
+                                    data_args["load_weight_path"],
                                     model_args["load_weight_epoch"]
         )
         load_dir = os.path.dirname(load_path)
         classifier.load_weights(load_path)
 
         #Loading the gate tensor
-        gate_fpath = "nlp_logs/{}/gate_tensor.npz".format(model_args["load_weight_exp"])
+        gate_fpath = "{}/gate_tensor.npz".format(data_args["load_weight_path"])
         gate_arr = np.load(gate_fpath)["gate_tensor"]
         gate_tensor = tf.constant(
                         gate_arr,
@@ -863,8 +875,8 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
         )
 
     elif purpose=="gate":
-        checkpoint_path = "nlp_logs/{}/cp_{}.ckpt".format(
-                                    model_args["gate_weight_exp"],
+        checkpoint_path = "{}/cp_{}.ckpt".format(
+                                    data_args["gate_weight_path"],
                                     model_args["gate_weight_epoch"]
         )
         checkpoint_dir = os.path.dirname(checkpoint_path)
@@ -938,9 +950,13 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     #Getting the overall OOD difference
     print("Getting the overall OOD drop!")
     overall_drop = 0.0
+    all_drop_list = []
     all_delta_list=[]
+    all_ood_vacc=[]
+    all_indo_vacc = []
     for cat in classifier.data_args["cat_list"]:
         cat_drop = 0.0
+        all_indo_vacc.append(ood_vacc[cat][cat])
         for dcat in classifier.data_args["cat_list"]:
             drop = ood_vacc[cat][dcat] - ood_vacc[cat][cat]
             #Getting all the domain delta
@@ -949,15 +965,36 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
             
             #Just adding the drop
             if drop<0:
-                cat_drop+=drop 
+                cat_drop+=drop
+                all_drop_list.append(drop)
+                
+            #Addng the validation accuracy to the list
+            all_ood_vacc.append(ood_vacc[cat][dcat])
         print("cat:{}\tdrop:{}".format(cat,cat_drop))
         overall_drop+=cat_drop
     print("Overall Drop:",overall_drop)
     print("Overall variance in the OOD performace:",np.std(all_delta_list))
+    print("Mean Drop in OOD Vacc",np.mean(all_drop_list))
+    print("Mean OOD Valid-Acc:",np.mean(all_ood_vacc))
+    print("Mean INDO Valid-Acc:",np.mean(all_indo_vacc))
+    print("Avg OOD vacc / Avg OOD vacc drop:",np.mean(all_ood_vacc)/abs(np.mean(all_drop_list)))
 
+    #Saving these in the results
+    ood_meta_dict = {}
+    ood_meta_dict["overall_ood_drop"]       = np.sum(all_drop_list)
+    ood_meta_dict["mean_ood_drop"]          = np.mean(all_drop_list)
 
+    ood_meta_dict["overall_ood_std"]        = np.std(all_delta_list)
+
+    ood_meta_dict["mean_all_vacc"]          = np.mean(all_ood_vacc)
+    ood_meta_dict["mean_indo_vacc"]         = np.mean(all_indo_vacc)
+
+    ood_meta_dict["avg_vacc_by_avg_drop"]   = np.mean(all_ood_vacc)/abs(np.mean(all_drop_list))
+    ood_meta_dict["avg_vacc_by_sum_drop"]   = np.mean(all_ood_vacc)/abs(np.sum(all_drop_list))
+
+    
     #Now we have all the indo and ood validation accuracy
-    return indo_vacc,ood_vacc,classifier
+    return indo_vacc,ood_vacc,classifier,ood_meta_dict
 
 def get_spuriousness_rank(classifier,policy):
     #Now getting the importance weights of the topics
@@ -1060,28 +1097,29 @@ def load_and_analyze_transformer(data_args,model_args):
     # classifier.load_weights(checkpoint_path)
 
     #Getting the classifier with the loaded weights and getting the ood accuracy
-    indo_vacc,ood_vacc,classifier = evaluate_ood_indo_performance(
+    indo_vacc,ood_vacc,classifier,ood_meta_dict = evaluate_ood_indo_performance(
                                             data_args=data_args,
                                             model_args=model_args,
                                             only_indo=False,
                                             purpose="load",
     )
+    return ood_meta_dict
 
     #Getting the spuriousness score using the drop in importance idea
-    sent_weights = get_sent_imp_weights(classifier)
-    gate_arr = get_feature_spuriousness(classifier,ood_vacc,sent_weights)
+    # sent_weights = get_sent_imp_weights(classifier)
+    # gate_arr = get_feature_spuriousness(classifier,ood_vacc,sent_weights)
 
 
-    #Printing the different correlation weights
-    get_spuriousness_rank(classifier,"weightedtau")
-    get_spuriousness_rank(classifier,"kendalltau")
-    get_spuriousness_rank(classifier,"spearmanr")
-    _,corr_dict_dot     = get_spuriousness_rank(classifier,"dot")
-    _,corr_dict_wdot    = get_spuriousness_rank(classifier,"weighted_dot")
-    _,corr_dict_cos     = get_spuriousness_rank(classifier,"cosine")
-    _,corr_dict_wcos    = get_spuriousness_rank(classifier,"weighted_cosine")
+    # #Printing the different correlation weights
+    # get_spuriousness_rank(classifier,"weightedtau")
+    # get_spuriousness_rank(classifier,"kendalltau")
+    # get_spuriousness_rank(classifier,"spearmanr")
+    # _,corr_dict_dot     = get_spuriousness_rank(classifier,"dot")
+    # _,corr_dict_wdot    = get_spuriousness_rank(classifier,"weighted_dot")
+    # _,corr_dict_cos     = get_spuriousness_rank(classifier,"cosine")
+    # _,corr_dict_wcos    = get_spuriousness_rank(classifier,"weighted_cosine")
 
-    return corr_dict_dot,corr_dict_cos
+    # return corr_dict_dot,corr_dict_cos
 
     # dim_score = np.mean(sent_weights,axis=1) * np.std(sent_weights,axis=1)
     # spurious_dims = np.argsort(dim_score)
@@ -1104,10 +1142,79 @@ def load_and_analyze_transformer(data_args,model_args):
 
 def dump_arguments(arg_dict,expt_name,fname):
     #This function will dump the arguments in a file for tracking purpose
-    filepath = "nlp_logs/{}/{}.txt".format(expt_name,fname)
+    filepath = "{}/{}.txt".format(expt_name,fname)
     with open(filepath,"w") as whandle:
         json.dump(arg_dict,whandle,indent="\t")
+
+
+def run_parallel_jobs_subset_exp(data_args,model_args):
+    '''
+    This job runner will run the subset of all the topic dimension in the 
+    to see if we are indeed able to find the correct causal subset 
+    using our definition 1 of supuriousness.
+
+    Definition: The causal subset will have minimum total drop in performance
+    '''
+    #First of all we need to get all the feature subset we want to make
+    all_subset_loc=[]
+    index_list = range(0,len(data_args["topic_list"]))
+    for deg in range(0,len(data_args["topic_list"])+1):
+        #Getting the subset location
+        all_subset_loc += list(combinations(index_list,deg))
     
+    #Creating all the experiment metadata
+    all_expt_config = []
+    for sub in all_subset_loc:
+        alive_dims = tuple(set(index_list).difference(sub))
+        config = {}
+        config["mask_feature_dims"]=sub
+        config["alive_feature_dims"] = alive_dims
+        config["data_args"]=data_args.copy()
+        config["model_args"]=model_args.copy()
+
+        #Now changing the mask argument in the data args
+        config["data_args"]["mask_feature_dims"]=sub
+        config["data_args"]["expt_name"]="exp.synct.{}".format(alive_dims)
+        config["model_args"]["expt_name"]="exp.synct.{}".format(alive_dims)
+
+        #Adding the experiment config
+        all_expt_config.append(config)
+    
+    #Creating the worker kernel
+    def worker_kernel(problem_config):
+        expt_main_path = problem_config["data_args"]["expt_meta_path"]
+        #Getting the arguments
+        data_args = problem_config["data_args"]
+        model_args = problem_config["model_args"]
+        #Starting the training phase
+        transformer_trainer(data_args,model_args)
+
+        #Now starting the validation run
+        data_args["load_weight_path"]=data_args["expt_meta_path"]
+        data_args["load_weight_epoch"]=model_args["epochs"]-1
+        ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
+
+        #Adding the result to the config
+        problem_config["ood_meta_dict"]=ood_meta_dict
+
+        #Dumping the result in one json
+        import json
+        fname = "{}/results_{}.json".format(
+                                data_args["expt_meta_path"],
+                                problem_config["alive_feature_dims"]
+        )
+        with open(fname,"w") as fp:
+            json.dump(problem_config,fp,indent="\t")
+        
+        return problem_config
+
+    #Now we will start the parallel experiment
+    ncpus = int(3.0/4.0*multiprocessing.cpu_count())
+    with Pool(ncpus) as p:
+            production = p.map(worker_kernel,all_expt_config)
+    
+    return 
+       
 
 if __name__=="__main__":
     import argparse
@@ -1155,7 +1262,7 @@ if __name__=="__main__":
     data_args["lda_epochs"]=25
     data_args["min_df"]=0.0
     data_args["max_df"]=1.0
-    data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
+    # data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
 
     #Defining the Model args
     model_args={}
@@ -1179,6 +1286,7 @@ if __name__=="__main__":
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
     os.makedirs(meta_folder,exist_ok=True)
+    data_args["expt_meta_path"]=meta_folder
 
     transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
