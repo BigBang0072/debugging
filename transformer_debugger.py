@@ -531,8 +531,10 @@ def transformer_trainer(data_args,model_args):
     )
 
     #Creating the dataset object
-    data_handler = DataHandleTransformer(data_args)
-    all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    # data_handler = DataHandleTransformer(data_args)
+    # all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    #Lets reuse the same dataset
+    all_cat_ds = data_args["all_cat_ds"]
 
     # checkpoint_path = "nlp_logs/{}/cp.ckpt".format(model_args["expt_name"])
     # checkpoint_dir = os.path.dirname(checkpoint_path)
@@ -855,8 +857,9 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     )
 
     #Creating the dataset object
-    data_handler = DataHandleTransformer(data_args)
-    all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    # data_handler = DataHandleTransformer(data_args)
+    # all_cat_ds,all_topic_ds = data_handler.amazon_reviews_handler()
+    all_cat_ds = data_args["all_cat_ds"]
 
     if purpose=="load":
         load_path = "{}/cp_cat_{}.ckpt".format(
@@ -1162,6 +1165,10 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
         #Getting the subset location
         all_subset_loc += list(combinations(index_list,deg))
     
+    #Creating one single dataset for time saving and uniformity
+    data_handler = DataHandleTransformer(data_args)
+    all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
+
     #Creating all the experiment metadata
     all_expt_config = []
     for sub in all_subset_loc:
@@ -1177,6 +1184,10 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
         config["data_args"]["expt_name"]="exp.synct.{}".format(alive_dims)
         config["model_args"]["expt_name"]="exp.synct.{}".format(alive_dims)
 
+        
+        #Now we have the cat_df to the config for reuse of dataset creation
+        config["data_args"]["new_all_cat_df"]=new_all_cat_df.copy()
+
         #Adding the experiment config
         all_expt_config.append(config)
     
@@ -1190,6 +1201,26 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
 
 #Creating the worker kernel
 def worker_kernel(problem_config):
+    #First of we have to create the masked dataset
+    data_handler = DataHandleTransformer(problem_config["data_args"])
+    #Creating the zipped dataset
+    print("Creating the masked dataset for worker:{}".format(problem_config["alive_feature_dims"]))
+    all_cat_ds = {}
+    for cat in problem_config["data_args"]["cat_list"]:
+        cat_df = problem_config["data_args"]["new_all_cat_df"][cat]
+        #Getting the dataset object
+        cat_ds = data_handler._convert_df_to_dataset(
+                                    df=cat_df,
+                                    doc_col_name="topic_feature",
+                                    label_col_name="label",
+                                    mask_feature_dims=problem_config["mask_feature_dims"],
+                                    # topic_col_name="topic",
+                                    # topic_weight_col_name="topic_weight",
+        )
+        all_cat_ds[cat]=cat_ds
+    problem_config["data_args"]["all_cat_ds"]=all_cat_ds
+
+    print("Training the worker:{}".format(problem_config["alive_feature_dims"]))
     expt_main_path = problem_config["data_args"]["expt_meta_path"]
     #Getting the arguments
     data_args = problem_config["data_args"]
@@ -1198,17 +1229,22 @@ def worker_kernel(problem_config):
     transformer_trainer(data_args,model_args)
 
     #Now starting the validation run
-    data_args["load_weight_path"]=expt_main_path
+    print("Validating the worker:{}".format(problem_config["alive_feature_dims"]))
+    data_args["load_weight_path"]=data_args["expt_meta_path"]
     model_args["load_weight_epoch"]=model_args["epochs"]-1
     ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
 
     #Adding the result to the config
     problem_config["ood_meta_dict"]=ood_meta_dict
 
+
+    #Removing the dataset related objects
+    del problem_config["data_args"]["new_all_cat_df"]
+    del problem_config["data_args"]["all_cat_ds"]
     #Dumping the result in one json
     import json
     fname = "{}/results_{}.json".format(
-                            data_args["expt_meta_path"],
+                            expt_main_path,
                             problem_config["alive_feature_dims"]
     )
     with open(fname,"w") as fp:
