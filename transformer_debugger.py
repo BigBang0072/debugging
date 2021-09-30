@@ -507,12 +507,12 @@ class TransformerClassifier(keras.Model):
 def transformer_trainer(data_args,model_args):
     '''
     '''
-    #Creating the metadata folder
-    data_args["expt_meta_path"] = "{}/{}".format(
-                                            data_args["expt_meta_path"],
-                                            model_args["expt_name"]
-    )
-    os.makedirs(data_args["expt_meta_path"],exist_ok=True)
+    # #Creating the metadata folder
+    # data_args["expt_meta_path"] = "{}/{}".format(
+    #                                         data_args["expt_meta_path"],
+    #                                         model_args["expt_name"]
+    # )
+    # os.makedirs(data_args["expt_meta_path"],exist_ok=True)
 
     #First of all we will load the gate array we are truing to run gate experiemnt
     gate_tensor = get_dimension_gate(data_args,model_args)
@@ -1110,7 +1110,7 @@ def load_and_analyze_transformer(data_args,model_args):
                                             only_indo=False,
                                             purpose="load",
     )
-    return ood_meta_dict
+    return ood_vacc,ood_meta_dict
 
     #Getting the spuriousness score using the drop in importance idea
     # sent_weights = get_sent_imp_weights(classifier)
@@ -1229,17 +1229,26 @@ def worker_kernel(problem_config):
     #Getting the arguments
     data_args = problem_config["data_args"]
     model_args = problem_config["model_args"]
+
+    #Creating the metadata folder
+    data_args["expt_meta_path"] = "{}/{}".format(
+                                            data_args["expt_meta_path"],
+                                            model_args["expt_name"]
+    )
+    os.makedirs(data_args["expt_meta_path"],exist_ok=True)
+
     #Starting the training phase
-    transformer_trainer(data_args,model_args)
+    # transformer_trainer(data_args,model_args)
 
     #Now starting the validation run
     print("Validating the worker:{}".format(problem_config["alive_feature_dims"]))
     data_args["load_weight_path"]=data_args["expt_meta_path"]
     model_args["load_weight_epoch"]=model_args["epochs"]-1
-    ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
+    ood_vacc,ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
 
     #Adding the result to the config
     problem_config["ood_meta_dict"]=ood_meta_dict
+    problem_config["ood_vacc"]=ood_vacc
 
 
     #Removing the dataset related objects
