@@ -619,15 +619,28 @@ class DataHandleTransformer():
         #Now we will label the document
         assert type(pdoc) == type([1,2]), "pdoc is not list of words"
 
+        #TODO: counting the word occurance for better
+        pdoc_dict = defaultdict(int)
+        for wrd in pdoc:
+            pdoc_dict[wrd]+=1
+
         #Now getting the topic distribution for this document
         pdoc_set = set(pdoc)
         topic_label = []
         for topic_set in topic_list:
+
+            #Binary Feature
             # if len(pdoc_set.intersection(topic_set))!=0:
             #     topic_label.append(1.0)
             # else:
             #     topic_label.append(0.0)
-            topic_label.append(len(pdoc_set.intersection(topic_set)))
+            
+            #Counting the number of intersection
+            # topic_label.append(len(pdoc_set.intersection(topic_set)))
+
+            #Counting the frequency of the number of intersection too
+            topic_freq = sum([pdoc_dict[tword] for tword in topic_set])
+            topic_label.append(topic_freq)
 
         return np.array(topic_label)
 
