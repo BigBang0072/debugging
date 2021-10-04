@@ -623,10 +623,11 @@ class DataHandleTransformer():
         pdoc_set = set(pdoc)
         topic_label = []
         for topic_set in topic_list:
-            if len(pdoc_set.intersection(topic_set))!=0:
-                topic_label.append(1.0)
-            else:
-                topic_label.append(0.0)
+            # if len(pdoc_set.intersection(topic_set))!=0:
+            #     topic_label.append(1.0)
+            # else:
+            #     topic_label.append(0.0)
+            topic_label.append(len(pdoc_set.intersection(topic_set)))
 
         return np.array(topic_label)
 
