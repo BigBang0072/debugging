@@ -1238,7 +1238,7 @@ def worker_kernel(problem_config):
     os.makedirs(data_args["expt_meta_path"],exist_ok=True)
 
     #Starting the training phase
-    # transformer_trainer(data_args,model_args)
+    transformer_trainer(data_args,model_args)
 
     #Now starting the validation run
     print("Validating the worker:{}".format(problem_config["alive_feature_dims"]))
