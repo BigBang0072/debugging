@@ -12,6 +12,8 @@ from spacy.lang.en import English
 from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
 from sklearn.feature_extraction.text import CountVectorizer
 
+from sklearn.neighbors import NearestNeighbors
+
 import os
 import gzip
 import json
@@ -610,11 +612,16 @@ class DataHandleTransformer():
             "history"
         ])
 
+        #Creating the topic list
         topic_list = [
             pos_adjective,neg_adjective,negations,adverbs,
             religion,gender,electronics,pronoun,kitchen,genre
         ]
         self.data_args["num_topics"]=len(topic_list)
+
+        #Here we will go with extension of the topic set
+        #First of all loading the word embedding
+        self._load_word_embedding()
 
         #Now we will label the document
         assert type(pdoc) == type([1,2]), "pdoc is not list of words"
@@ -628,7 +635,11 @@ class DataHandleTransformer():
         pdoc_set = set(pdoc)
         topic_label = []
         for topic_set in topic_list:
-
+            print("\n\nGetting the newly extended topic set")
+            print("InitialSet:\n ",topic_set)
+            #First of all getting the new topic set 
+            topic_set = self._extend_topic_set_wordembedding(topic_set)
+            print("ExtendedSet:\n",topic_set)
             #Binary Feature
             # if len(pdoc_set.intersection(topic_set))!=0:
             #     topic_label.append(1.0)
@@ -643,6 +654,63 @@ class DataHandleTransformer():
             topic_label.append(topic_freq)
 
         return np.array(topic_label)
+    
+    def _extend_topic_set_wordembedding(self,topic_set):
+        '''
+        Given the seed words for the topic we will extend this set to
+        using the neighborhood of the word2vec embedding hoping that
+        they will be useful.
+        '''
+        #Get the embedding of words in the set
+        seed_words = [word for word in topic_set if word in self.vocab_w2i]
+        seed_embs = np.stack([self.emb_matrix[self.vocab_w2i[word]] 
+                        for word in seed_words
+                    ],axis=0)
+        
+        #Now we will find the nearest neighbors
+        print("Finding the neighbors! Sit Tight!")
+        n_indices = self.neigh_tree.kneighbors(X=seed_embs,
+                                    n_neighbors=self.data_args["num_neigh"],
+                                    return_distance=False)
+        #Getting the neighbor words for this topic set
+        new_topic_set = []
+        for zidx in range(n_indices.shape[0]):
+            for yidx in range(n_indices.shape[1]):
+                n_idx = n_indices[zidx,yidx]
+                new_topic_set.append(self.vocab_i2w[n_idx])
+        new_topic_set=set(new_topic_set)
+
+        return new_topic_set
+    
+    def _load_word_embedding(self,):
+        #Loading the embedding from the gensim repo
+        print("Loading the WordVectors via Gensim! Hold Tight!")
+        emb_model = gensim_api.load(self.data_args["emb_path"])
+
+        #Next we will load the smallar subsampled vocablury
+        vocab_df = pd.read_csv(self.data_args["vocab_path"],sep="\t",header=0)
+        vocab_list = self.vocab_df["word"].tolist()
+
+        #Now filtering out the required embeddings
+        emb_matrix = []
+        self.vocab_w2i = {}
+        for widx,word in enumerate(self.vocab_list):
+            try:
+                word_vec = emb_model.get_vector(word)
+                emb_matrix.append(word_vec)
+                #Adding the word to vocablury
+                self.vocab_w2i[word]=len(self.vocab_w2i)
+            except:
+                print("Missed Word: ",word)
+        #Now we will assign this matrix to the class
+        self.emb_matrix = np.stack(emb_matrix,axis=0)
+        self.vocab_i2w = {idx:word for idx,word in self.vocab_w2i.items()}
+
+        #Lets create the neighborhood object too here
+        self.neigh_tree = NearestNeighbors(algorithm="auto",
+                                        metric="minkowski",#DEBUG
+                                        p=2,leaf_size=30,
+                                        n_jobs=-1).fit(self.emb_matrix)
 
     def _save_topic_distiribution(self,model, vectorizer,fname, top_n=100):
         #Saving the topic distribution to a file

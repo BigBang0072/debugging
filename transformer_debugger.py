@@ -1275,6 +1275,10 @@ if __name__=="__main__":
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int)
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float)
 
+    parser.add_argument('-emb_path',dest="emb_path",type=str)
+    parser.add_argument('-vocab_path',"vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
+    parser.add_argument('-num_neigh',"num_neigh",type=int)
+
     parser.add_argument("-temb_dim",dest="temb_dim",type=int)
     parser.add_argument("--normalize_temb",default=False,action="store_true")
 
