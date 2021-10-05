@@ -620,10 +620,52 @@ class DataHandleTransformer():
             "history"
         ])
 
+        #Domain specific topics itself
+        arts = set([
+            "painting","picture","sculpture","artistic","arts",
+            "painter", "color"
+        ])
+
+        books = set([
+            "book", "cover", "binding", "author", "novel", "comic", 
+            "stationary", "poet"
+        ])
+
+        clothes = set([ 
+            "clothes", "faishon", "jeans", "shirt", "frock", "pant", 
+            "costume", "tie", "belt"
+        ])
+
+        groceries = set([ 
+            "groceries", "rice", "vegetable", "oil", "beef", "milk", "bread",
+            "pasta", "corn", "dairy"
+        ])
+
+        movies = set([ 
+            "movie", "animation", "film", "show", "theatre", "hollywood",
+            "disney", "producer", "director", "actor", "actress" 
+        ])
+
+        pets = set([ 
+            "pet", "dog", "cat", "snake", "rabbit", "parrot", "hamster",
+            "owl", "lizard", "store"
+        ])
+
+        phone = set([ 
+            "phone","mobile", "samsung", "nokia", "blackberry", "telephone",
+            "sim", "battery","charger", "cable"
+        ])
+
+        tools = set([ 
+            "tool","hacksaw","knife", "saw", "screw", "blower", "hammer",
+            "blade", "bolt", "keys" ,"key"
+        ])
+
         #Creating the topic list
         old_topic_list = [
             pos_adjective,neg_adjective,negations,adverbs,
-            religion,gender,electronics,pronoun,kitchen,genre
+            religion,gender,electronics,pronoun,kitchen,genre,
+            arts,books,clothes,groceries,movies,pets,phone,tools
         ]
 
         if(extend==True):
@@ -698,7 +740,7 @@ class DataHandleTransformer():
             for yidx in range(n_indices.shape[1]):
                 n_idx = n_indices[zidx,yidx]
                 new_topic_set.append(self.vocab_i2w[n_idx])
-        new_topic_set=set(new_topic_set)
+        new_topic_set=set(new_topic_set+seed_words)
 
         return new_topic_set
     
