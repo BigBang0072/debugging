@@ -262,3 +262,12 @@ python transformer_debugger.py -expt_num "10.3.gate.5" -num_samples 1000 -num_to
 python transformer_debugger.py -expt_num "ct3.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
 #Counting the number of intersection too
 python transformer_debugger.py -expt_num "ct4.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
+#Using the frequqncy of all the words in the topic as feature
+python transformer_debugger.py -expt_num "ct5.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
+
+#Adding the wordembedding assist for new words
+python transformer_debugger.py -expt_num "ct6.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+python transformer_debugger.py -expt_num "ct6.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+python transformer_debugger.py -expt_num "ct6.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 40
+python transformer_debugger.py -expt_num "ct6.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 80
+python transformer_debugger.py -expt_num "ct6.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 160
