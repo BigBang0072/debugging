@@ -256,3 +256,9 @@ python transformer_debugger.py -expt_num "10.3.gate.5" -num_samples 1000 -num_to
 # python transformer_debugger.py -expt_num "11.2" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0
 # python transformer_debugger.py -expt_num "11.3" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0
 # python transformer_debugger.py -expt_num "11.4" -num_samples 2000 -num_topic_samples 1200 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 100.0
+
+
+#Using the topic as binary feature [word present on not from atleast one of topic]
+python transformer_debugger.py -expt_num "ct3.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
+#Counting the number of intersection too
+python transformer_debugger.py -expt_num "ct4.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
