@@ -418,6 +418,14 @@ class DataHandleTransformer():
         approach which we think are clean and have clear distinction ob being 
         spurious and causal.
         '''
+        #First of all we get the topic list
+        if(self.data_args["emb_path"]!=None):
+            self._load_word_embedding()
+            self._create_topic_list(extend=True)
+        else:
+            self._create_topic_list(extend=False)
+
+
         complete_topic_label_list = []
         complete_topic_list = []
         complete_doc_list = []
@@ -550,8 +558,8 @@ class DataHandleTransformer():
 
         #Now creating the dataset object from here
         return topic_df
-   
-    def _get_topic_annotation_manual(self,pdoc):
+    
+    def _create_topic_list(self,extend):
         '''
         '''
         #Should have high importance
@@ -613,15 +621,31 @@ class DataHandleTransformer():
         ])
 
         #Creating the topic list
-        topic_list = [
+        old_topic_list = [
             pos_adjective,neg_adjective,negations,adverbs,
             religion,gender,electronics,pronoun,kitchen,genre
         ]
+
+        if(extend==True):
+            new_topic_list = []
+            for topic_set in old_topic_list:
+                print("\n\nGetting the newly extended topic set")
+                print("InitialSet:\n ",topic_set)
+                #First of all getting the new topic set 
+                topic_set = self._extend_topic_set_wordembedding(topic_set)
+                print("ExtendedSet:\n",topic_set)
+                new_topic_list.append(topic_set)
+            
+            self.topic_list = new_topic_list
+        else:
+            self.topic_list = old_topic_list
+
+    def _get_topic_annotation_manual(self,pdoc):
+        '''
+        '''
+        topic_list = self.topic_list
         self.data_args["num_topics"]=len(topic_list)
 
-        #Here we will go with extension of the topic set
-        #First of all loading the word embedding
-        self._load_word_embedding()
 
         #Now we will label the document
         assert type(pdoc) == type([1,2]), "pdoc is not list of words"
@@ -635,11 +659,7 @@ class DataHandleTransformer():
         pdoc_set = set(pdoc)
         topic_label = []
         for topic_set in topic_list:
-            print("\n\nGetting the newly extended topic set")
-            print("InitialSet:\n ",topic_set)
-            #First of all getting the new topic set 
-            topic_set = self._extend_topic_set_wordembedding(topic_set)
-            print("ExtendedSet:\n",topic_set)
+            
             #Binary Feature
             # if len(pdoc_set.intersection(topic_set))!=0:
             #     topic_label.append(1.0)
@@ -689,12 +709,12 @@ class DataHandleTransformer():
 
         #Next we will load the smallar subsampled vocablury
         vocab_df = pd.read_csv(self.data_args["vocab_path"],sep="\t",header=0)
-        vocab_list = self.vocab_df["word"].tolist()
+        vocab_list = vocab_df["word"].tolist()
 
         #Now filtering out the required embeddings
         emb_matrix = []
         self.vocab_w2i = {}
-        for widx,word in enumerate(self.vocab_list):
+        for widx,word in enumerate(vocab_list):
             try:
                 word_vec = emb_model.get_vector(word)
                 emb_matrix.append(word_vec)
@@ -704,7 +724,7 @@ class DataHandleTransformer():
                 print("Missed Word: ",word)
         #Now we will assign this matrix to the class
         self.emb_matrix = np.stack(emb_matrix,axis=0)
-        self.vocab_i2w = {idx:word for idx,word in self.vocab_w2i.items()}
+        self.vocab_i2w = {idx:word for word,idx in self.vocab_w2i.items()}
 
         #Lets create the neighborhood object too here
         self.neigh_tree = NearestNeighbors(algorithm="auto",

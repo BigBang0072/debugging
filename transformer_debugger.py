@@ -1276,8 +1276,8 @@ if __name__=="__main__":
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float)
 
     parser.add_argument('-emb_path',dest="emb_path",type=str)
-    parser.add_argument('-vocab_path',"vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
-    parser.add_argument('-num_neigh',"num_neigh",type=int)
+    parser.add_argument('-vocab_path',dest="vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
+    parser.add_argument('-num_neigh',dest="num_neigh",type=int)
 
     parser.add_argument("-temb_dim",dest="temb_dim",type=int)
     parser.add_argument("--normalize_temb",default=False,action="store_true")
@@ -1316,6 +1316,9 @@ if __name__=="__main__":
     data_args["lda_epochs"]=25
     data_args["min_df"]=0.0
     data_args["max_df"]=1.0
+    data_args["emb_path"]=args.emb_path
+    data_args["vocab_path"]=args.vocab_path
+    data_args["num_neigh"]=args.num_neigh
     # data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
 
     #Defining the Model args
