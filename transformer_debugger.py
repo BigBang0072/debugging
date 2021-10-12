@@ -1171,7 +1171,12 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
     
     #Creating one single dataset for time saving and uniformity
     data_handler = DataHandleTransformer(data_args)
-    all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
+    if "amazon" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
+    elif "nlp_toy" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
+    else:
+        raise NotImplementedError()
 
     #Creating all the experiment metadata
     all_expt_config = []
@@ -1275,6 +1280,11 @@ if __name__=="__main__":
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int)
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float)
 
+    parser.add_argument('-path',dest="path",type=str)
+    parser.add_argument('-task_name',dest="task_name",type=str,default="sentiment")
+    parser.add_argument('-spurious_ratio',dest="spurious_ratio",type=int,default=None)
+    parser.add_argument('-causal_ratio',dest="causal_ratio",type=int,default=None)
+
     parser.add_argument('-emb_path',dest="emb_path",type=str)
     parser.add_argument('-vocab_path',dest="vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
     parser.add_argument('-num_neigh',dest="num_neigh",type=int)
@@ -1300,7 +1310,10 @@ if __name__=="__main__":
 
     #Defining the Data args
     data_args={}
-    data_args["path"] = "dataset/amazon/"
+    data_args["path"] = args.path                   #"dataset/amazon/"
+    data_args["task_name"] = args.task_name         #"sentiment or regard ..."
+    data_args["causal_ratio"] = args.causal_ratio
+    data_args["spurious_ratio"] = args.spurious_ratio
     data_args["transformer_name"]=args.transformer
     data_args["num_class"]=2
     data_args["max_len"]=200
