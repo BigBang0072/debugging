@@ -214,36 +214,36 @@ mkdir nlp_logs
 # python transformer_debugger.py -expt_num "10.0.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -gate_weight_exp "10.0" -gate_weight_epoch 2 -gate_var_cutoff "0.4"
 # python transformer_debugger.py -expt_num "10.0.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.3" -load_weight_epoch 2
 
-python transformer_debugger.py -expt_num "10.0.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
-python transformer_debugger.py -expt_num "10.0.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.2"
-python transformer_debugger.py -expt_num "10.0.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
-python transformer_debugger.py -expt_num "10.0.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+# python transformer_debugger.py -expt_num "10.0.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+# python transformer_debugger.py -expt_num "10.0.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+# python transformer_debugger.py -expt_num "10.0.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+# python transformer_debugger.py -expt_num "10.0.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 0.0 -load_weight_exp "10.0.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
 
 
 
 
-python transformer_debugger.py -expt_num "10.1.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
-python transformer_debugger.py -expt_num "10.1.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
-python transformer_debugger.py -expt_num "10.1.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
-python transformer_debugger.py -expt_num "10.1.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
-python transformer_debugger.py -expt_num "10.1.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
-python transformer_debugger.py -expt_num "10.1.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+# python transformer_debugger.py -expt_num "10.1.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+# python transformer_debugger.py -expt_num "10.1.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
+# python transformer_debugger.py -expt_num "10.1.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+# python transformer_debugger.py -expt_num "10.1.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
+# python transformer_debugger.py -expt_num "10.1.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+# python transformer_debugger.py -expt_num "10.1.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 1.0 -load_weight_exp "10.1.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
 
 
-python transformer_debugger.py -expt_num "10.2.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
-python transformer_debugger.py -expt_num "10.2.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
-python transformer_debugger.py -expt_num "10.2.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
-python transformer_debugger.py -expt_num "10.2.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
-python transformer_debugger.py -expt_num "10.2.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
-python transformer_debugger.py -expt_num "10.2.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+# python transformer_debugger.py -expt_num "10.2.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+# python transformer_debugger.py -expt_num "10.2.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
+# python transformer_debugger.py -expt_num "10.2.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+# python transformer_debugger.py -expt_num "10.2.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
+# python transformer_debugger.py -expt_num "10.2.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+# python transformer_debugger.py -expt_num "10.2.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -load_weight_exp "10.2.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
 
 
-python transformer_debugger.py -expt_num "10.3.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
-python transformer_debugger.py -expt_num "10.3.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
-python transformer_debugger.py -expt_num "10.3.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
-python transformer_debugger.py -expt_num "10.3.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
-python transformer_debugger.py -expt_num "10.3.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
-python transformer_debugger.py -expt_num "10.3.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
+# python transformer_debugger.py -expt_num "10.3.gate.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.0" -load_weight_epoch 2 -gate_var_cutoff "0.05"
+# python transformer_debugger.py -expt_num "10.3.gate.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.1" -load_weight_epoch 2 -gate_var_cutoff "0.1"
+# python transformer_debugger.py -expt_num "10.3.gate.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.2" -load_weight_epoch 2 -gate_var_cutoff "0.2"
+# python transformer_debugger.py -expt_num "10.3.gate.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.3" -load_weight_epoch 2 -gate_var_cutoff "0.4"
+# python transformer_debugger.py -expt_num "10.3.gate.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.4" -load_weight_epoch 2 -gate_var_cutoff "0.6"
+# python transformer_debugger.py -expt_num "10.3.gate.5" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 50.0 -load_weight_exp "10.3.gate.5" -load_weight_epoch 2 -gate_var_cutoff "0.8"
 
 
 # python transformer_debugger.py -expt_num "10.2.gate" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 3 -transformer "bert-base-uncased" -l1_lambda 10.0 -gate_weight_exp "10.2" -gate_weight_epoch 2 -gate_var_cutoff "neg"
@@ -259,15 +259,38 @@ python transformer_debugger.py -expt_num "10.3.gate.5" -num_samples 1000 -num_to
 
 
 #Using the topic as binary feature [word present on not from atleast one of topic]
-python transformer_debugger.py -expt_num "ct3.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
-#Counting the number of intersection too
-python transformer_debugger.py -expt_num "ct4.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
-#Using the frequqncy of all the words in the topic as feature
-python transformer_debugger.py -expt_num "ct5.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
+# python transformer_debugger.py -expt_num "ct3.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
+# #Counting the number of intersection too
+# python transformer_debugger.py -expt_num "ct4.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
+# #Using the frequqncy of all the words in the topic as feature
+# python transformer_debugger.py -expt_num "ct5.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1
 
 #Adding the wordembedding assist for new words
-python transformer_debugger.py -expt_num "ct6.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
-python transformer_debugger.py -expt_num "ct6.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
-python transformer_debugger.py -expt_num "ct6.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 40
-python transformer_debugger.py -expt_num "ct6.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 80
-python transformer_debugger.py -expt_num "ct6.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 10 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 160
+# python transformer_debugger.py -expt_num "ct6.0" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+# python transformer_debugger.py -expt_num "ct6.1" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+# python transformer_debugger.py -expt_num "ct6.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 40
+# python transformer_debugger.py -expt_num "ct6.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 80
+# python transformer_debugger.py -expt_num "ct6.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 160
+
+#Added domain specific topics
+
+python transformer_debugger.py -expt_num "ct7.1" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+python transformer_debugger.py -expt_num "ct7.0" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+
+python transformer_debugger.py -expt_num "ct8.0" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+python transformer_debugger.py -expt_num "ct8.1" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+
+
+python transformer_debugger.py -expt_num "ct8.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 
+python transformer_debugger.py -expt_num "ct8.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+python transformer_debugger.py -expt_num "ct8.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+
+python transformer_debugger.py -expt_num "ct8.5" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 
+
+
+# python transformer_debugger.py -expt_num "ct7.1" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+# python transformer_debugger.py -expt_num "ct7.1.1" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "word2vec-google-news-300" -num_neigh 20
+
+# python transformer_debugger.py -expt_num "ct7.2" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 40
+# python transformer_debugger.py -expt_num "ct7.3" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 80
+# python transformer_debugger.py -expt_num "ct7.4" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 160
