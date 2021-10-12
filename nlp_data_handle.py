@@ -661,11 +661,34 @@ class DataHandleTransformer():
             "blade", "bolt", "keys" ,"key"
         ])
 
+
+        #Toy Dataset specific topics
+        male = set([ 
+            "man","adam"
+        ])
+        female = set([ 
+            "women","eve"
+        ])
+        white = set([ 
+            "white","john"
+        ])
+        black = set([ 
+            "black","smith",
+        ])
+        straight = set([ 
+            "straight"
+        ])
+        gay = set([ 
+            "gay"
+        ])
+
+
         #Creating the topic list
         old_topic_list = [
             pos_adjective,neg_adjective,negations,adverbs,
-            religion,gender,electronics,pronoun,kitchen,genre,
-            arts,books,clothes,groceries,movies,pets,phone,tools
+            #religion,gender,electronics,pronoun,kitchen,genre,
+            #arts,books,clothes,groceries,movies,pets,phone,tools,
+            male,female,white,black,straight,gay,
         ]
 
         if(extend==True):
@@ -1059,6 +1082,180 @@ class DataHandleTransformer():
         # dataset = dataset.shuffle(self.data_args["shuffle_size"])
         # dataset = dataset.batch(self.data_args["batch_size"])
         # return dataset
+
+    def toy_nlp_dataset_handler(self,):
+        '''
+        This function will handle the dataset creation of the toy nlp dataset
+        where we will induce the desired bias by ourselves and then test both
+        the phases of our algorithm.
+        '''
+        #First of all we have to load the template dataset
+        template_df = self._tnlp_load_template_dataset(self.data_args["task_name"])
+
+        #Now we will create dataset for different domain/category
+        all_cat_df = {}
+        for cat_name in self.data_args["cat_list"]:
+            all_cat_df[cat_name] = self._tnlp_get_category_dataset(
+                                        cat_name=cat_name,
+                                        causal_ratio=self.data_args["causal_ratio"],
+                                        spuriousness_ratio=self.data_args["spurious_ratio"],
+                                        template_df=template_df
+            )
+        
+        all_topic_df,new_all_cat_df = self._get_topic_labels_manual(
+                                            all_cat_df=all_cat_df,
+                                            doc_col_name="doc",
+                                            pdoc_name="pdoc",
+                                            label_col_name="label",
+                                            # topic_col_name="topic",
+                                            # topic_weight_col_name="topic_weight"
+        )
+        #Empty for now
+        all_cat_ds = {}
+        all_topic_ds = {}
+        
+
+        return all_cat_ds,all_topic_ds,new_all_cat_df
+
+    def _tnlp_load_template_dataset(self,task_name):
+        #Loading all the dataset for the given task
+        task_path = self.data_args["path"]+task_name+"/{}.tsv"
+        fnames = ["train","dev","test","train_other"]
+
+        #Aggregating all the tmeplates
+        all_example_df = []
+        for fname in fnames:
+            fpath = fname.format(fname)
+            fdf = pd.read_csv(fpath,sep="\t",names=["label","template"])
+            #Filtering out the positive and negative labels
+            fdf = fdf[fdf["label"]==1 | fdf["label"]==-1]
+            #Now making the negative lable as 0
+            fdf.loc[fdf["label"]==-1,"label"]=0
+
+            #Adding to the aggregate list
+            all_example_df.append(fdf)
+        
+        template_df = pd.concat(all_example_df,ignore_index=True)
+
+        return template_df
+
+    def _tnlp_get_category_dataset(self,cat_name,
+                                        causal_ratio,spuriousness_ratio,
+                                        template_df):
+        '''
+        This will use the template dataset and induce bias towards a particular 
+        group/demographies wrt to the task
+
+        causal_ratio         : the accruacy we hope to achieve if we just use
+                                causal feature relavant to the task (keep 0.75)
+        spuriousness_ratio   : the accuracy which an indomain optimal classifier
+                                will be able to use if they use these spurious feature.
+                                (kepp 0.90)
+        '''
+        print("Creating category df for: {}".format(cat_name))
+        #Getting the replacement dict
+        replacement_dict = self._tnlp_catwise_replacement_dict_manual()[cat_name]
+
+        #Now we will have to create instance of examples from the template dataset
+        cat_df = template_df.copy(deep=True)
+        num_examples = cat_df.shape[0]
+
+        #Creating the flip label for causal limit
+        num_keep_causal = int(causal_ratio*num_examples)
+        causal_flip = np.random.permutation(
+                    ["same"]*num_keep_causal+\
+                    ["flip"]*(num_examples-num_keep_causal)
+        )
+
+        #Creating the flip label for the spuroius limit
+        num_keep_spurious = int(spuriousness_ratio*num_examples)
+        spurious_flip = np.random.permutation(
+                    ["same"]*num_keep_spurious+\
+                    ["flip"]*(num_examples-num_keep_spurious)
+        )
+        #Our flipper function
+        def flip_label(label,flip_decision):
+            if flip_decision=="flip":
+                return 1 if label==0 else 0
+            else:
+                return label
+
+        #Creating the cateogory dataframe
+        label_list=[]
+        doc_list = []
+        pdoc_list = []
+        for ridx in range(cat_df.shape[0]):
+            #Flipping the label t have a causal threshold
+            label = cat_df.iloc[ridx]["label"]
+            label = flip_label(label,causal_flip[ridx])
+
+            #Getting the text to replace the template with
+            replace_frag = np.random.choice(replacement_dict[label],size=1)
+            #Again replacing #Adding noise to label wrt to spurious feature
+            label = flip_label(label,spurious_flip[ridx])
+            label_list.append(label)
+
+            #Replacing the template
+            template_text = cat_df.iloc[ridx]["template"]
+            replaced_text = re.sub('XYZ',replace_frag,template_text)
+            doc_list.append(replaced_text)
+
+            #Processing the doc
+            doc_tokens,doclen,token_list = self._clean_the_document(replaced_text)
+            pdoc_list.append(token_list)
+        
+        #Now creating the category dataframe
+        cat_df = pd.DataFrame(
+                    dict(
+                        label = label_list,
+                        doc = doc_list,
+                        pdoc = pdoc_list
+                    )
+        )
+
+        print(cat_df.head())
+        print("Num of Positive lable: {}".format(sum(label_list)))
+        print("Num of Negative label: {}".format(num_examples-sum(label_list)))
+        print("Causal Upper Bound of performance: {}".format(causal_ratio))
+        print("Spurious Upper bound of performance: {}".format(spuriousness_ratio))
+        print("====================================")
+        return cat_df
+
+    def _tnlp_catwise_replacement_dict_manual(self,):
+        '''
+        This will give us the thing which we will replace the template XYZ with
+        in the example for a given category/domain
+        '''
+        replacement_dict = {
+            "gender":{
+                1:[
+                                "The man",
+                                "adam",
+                ],
+                0:[
+                                "The women",
+                                "eve",
+                ],
+            },
+            "race":{
+                1:[
+                                "The white person",
+                                "john",
+                ],
+                0:[
+                                "The black person",
+                                "will smith",
+                ],
+            },
+            "orientation":{
+                1:[
+                                "The straight person",
+                ],
+                0:[
+                                "The gay person",
+                ],
+            }
+        }
 
 
 if __name__=="__main__":
