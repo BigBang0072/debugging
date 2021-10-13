@@ -1552,6 +1552,10 @@ if __name__=="__main__":
     parser.add_argument('-spurious_ratio',dest="spurious_ratio",type=float,default=None)
     parser.add_argument('-causal_ratio',dest="causal_ratio",type=float,default=None)
 
+    parser.add_argument('-stage',dest="stage",type=int)
+    parser.add_argument('-debug_cidx',dest="debug_cidx",type=int,default=None)
+    parser.add_argument('-debug_tidx',dest="debug_tidx",type=int,default=None)
+
     parser.add_argument('-emb_path',dest="emb_path",type=str,default=None)
     parser.add_argument('-vocab_path',dest="vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
     parser.add_argument('-num_neigh',dest="num_neigh",type=int,default=None)
@@ -1631,7 +1635,8 @@ if __name__=="__main__":
     os.makedirs(meta_folder,exist_ok=True)
     data_args["expt_meta_path"]=meta_folder
 
-    run_parallel_jobs_subset_exp(data_args,model_args)
+    transformer_trainer_stage2(data_args,model_args)
+    # run_parallel_jobs_subset_exp(data_args,model_args)
     # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
 
