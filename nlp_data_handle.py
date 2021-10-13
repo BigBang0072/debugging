@@ -412,11 +412,20 @@ class DataHandleTransformer():
         
         return all_cat_df
     
-    def _get_topic_labels_manual(self,all_cat_df,doc_col_name,pdoc_name,label_col_name):
+    def _get_topic_labels_manual(self,all_cat_df,doc_col_name,pdoc_col_name,label_col_name):
         '''
         Here we will try to manually annotate certain concepts using bag of words
         approach which we think are clean and have clear distinction ob being 
         spurious and causal.
+
+        new_cat_df = 
+        {
+                    doc             : the actual document of this category/domain
+                    pdoc            : the procssed/tokenized doc for all the corresponding doc
+                    topic_feature   : the topic annotation to be used directly as a feature
+                                        contains the tf of word which overlap with topic BOW.
+                    label           : this is the main task label eg. sentiment classification etc
+        }
         '''
         #First of all we get the topic list
         if(self.data_args["emb_path"]!=None):
@@ -432,10 +441,15 @@ class DataHandleTransformer():
         new_all_cat_df = {}
         for cat_name,cat_df in all_cat_df.items():
             topic_label_list = []
+            cat_doc_list=[]
+            cat_pdoc_list=[]
             cat_topic_feature_list = [] #using topic as a feature
             cat_label_list = []
             for ctidx in range(cat_df.shape[0]):
-                pdoc = cat_df.iloc[ctidx][pdoc_name]
+                pdoc = cat_df.iloc[ctidx][pdoc_col_name]
+                cat_pdoc_list.append(pdoc)
+                cat_doc_list.append(cat_df.iloc[ctidx][doc_col_name])
+                
                 #Getting the topic distriubiton
                 doc_topic = self._get_topic_annotation_manual(pdoc)
 
@@ -471,6 +485,8 @@ class DataHandleTransformer():
             #Creating the new dataframe for the cat
             new_cat_df = pd.DataFrame(
                             {
+                                doc_col_name:cat_doc_list,
+                                pdoc_col_name : cat_pdoc_list,
                                 "topic_feature":cat_topic_feature_list,
                                 "label":cat_label_list
                             }
@@ -813,7 +829,67 @@ class DataHandleTransformer():
                 whandle.write(write_string)
                 print("Topic:{} \t\t Component:{}".format(idx,feature_vector))
 
-    def _convert_df_to_dataset(self,df,doc_col_name,label_col_name,mask_feature_dims):
+    def _convert_df_to_dataset_stage2(self,df,doc_col_name,label_col_name,
+                                        topic_feature_col_name,debug_topic_idx):
+        '''
+        This function will conver the dataframe to a tensorflow dataset
+        to be used as input for Transformer.
+
+        This will be specifically be used for stage to when we are training 
+        normal model, which will be BERT for our use case.
+
+        Current we will only allow one topic to be debugged at a time for the debugger
+        TODO: add multi-topic debugging support.
+        '''
+        #First of all parsing the review documents into tensors
+        doc_list = []
+        label_list = []
+        topic_label_list = []
+        # topic_weight_list = []
+        for ridx in range(df.shape[0]):
+            doc_list.append(df.iloc[ridx][doc_col_name])
+            label_list.append(df.iloc[ridx][label_col_name])
+
+            #Getting the topic labels
+            topic_feature = df.iloc[ridx][topic_feature_col_name]
+            topic_label=0
+            if topic_feature[debug_topic_idx]>0:
+                topic_label=1
+            topic_label_list.append(topic_label)
+            
+            # topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
+        
+        #Now we will parse the documents
+        encoded_doc = self.tokenizer(
+                                    doc_list,
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+        input_idx = encoded_doc["input_ids"]
+        attn_mask = encoded_doc["attention_mask"]
+
+
+        #Creating the dataset for this category
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    label=np.array(label_list),
+                                    # topic=np.array(topic_list),
+                                    # topic_weight=np.array(topic_weight_list),
+                                    input_idx = input_idx,
+                                    attn_mask = attn_mask,
+                                    # topic_feature=topic_feature,
+                                    topic_label = np.array(topic_label_list)
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset
+    
+    def _convert_df_to_dataset_stage1(self,df,doc_col_name,label_col_name,mask_feature_dims):
         '''
         This function will conver the dataframe to a tensorflow dataset
         to be used as input for Transformer.

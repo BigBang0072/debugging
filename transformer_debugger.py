@@ -37,39 +37,47 @@ class TransformerClassifier(keras.Model):
         self.data_args = data_args
         self.model_args = model_args
 
+        #Stage 2: ONly used in  Stage 2
         #Now initializing the layers to be used
-        # if "distil" in data_args["transformer_name"]:
-        #     self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
-        # else:
-        #     self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
-        # if model_args["train_bert"]==False:
-        #     for layer in self.bert_model.layers:
-        #         layer.trainable = False
+        if data_args["stage"]==2:
+            if "distil" in data_args["transformer_name"]:
+                self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
+            else:
+                self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
+            if model_args["train_bert"]==False:
+                for layer in self.bert_model.layers:
+                    layer.trainable = False
 
         #Initializing the heads for each classifier (Domain Sntiment)
         self.cat_classifier_list = []
         self.cat_importance_weight_list = []
         self.cat_temb_importance_weight_list = []
         for cat in self.data_args["cat_list"]:
-            #Creating the imporatance paramaters for each classifier
-            cat_imp_weight = tf.Variable(
-                tf.random_normal_initializer(mean=0.0,stddev=1.0)(
-                                shape=[1,model_args["bemb_dim"]],
-                                dtype=tf.float32,
-                ),
-                trainable=True
-            )
-            self.cat_importance_weight_list.append(cat_imp_weight)
+            #Stage 2: This is used in Stage 2, when we just have normal classiifer
+            if data_args["stage"]==2:
+                #Creating the imporatance paramaters for each classifier
+                cat_imp_weight = tf.Variable(
+                    tf.random_normal_initializer(mean=0.0,stddev=1.0)(
+                                    shape=[1,model_args["bemb_dim"]],
+                                    dtype=tf.float32,
+                    ),
+                    trainable=True
+                )
+                self.cat_importance_weight_list.append(cat_imp_weight)
 
-            #Creating the topic embedding weights to be used by classifier
-            cat_temb_imp_weight = tf.Variable(
-                tf.random_normal_initializer(mean=0.0,stddev=1.0)(
-                                shape=[1,1,len(data_args["topic_list"])]
-                ),
-                trainable=True
-            )
-            self.cat_temb_importance_weight_list.append(cat_temb_imp_weight)
+            #Stage 1: THis is used in stage 1 when we are working directly with topic
+            if data_args["stage"]==1:
+                #Creating the topic embedding weights to be used by classifier
+                cat_temb_imp_weight = tf.Variable(
+                    tf.random_normal_initializer(mean=0.0,stddev=1.0)(
+                                    shape=[1,1,len(data_args["topic_list"])]
+                    ),
+                    trainable=True
+                )
+                self.cat_temb_importance_weight_list.append(cat_temb_imp_weight)
 
+
+            #Stage 1 and 2: This is being used in both the stages
             #Creating a dense layer
             cat_dense = layers.Dense(2,activation="softmax")
             self.cat_classifier_list.append(cat_dense)
@@ -90,8 +98,8 @@ class TransformerClassifier(keras.Model):
             self.topic_importance_weight_list.append(topic_imp_weight)
 
             #Creating the topic embedding layers (will be applied before the final activation)
-            topic_embed_layer = layers.Dense(self.model_args["temb_dim"])
-            self.topic_embedding_layer_list.append(topic_embed_layer)
+            # topic_embed_layer = layers.Dense(self.model_args["temb_dim"])
+            # self.topic_embedding_layer_list.append(topic_embed_layer)
 
             #Creating a dense layer
             topic_dense = layers.Dense(self.data_args["per_topic_class"],activation="softmax")
@@ -159,13 +167,26 @@ class TransformerClassifier(keras.Model):
         avg_embedding = masked_sum / (num_tokens+1e-10)
 
         #Now we will gate the dimension which are spurious
-        gated_avg_embedding = avg_embedding*gate_tensor
+        gated_avg_embedding = avg_embedding#*gate_tensor
         
         #Now we will apply the dense layer for this category
         cat_class_prob = self.cat_classifier_list[cidx](gated_avg_embedding)
 
-        return cat_class_prob
+        return cat_class_prob,gated_avg_embedding
     
+    def get_topic_pred_prob_from_sentiment_emb(self,sentiment_emb,tidx):
+        '''
+        This will be mainly used in the stage2, when we will try to remove the information
+        about the topic from the senitment embedding used by the classifier to see if they 
+        are using the topic information.
+        '''
+        #Reverse the gradient from this sentiment embessing
+        sentiment_emb = grad_reverse(sentiment_emb)
+
+        #Predcit the topic information fro mthe given sentiment embedding
+        topic_class_prob = self.topic_classifier_list[tidx](sentiment_emb)
+        return topic_class_prob
+
     def get_sentiment_pred_prob_topic_basis(self,idx_train,mask_train,gate_tensor,cidx):
         '''
         Here we will try to get the task prediciton using the topic basis
@@ -254,7 +275,7 @@ class TransformerClassifier(keras.Model):
 
         return topic_class_prob,topic_embedding
     
-    def train_step(self,sidx,single_ds,gate_tensor,task):
+    def train_step_stage1(self,sidx,single_ds,gate_tensor,task):
         '''
         This function will run one step of training for the classifier
         '''
@@ -473,7 +494,7 @@ class TransformerClassifier(keras.Model):
         # return track_dict
         return None
 
-    def valid_step(self,sidx,single_ds,gate_tensor,acc_op,task):
+    def valid_step_stage1(self,sidx,single_ds,gate_tensor,acc_op,task):
         '''
         Given a single dataset we will get the validation score
         (using the lower end of the dataset which was not used for training)
@@ -502,9 +523,153 @@ class TransformerClassifier(keras.Model):
         #Getting the validation accuracy
         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
         acc_op.update_state(acc)
+    
+    def train_step_stage2(self,cidx,tidx,single_ds,task):
+        '''
+        This function will run one step of training for the classifier
+        '''
+        scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        # cxentropy_loss = keras.losses.CategoricalCrossentropy(from_logits=False)
+
+        # #Get the dataset for each category
+        # cat_dataset_list = data
+
+        #Keeping track of classification accuracy
+        cat_accuracy_list = []
+
+        #Now getting the classification loss one by one each category        
+        # cat_total_loss = 0.0
+        # for cidx,cat in enumerate(self.data_args["cat_list"]):
+        label = single_ds["label"]
+        idx = single_ds["input_idx"]
+        mask = single_ds["attn_mask"]
+        topic_label = single_ds["topic_label"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+
+        #Getting the train data
+        label_train = label[0:valid_idx]
+        idx_train = idx[0:valid_idx]
+        mask_train = mask[0:valid_idx]
+        topic_label_train = topic_label[0:valid_idx]
+
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        mask_valid = mask[valid_idx:]
+        topic_label_valid = topic_label[valid_idx:]
+
+        if task=="sentiment":
+            #First of all we need to get the topic embedding from all the 
+            with tf.GradientTape() as tape:
+                #Forward propagating the model
+                # train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
+                train_prob,_ = self.get_sentiment_pred_prob(idx_train,mask_train,None,cidx)
+
+                #Getting the loss for this classifier
+                xentropy_loss = scxentropy_loss(label_train,train_prob)
+                # cat_total_loss += cat_loss
+
+                l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.cat_importance_weight_list[cidx])))
+
+                total_loss = xentropy_loss + self.model_args["l1_lambda"]*l1_loss
+        
+            #Now we have total classification loss, lets update the gradient
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+
+            #Getting the validation accuracy for this category
+            # valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
+            valid_prob,_ = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+            self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
+    
+            #Updating the metrics to track
+            self.sent_pred_xentropy.update_state(xentropy_loss)
+            self.sent_l1_loss_list[cidx].update_state(l1_loss)
+        elif task=="remove_topic":
+            #First of all we need to get the topic embedding from all the 
+            with tf.GradientTape() as tape:
+                #Forward propagating the model
+                # train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
+                train_prob,sentiment_emb = self.get_sentiment_pred_prob(idx_train,mask_train,None,cidx)
+                
+                #Getting the topic prediction
+                topic_train_prob = self.get_topic_pred_prob_from_sentiment_emb(sentiment_emb,tidx)
+
+                #Getting the loss for this classifier
+                xentropy_loss = scxentropy_loss(label_train,train_prob)
+                # cat_total_loss += cat_loss
+
+                #Getting the loss for this topic classfier
+                topic_xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
+
+                l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.cat_importance_weight_list[cidx])))
+
+                total_loss = xentropy_loss + topic_xentropy_loss + self.model_args["l1_lambda"]*l1_loss
+        
+            #Now we have total classification loss, lets update the gradient
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+
+            #Getting the validation accuracy for this category
+            # valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
+            valid_prob,sentiment_emb = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+            self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
+
+            topic_valid_prob = self.get_topic_pred_prob_from_sentiment_emb(sentiment_emb,tidx)
+            self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
+    
+            #Updating the metrics to track
+            self.sent_pred_xentropy.update_state(xentropy_loss)
+            self.topic_pred_xentropy.update_state(topic_xentropy_loss)
+            self.sent_l1_loss_list[cidx].update_state(l1_loss)
+        else:
+            raise NotImplementedError()
+    
+    def valid_step_stage2(self,sidx,single_ds,gate_tensor,acc_op,task):
+        '''
+        This validation step will be used by the stage 2 of our debugger
+        '''
+        label = single_ds["label"]
+        idx = single_ds["input_idx"]
+        mask = single_ds["attn_mask"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        mask_valid = mask[valid_idx:]
+
+        #Now we will make the forward pass
+        raise NotImplementedError()
+        if task=="sentiment":
+            # valid_prob = self.get_sentiment_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+            valid_prob = self.get_sentiment_pred_prob_topic_direct(idx_valid,sidx)
+        elif task=="topic":
+            valid_prob = self.get_topic_pred_prob(idx_valid,mask_valid,gate_tensor,sidx)
+        else:
+            raise NotImplementedError()
+
+        #Getting the validation accuracy
+        acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
+        acc_op.update_state(acc)
 
 
-def transformer_trainer(data_args,model_args):
+@tf.custom_gradient
+def grad_reverse(x):
+    y = tf.identity(x)
+    def custom_grad(dy):
+        return -dy
+    return y, custom_grad
+
+def transformer_trainer_stage1(data_args,model_args):
     '''
     '''
     # #Creating the metadata folder
@@ -626,6 +791,107 @@ def transformer_trainer(data_args,model_args):
     
     #Printing the variance of the importance weight
     # get_cat_temb_importance_weight_variance(classifier)
+
+def transformer_trainer_stage2(data_args,model_args):
+    '''
+    This transformer trainer is just for debugging purpose of the model trained on 
+    a particular domain/dataset/merged one.
+
+    Right now we suppport the checking the bug for a particular topic within the 
+    current model/predictor.
+    TODO: We could have multiple bug being checked at a time for the same predictor.
+    '''
+    #Creating one single dataset for time saving and uniformity
+    data_handler = DataHandleTransformer(data_args)
+    if "amazon" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
+    elif "nlp_toy" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
+    else:
+        raise NotImplementedError()
+    #Getting the dataset for the required category and topic
+    print("Getting the dataset for: cat:{}\ttopic:{}".format(
+                                                data_args["cat_list"][data_args["debug_cidx"]],
+                                                data_args["debug_tidx"],
+    ))
+    cat_dataset = data_handler._convert_df_to_dataset_stage2(
+                            df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
+                            doc_col_name="doc",
+                            label_col_name="label",
+                            topic_feature_col_name="topic_feature",
+                            debug_topic_idx=data_args["debug_tidx"]
+    )
+
+
+    #Step 1: We need to train the optimal classifier without topic removal
+    print("Step 1: Training the Main Classifier (to be debugged later)")
+    #Creating the forst classifier
+    classifier_main = TransformerClassifier(data_args,model_args)
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+    optimal_vacc_main = None
+    for eidx in model_args["epochs"]:
+        for data_batch in cat_dataset:
+            classifier_main.train_step_stage2(
+                                            cidx=data_args["debug_cidx"],
+                                            tidx=data_args["debug_tidx"],
+                                            single_ds=data_batch,
+                                            task="sentiment")
+
+        #Now we will print the metric for this category
+        print("cat:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
+                            data_args["cat_list"][data_args["debug_cidx"]],
+                            classifier_main.sent_pred_xentropy.result(),
+                            classifier_main.sent_l1_loss_list[data_args["debug_cidx"]].result(),
+                            classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
+                )
+        )
+        #Keeping track of the optimal vaccuracy of the main classifier
+        optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
+
+        #Saving the paramenters
+        checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+        classifier_main.save_weights(checkpoint_path)
+    
+
+
+    #Step 2: Now we will remove the topic information and see if performance drops
+    print("Step 1: Training the Main Classifier (to be debugged later)")
+    #Creating the forst classifier
+    classifier_trm = TransformerClassifier(data_args,model_args)
+    #Now we will compile the model
+    classifier_trm.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+    optimal_vacc_trm = None
+    for eidx in model_args["epochs"]:
+        for data_batch in cat_dataset:
+            classifier_trm.train_step_stage2(
+                                            cidx=data_args["debug_cidx"],
+                                            tidx=data_args["debug_tidx"],
+                                            single_ds=data_batch,
+                                            task="remove_topic")
+
+        #Now we will print the metric for this category
+        print("cat:{}\t_sent_celoss:{:0.5f}\ttopic_celoss:{:0.5f}\tsent_vacc:{:0.5f}\ttopic_vacc:{:0.5f}".format(
+                            data_args["cat_list"][data_args["debug_cidx"]],
+                            classifier_trm.sent_pred_xentropy.result(),
+                            classifier_trm.topic_pred_xentropy.result(),
+                            classifier_trm.sent_valid_acc_list[data_args["debug_cidx"]].result(),
+                            classifier_trm.topic_valid_acc_list[data_args["debug_tidx"]].result(),
+                )
+        )
+        #Keeping track of the optimal vaccuracy of the main classifier
+        optimal_vacc_trm = classifier_trm.sent_valid_acc_list[data_args["debug_cidx"]].result()
+
+        #Saving the paramenters
+        checkpoint_path = "{}/cp_cat_trm_{}.ckpt".format(data_args["expt_name"],eidx)
+        classifier_trm.save_weights(checkpoint_path)
+    
+
+    print("vacc_main:{:0.5f}\nvacc_trm:{:0.5f}".format(optimal_vacc_main,optimal_vacc_trm))
 
 
 def get_cat_temb_importance_weight_variance(classifier):
@@ -1219,7 +1485,7 @@ def worker_kernel(problem_config):
     for cat in problem_config["data_args"]["cat_list"]:
         cat_df = problem_config["data_args"]["new_all_cat_df"][cat]
         #Getting the dataset object
-        cat_ds = data_handler._convert_df_to_dataset(
+        cat_ds = data_handler._convert_df_to_dataset_stage1(
                                     df=cat_df,
                                     doc_col_name="topic_feature",
                                     label_col_name="label",
@@ -1244,7 +1510,7 @@ def worker_kernel(problem_config):
     os.makedirs(data_args["expt_meta_path"],exist_ok=True)
 
     #Starting the training phase
-    transformer_trainer(data_args,model_args)
+    transformer_trainer_stage1(data_args,model_args)
 
     #Now starting the validation run
     print("Validating the worker:{}".format(problem_config["alive_feature_dims"]))
@@ -1315,6 +1581,9 @@ if __name__=="__main__":
     data_args["task_name"] = args.task_name         #"sentiment or regard ..."
     data_args["causal_ratio"] = args.causal_ratio
     data_args["spurious_ratio"] = args.spurious_ratio
+    data_args["stage"]=args.stage                    #Whether we are in stage1 or stage2
+    data_args["debug_cat"]=args.debug_cat
+    data_args["debug_tidx"]=args.debug_tidx
     data_args["transformer_name"]=args.transformer
     data_args["num_class"]=2
     data_args["max_len"]=200
