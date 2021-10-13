@@ -274,18 +274,19 @@ mkdir nlp_logs
 
 #Added domain specific topics
 
-python transformer_debugger.py -expt_num "ct7.1" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
-python transformer_debugger.py -expt_num "ct7.0" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+# python transformer_debugger.py -expt_num "ct7.1" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+# python transformer_debugger.py -expt_num "ct7.0" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
 
-python transformer_debugger.py -expt_num "ct8.0" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
-python transformer_debugger.py -expt_num "ct8.1" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+# python transformer_debugger.py -expt_num "ct8.0" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+# python transformer_debugger.py -expt_num "ct8.1" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
 
 
-python transformer_debugger.py -expt_num "ct8.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 
-python transformer_debugger.py -expt_num "ct8.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
-python transformer_debugger.py -expt_num "ct8.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
+# python transformer_debugger.py -expt_num "ct8.2" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 
+# python transformer_debugger.py -expt_num "ct8.3" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 10
+# python transformer_debugger.py -expt_num "ct8.4" -num_samples 1000 -num_topic_samples 600 -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
 
-python transformer_debugger.py -expt_num "ct8.5" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 
+# python transformer_debugger.py -expt_num "ct8.5" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 
+
 
 
 # python transformer_debugger.py -expt_num "ct7.1" -num_samples 1000 -num_topic_samples 600 -num_topics 11 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 20
@@ -294,3 +295,14 @@ python transformer_debugger.py -expt_num "ct8.5" -num_samples 1000 -num_topic_sa
 # python transformer_debugger.py -expt_num "ct7.2" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 40
 # python transformer_debugger.py -expt_num "ct7.3" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 80
 # python transformer_debugger.py -expt_num "ct7.4" -num_samples 1000 -num_topic_samples 600 -num_topics 18 -num_epochs 50 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -emb_path "glove-wiki-gigaword-100" -num_neigh 160
+
+
+
+
+#Experiment on the new toy dataset
+
+python transformer_debugger.py -expt_num "ct9.0" -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.75 -spurious_ratio 0.90 
+
+python transformer_debugger.py -expt_num "ct9.1" -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.90 
+
+python transformer_debugger.py -expt_num "ct9.temp" -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.90 

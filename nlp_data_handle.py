@@ -1125,10 +1125,10 @@ class DataHandleTransformer():
         #Aggregating all the tmeplates
         all_example_df = []
         for fname in fnames:
-            fpath = fname.format(fname)
+            fpath = task_path.format(fname)
             fdf = pd.read_csv(fpath,sep="\t",names=["label","template"])
             #Filtering out the positive and negative labels
-            fdf = fdf[fdf["label"]==1 | fdf["label"]==-1]
+            fdf = fdf[(fdf["label"]==1) | (fdf["label"]==-1)]
             #Now making the negative lable as 0
             fdf.loc[fdf["label"]==-1,"label"]=0
 
@@ -1190,7 +1190,7 @@ class DataHandleTransformer():
             label = flip_label(label,causal_flip[ridx])
 
             #Getting the text to replace the template with
-            replace_frag = np.random.choice(replacement_dict[label],size=1)
+            replace_frag = np.random.choice(replacement_dict[label],size=1)[0]
             #Again replacing #Adding noise to label wrt to spurious feature
             label = flip_label(label,spurious_flip[ridx])
             label_list.append(label)
@@ -1256,6 +1256,8 @@ class DataHandleTransformer():
                 ],
             }
         }
+        
+        return replacement_dict
 
 
 if __name__=="__main__":

@@ -1198,11 +1198,12 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
         config["data_args"]["new_all_cat_df"]=new_all_cat_df.copy()
 
         #Adding the experiment config
+        #if len(alive_dims)==1:
         all_expt_config.append(config)
     
 
     #Now we will start the parallel experiment
-    ncpus = int(3.0/4.0*multiprocessing.cpu_count())
+    ncpus = 6#int(3.0/4.0*multiprocessing.cpu_count())
     with Pool(ncpus) as p:
             production = p.map(worker_kernel,all_expt_config)
     
@@ -1275,19 +1276,19 @@ if __name__=="__main__":
     import argparse
     parser=argparse.ArgumentParser()
     parser.add_argument('-expt_num',dest="expt_name",type=str)
-    parser.add_argument('-num_samples',dest="num_samples",type=int)
+    parser.add_argument('-num_samples',dest="num_samples",type=int,default=None)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
-    parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int)
+    parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int,default=None)
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float)
 
     parser.add_argument('-path',dest="path",type=str)
     parser.add_argument('-task_name',dest="task_name",type=str,default="sentiment")
-    parser.add_argument('-spurious_ratio',dest="spurious_ratio",type=int,default=None)
-    parser.add_argument('-causal_ratio',dest="causal_ratio",type=int,default=None)
+    parser.add_argument('-spurious_ratio',dest="spurious_ratio",type=float,default=None)
+    parser.add_argument('-causal_ratio',dest="causal_ratio",type=float,default=None)
 
-    parser.add_argument('-emb_path',dest="emb_path",type=str)
+    parser.add_argument('-emb_path',dest="emb_path",type=str,default=None)
     parser.add_argument('-vocab_path',dest="vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
-    parser.add_argument('-num_neigh',dest="num_neigh",type=int)
+    parser.add_argument('-num_neigh',dest="num_neigh",type=int,default=None)
 
     parser.add_argument("-temb_dim",dest="temb_dim",type=int)
     parser.add_argument("--normalize_temb",default=False,action="store_true")
@@ -1321,7 +1322,10 @@ if __name__=="__main__":
     data_args["num_topic_samples"]=args.num_topic_samples
     data_args["batch_size"]=32
     data_args["shuffle_size"]=data_args["batch_size"]*3
-    data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
+    if "amazon" in data_args["path"]:
+        data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
+    elif "nlp_toy" in data_args["path"]:
+        data_args["cat_list"]=["gender","race","orientation"]
     data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
     data_args["per_topic_class"]=2 #Each of the topic is binary (later could have more)
