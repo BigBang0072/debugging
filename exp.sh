@@ -306,3 +306,7 @@ python transformer_debugger.py -expt_num "ct9.0" -num_topics 10 -num_epochs 30 -
 python transformer_debugger.py -expt_num "ct9.1" -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.90 
 
 python transformer_debugger.py -expt_num "ct9.temp" -num_topics 10 -num_epochs 30 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.90 
+
+python transformer_debugger.py -expt_num "ct10.0" -num_topics 10 -num_epochs 5 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 -debug_cidx 1 -debug_tidx 6
+
+

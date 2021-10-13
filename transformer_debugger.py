@@ -832,7 +832,7 @@ def transformer_trainer_stage2(data_args,model_args):
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
     optimal_vacc_main = None
-    for eidx in model_args["epochs"]:
+    for eidx in range(model_args["epochs"]):
         for data_batch in cat_dataset:
             classifier_main.train_step_stage2(
                                             cidx=data_args["debug_cidx"],
@@ -866,7 +866,7 @@ def transformer_trainer_stage2(data_args,model_args):
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
     optimal_vacc_trm = None
-    for eidx in model_args["epochs"]:
+    for eidx in range(model_args["epochs"]):
         for data_batch in cat_dataset:
             classifier_trm.train_step_stage2(
                                             cidx=data_args["debug_cidx"],
@@ -1553,6 +1553,7 @@ if __name__=="__main__":
     parser.add_argument('-causal_ratio',dest="causal_ratio",type=float,default=None)
 
     parser.add_argument('-stage',dest="stage",type=int)
+    #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
     parser.add_argument('-debug_cidx',dest="debug_cidx",type=int,default=None)
     parser.add_argument('-debug_tidx',dest="debug_tidx",type=int,default=None)
 
@@ -1586,7 +1587,7 @@ if __name__=="__main__":
     data_args["causal_ratio"] = args.causal_ratio
     data_args["spurious_ratio"] = args.spurious_ratio
     data_args["stage"]=args.stage                    #Whether we are in stage1 or stage2
-    data_args["debug_cat"]=args.debug_cat
+    data_args["debug_cidx"]=args.debug_cidx
     data_args["debug_tidx"]=args.debug_tidx
     data_args["transformer_name"]=args.transformer
     data_args["num_class"]=2
@@ -1622,7 +1623,7 @@ if __name__=="__main__":
     model_args["l1_lambda"]=args.l1_lambda
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
-    model_args["bemb_dim"] = len(data_args["topic_list"]) #The dimension of bert produced last layer
+    model_args["bemb_dim"] = 768 if args.stage==2 else len(data_args["topic_list"]) #The dimension of bert produced last layer
     model_args["temb_dim"] = args.temb_dim
     model_args["normalize_temb"] = args.normalize_temb
     model_args["shuffle_topic_batch"]=False

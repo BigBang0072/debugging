@@ -1181,7 +1181,7 @@ class DataHandleTransformer():
         all_topic_df,new_all_cat_df = self._get_topic_labels_manual(
                                             all_cat_df=all_cat_df,
                                             doc_col_name="doc",
-                                            pdoc_name="pdoc",
+                                            pdoc_col_name="pdoc",
                                             label_col_name="label",
                                             # topic_col_name="topic",
                                             # topic_weight_col_name="topic_weight"
