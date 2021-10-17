@@ -826,34 +826,34 @@ def transformer_trainer_stage2(data_args,model_args):
     #Step 1: We need to train the optimal classifier without topic removal
     print("Step 1: Training the Main Classifier (to be debugged later)")
     #Creating the forst classifier
-    classifier_main = TransformerClassifier(data_args,model_args)
-    #Now we will compile the model
-    classifier_main.compile(
-        keras.optimizers.Adam(learning_rate=model_args["lr"])
-    )
-    optimal_vacc_main = None
-    for eidx in range(model_args["epochs"]):
-        for data_batch in cat_dataset:
-            classifier_main.train_step_stage2(
-                                            cidx=data_args["debug_cidx"],
-                                            tidx=data_args["debug_tidx"],
-                                            single_ds=data_batch,
-                                            task="sentiment")
+#     classifier_main = TransformerClassifier(data_args,model_args)
+#     #Now we will compile the model
+#     classifier_main.compile(
+#         keras.optimizers.Adam(learning_rate=model_args["lr"])
+#     )
+#     optimal_vacc_main = None
+#     for eidx in range(model_args["epochs"]):
+#         for data_batch in cat_dataset:
+#             classifier_main.train_step_stage2(
+#                                             cidx=data_args["debug_cidx"],
+#                                             tidx=data_args["debug_tidx"],
+#                                             single_ds=data_batch,
+#                                             task="sentiment")
 
-        #Now we will print the metric for this category
-        print("cat:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
-                            data_args["cat_list"][data_args["debug_cidx"]],
-                            classifier_main.sent_pred_xentropy.result(),
-                            classifier_main.sent_l1_loss_list[data_args["debug_cidx"]].result(),
-                            classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
-                )
-        )
-        #Keeping track of the optimal vaccuracy of the main classifier
-        optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
+#         #Now we will print the metric for this category
+#         print("cat:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
+#                             data_args["cat_list"][data_args["debug_cidx"]],
+#                             classifier_main.sent_pred_xentropy.result(),
+#                             classifier_main.sent_l1_loss_list[data_args["debug_cidx"]].result(),
+#                             classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
+#                 )
+#         )
+#         #Keeping track of the optimal vaccuracy of the main classifier
+#         optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
 
-        #Saving the paramenters
-        checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
-        classifier_main.save_weights(checkpoint_path)
+#         #Saving the paramenters
+#         checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+#         classifier_main.save_weights(checkpoint_path)
     
 
 
