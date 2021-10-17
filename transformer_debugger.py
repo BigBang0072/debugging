@@ -49,6 +49,7 @@ class TransformerClassifier(keras.Model):
                     layer.trainable = False
 
         #Initializing the heads for each classifier (Domain Sntiment)
+        self.cat_emb_layer_list = []
         self.cat_classifier_list = []
         self.cat_importance_weight_list = []
         self.cat_temb_importance_weight_list = []
@@ -64,6 +65,11 @@ class TransformerClassifier(keras.Model):
                     trainable=True
                 )
                 self.cat_importance_weight_list.append(cat_imp_weight)
+                
+                #Creating an embedding layer
+                cat_emb_layer = layers.Dense(10,activation="relu")
+                self.cat_emb_layer_list.append(cat_emb_layer)
+                
 
             #Stage 1: THis is used in stage 1 when we are working directly with topic
             if data_args["stage"]==1:
@@ -167,21 +173,22 @@ class TransformerClassifier(keras.Model):
         avg_embedding = masked_sum / (num_tokens+1e-10)
 
         #Now we will gate the dimension which are spurious
-        gated_avg_embedding = avg_embedding#*gate_tensor
+        gated_avg_embedding = self.cat_emb_layer_list[cidx](avg_embedding)#*gate_tensor
         
         #Now we will apply the dense layer for this category
         cat_class_prob = self.cat_classifier_list[cidx](gated_avg_embedding)
 
         return cat_class_prob,gated_avg_embedding
     
-    def get_topic_pred_prob_from_sentiment_emb(self,sentiment_emb,tidx):
+    def get_topic_pred_prob_from_sentiment_emb(self,sentiment_emb,tidx,reverse_grad):
         '''
         This will be mainly used in the stage2, when we will try to remove the information
         about the topic from the senitment embedding used by the classifier to see if they 
         are using the topic information.
         '''
         #Reverse the gradient from this sentiment embessing
-        sentiment_emb = grad_reverse(sentiment_emb)
+#         if reverse_grad==True:
+#             sentiment_emb = grad_reverse(sentiment_emb)
 
         #Predcit the topic information fro mthe given sentiment embedding
         topic_class_prob = self.topic_classifier_list[tidx](sentiment_emb)
@@ -524,7 +531,7 @@ class TransformerClassifier(keras.Model):
         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
         acc_op.update_state(acc)
     
-    def train_step_stage2(self,cidx,tidx,single_ds,task):
+    def train_step_stage2(self,cidx,tidx,single_ds,task,reverse_grad):
         '''
         This function will run one step of training for the classifier
         '''
@@ -591,13 +598,13 @@ class TransformerClassifier(keras.Model):
             self.sent_l1_loss_list[cidx].update_state(l1_loss)
         elif task=="remove_topic":
             #First of all we need to get the topic embedding from all the 
-            with tf.GradientTape() as tape:
+            with tf.GradientTape(persistent=True) as tape:
                 #Forward propagating the model
                 # train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
                 train_prob,sentiment_emb = self.get_sentiment_pred_prob(idx_train,mask_train,None,cidx)
                 
                 #Getting the topic prediction
-                topic_train_prob = self.get_topic_pred_prob_from_sentiment_emb(sentiment_emb,tidx)
+                topic_train_prob = self.get_topic_pred_prob_from_sentiment_emb(sentiment_emb,tidx,reverse_grad)
 
                 #Getting the loss for this classifier
                 xentropy_loss = scxentropy_loss(label_train,train_prob)
@@ -608,12 +615,32 @@ class TransformerClassifier(keras.Model):
 
                 l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.cat_importance_weight_list[cidx])))
 
-                total_loss = xentropy_loss + topic_xentropy_loss + self.model_args["l1_lambda"]*l1_loss
-        
+                total_loss = xentropy_loss -topic_xentropy_loss + self.model_args["l1_lambda"]*l1_loss
+            
             #Now we have total classification loss, lets update the gradient
-            grads = tape.gradient(total_loss,self.trainable_weights)
+#             grads = tape.gradient(total_loss,self.trainable_weights)
+#             self.optimizer.apply_gradients(
+#                 zip(grads,self.trainable_weights)
+#             )
+
+            #Getting the weight just from the our generator layers
+            generator_trainable_weights = [ 
+                            self.cat_importance_weight_list[cidx],       
+            ] + self.cat_classifier_list[cidx].trainable_variables + self.cat_emb_layer_list[cidx].trainable_variables
+
+            #Now we have total classification loss, lets update the gradient
+            grads = tape.gradient(total_loss,generator_trainable_weights)
             self.optimizer.apply_gradients(
-                zip(grads,self.trainable_weights)
+                zip(grads,generator_trainable_weights)
+            )
+
+            #Getting the weights from the discriminator
+            discriminator_trainable_weights = [
+                            self.topic_importance_weight_list[tidx],       
+            ] + self.topic_classifier_list[tidx].trainable_variables
+            grads = tape.gradient(topic_xentropy_loss,discriminator_trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,discriminator_trainable_weights)
             )
 
             #Getting the validation accuracy for this category
@@ -621,7 +648,7 @@ class TransformerClassifier(keras.Model):
             valid_prob,sentiment_emb = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
             self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
 
-            topic_valid_prob = self.get_topic_pred_prob_from_sentiment_emb(sentiment_emb,tidx)
+            topic_valid_prob = self.get_topic_pred_prob_from_sentiment_emb(sentiment_emb,tidx,reverse_grad)
             self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
     
             #Updating the metrics to track
@@ -666,7 +693,7 @@ class TransformerClassifier(keras.Model):
 def grad_reverse(x):
     y = tf.identity(x)
     def custom_grad(dy):
-        return -dy
+        return -10000*dy
     return y, custom_grad
 
 def transformer_trainer_stage1(data_args,model_args):
@@ -833,6 +860,7 @@ def transformer_trainer_stage2(data_args,model_args):
 #     )
 #     optimal_vacc_main = None
 #     for eidx in range(model_args["epochs"]):
+#         classifier_main.reset_all_metrics()
 #         for data_batch in cat_dataset:
 #             classifier_main.train_step_stage2(
 #                                             cidx=data_args["debug_cidx"],
@@ -867,22 +895,26 @@ def transformer_trainer_stage2(data_args,model_args):
     )
     optimal_vacc_trm = None
     for eidx in range(model_args["epochs"]):
+        print("==========================================")
+        classifier_trm.reset_all_metrics()
         for data_batch in cat_dataset:
             classifier_trm.train_step_stage2(
                                             cidx=data_args["debug_cidx"],
                                             tidx=data_args["debug_tidx"],
                                             single_ds=data_batch,
-                                            task="remove_topic")
+                                            task="remove_topic",
+                                            reverse_grad=model_args["reverse_grad"]
+            )
 
-        #Now we will print the metric for this category
-        print("cat:{}\t_sent_celoss:{:0.5f}\ttopic_celoss:{:0.5f}\tsent_vacc:{:0.5f}\ttopic_vacc:{:0.5f}".format(
-                            data_args["cat_list"][data_args["debug_cidx"]],
-                            classifier_trm.sent_pred_xentropy.result(),
-                            classifier_trm.topic_pred_xentropy.result(),
-                            classifier_trm.sent_valid_acc_list[data_args["debug_cidx"]].result(),
-                            classifier_trm.topic_valid_acc_list[data_args["debug_tidx"]].result(),
-                )
-        )
+            #Now we will print the metric for this category
+            print("cat:{}\t_sent_celoss:{:0.5f}\ttopic_celoss:{:0.5f}\tsent_vacc:{:0.5f}\ttopic_vacc:{:0.5f}".format(
+                                data_args["cat_list"][data_args["debug_cidx"]],
+                                classifier_trm.sent_pred_xentropy.result(),
+                                classifier_trm.topic_pred_xentropy.result(),
+                                classifier_trm.sent_valid_acc_list[data_args["debug_cidx"]].result(),
+                                classifier_trm.topic_valid_acc_list[data_args["debug_tidx"]].result(),
+                    )
+            )
         #Keeping track of the optimal vaccuracy of the main classifier
         optimal_vacc_trm = classifier_trm.sent_valid_acc_list[data_args["debug_cidx"]].result()
 
@@ -1556,6 +1588,8 @@ if __name__=="__main__":
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
     parser.add_argument('-debug_cidx',dest="debug_cidx",type=int,default=None)
     parser.add_argument('-debug_tidx',dest="debug_tidx",type=int,default=None)
+    parser.add_argument('--reverse_grad',default=False,action="store_true")
+    
 
     parser.add_argument('-emb_path',dest="emb_path",type=str,default=None)
     parser.add_argument('-vocab_path',dest="vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
@@ -1630,6 +1664,7 @@ if __name__=="__main__":
     model_args["gate_weight_exp"]=args.gate_weight_exp
     model_args["gate_weight_epoch"]=args.gate_weight_epoch
     model_args["gate_var_cutoff"]=args.gate_var_cutoff
+    model_args["reverse_grad"]=args.reverse_grad
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
