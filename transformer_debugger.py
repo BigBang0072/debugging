@@ -187,8 +187,8 @@ class TransformerClassifier(keras.Model):
         are using the topic information.
         '''
         #Reverse the gradient from this sentiment embessing
-#         if reverse_grad==True:
-#             sentiment_emb = grad_reverse(sentiment_emb)
+        # if reverse_grad==True:
+        #     sentiment_emb = grad_reverse(sentiment_emb)
 
         #Predcit the topic information fro mthe given sentiment embedding
         topic_class_prob = self.topic_classifier_list[tidx](sentiment_emb)
@@ -618,10 +618,10 @@ class TransformerClassifier(keras.Model):
                 total_loss = xentropy_loss -topic_xentropy_loss + self.model_args["l1_lambda"]*l1_loss
             
             #Now we have total classification loss, lets update the gradient
-#             grads = tape.gradient(total_loss,self.trainable_weights)
-#             self.optimizer.apply_gradients(
-#                 zip(grads,self.trainable_weights)
-#             )
+            # grads = tape.gradient(total_loss,self.trainable_weights)
+            # self.optimizer.apply_gradients(
+            #     zip(grads,self.trainable_weights)
+            # )
 
             #Getting the weight just from the our generator layers
             generator_trainable_weights = [ 
@@ -853,35 +853,35 @@ def transformer_trainer_stage2(data_args,model_args):
     #Step 1: We need to train the optimal classifier without topic removal
     print("Step 1: Training the Main Classifier (to be debugged later)")
     #Creating the forst classifier
-#     classifier_main = TransformerClassifier(data_args,model_args)
-#     #Now we will compile the model
-#     classifier_main.compile(
-#         keras.optimizers.Adam(learning_rate=model_args["lr"])
-#     )
-#     optimal_vacc_main = None
-#     for eidx in range(model_args["epochs"]):
-#         classifier_main.reset_all_metrics()
-#         for data_batch in cat_dataset:
-#             classifier_main.train_step_stage2(
-#                                             cidx=data_args["debug_cidx"],
-#                                             tidx=data_args["debug_tidx"],
-#                                             single_ds=data_batch,
-#                                             task="sentiment")
+    # classifier_main = TransformerClassifier(data_args,model_args)
+    # #Now we will compile the model
+    # classifier_main.compile(
+    #     keras.optimizers.Adam(learning_rate=model_args["lr"])
+    # )
+    optimal_vacc_main = None
+    # for eidx in range(model_args["epochs"]):
+    #     classifier_main.reset_all_metrics()
+    #     for data_batch in cat_dataset:
+    #         classifier_main.train_step_stage2(
+    #                                         cidx=data_args["debug_cidx"],
+    #                                         tidx=data_args["debug_tidx"],
+    #                                         single_ds=data_batch,
+    #                                         task="sentiment")
 
-#         #Now we will print the metric for this category
-#         print("cat:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
-#                             data_args["cat_list"][data_args["debug_cidx"]],
-#                             classifier_main.sent_pred_xentropy.result(),
-#                             classifier_main.sent_l1_loss_list[data_args["debug_cidx"]].result(),
-#                             classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
-#                 )
-#         )
-#         #Keeping track of the optimal vaccuracy of the main classifier
-#         optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
+    #     #Now we will print the metric for this category
+    #     print("cat:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
+    #                         data_args["cat_list"][data_args["debug_cidx"]],
+    #                         classifier_main.sent_pred_xentropy.result(),
+    #                         classifier_main.sent_l1_loss_list[data_args["debug_cidx"]].result(),
+    #                         classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
+    #             )
+    #     )
+    #     #Keeping track of the optimal vaccuracy of the main classifier
+    #     optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
 
-#         #Saving the paramenters
-#         checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
-#         classifier_main.save_weights(checkpoint_path)
+    #     #Saving the paramenters
+    #     checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+    #     classifier_main.save_weights(checkpoint_path)
     
 
 
@@ -926,6 +926,7 @@ def transformer_trainer_stage2(data_args,model_args):
     print("vacc_main:{:0.5f}\nvacc_trm:{:0.5f}".format(optimal_vacc_main,optimal_vacc_trm))
 
 
+
 def get_cat_temb_importance_weight_variance(classifier):
     #Getting the topic importance
     cat_topic_imp_weights = [
@@ -950,7 +951,6 @@ def get_cat_temb_importance_weight_variance(classifier):
     
     topic_metric_list.sort(key=lambda x:x[-1])
     mypp(topic_metric_list)
-
 
 def get_sent_imp_weights(classifier):
     '''
@@ -1071,6 +1071,7 @@ def get_feature_spuriousness(classifier,ood_vacc,sent_weights):
     mypp(dim_wise_diff)
 
     return gate_arr
+
 
 
 def get_dimension_gate(data_args,model_args):
@@ -1452,6 +1453,9 @@ def dump_arguments(arg_dict,expt_name,fname):
         json.dump(arg_dict,whandle,indent="\t")
 
 
+################################################################
+#########  Stage 1: Parallel Job Runner for all Subset #########
+################################################################
 def run_parallel_jobs_subset_exp(data_args,model_args):
     '''
     This job runner will run the subset of all the topic dimension in the 
