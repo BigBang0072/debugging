@@ -55,7 +55,8 @@ class TransformerClassifier(keras.Model):
         self.cat_temb_importance_weight_list = []
         for cat in self.data_args["cat_list"]:
             #Stage 2: This is used in Stage 2, when we just have normal classiifer
-            if data_args["stage"]==2:
+            #Stage 1: Even the stage 1 guys are using this for now
+            if data_args["stage"]==2 or data_args["stage"]==1:
                 #Creating the imporatance paramaters for each classifier
                 cat_imp_weight = tf.Variable(
                     tf.random_normal_initializer(mean=0.0,stddev=1.0)(
@@ -72,15 +73,15 @@ class TransformerClassifier(keras.Model):
                 
 
             #Stage 1: THis is used in stage 1 when we are working directly with topic
-            if data_args["stage"]==1:
-                #Creating the topic embedding weights to be used by classifier
-                cat_temb_imp_weight = tf.Variable(
-                    tf.random_normal_initializer(mean=0.0,stddev=1.0)(
-                                    shape=[1,1,len(data_args["topic_list"])]
-                    ),
-                    trainable=True
-                )
-                self.cat_temb_importance_weight_list.append(cat_temb_imp_weight)
+            # if data_args["stage"]==1:
+            #     #Creating the topic embedding weights to be used by classifier
+            #     cat_temb_imp_weight = tf.Variable(
+            #         tf.random_normal_initializer(mean=0.0,stddev=1.0)(
+            #                         shape=[1,1,len(data_args["topic_list"])]
+            #         ),
+            #         trainable=True
+            #     )
+            #     self.cat_temb_importance_weight_list.append(cat_temb_imp_weight)
 
 
             #Stage 1 and 2: This is being used in both the stages
@@ -1500,8 +1501,8 @@ def run_parallel_jobs_subset_exp(data_args,model_args):
         config["data_args"]["new_all_cat_df"]=new_all_cat_df.copy()
 
         #Adding the experiment config
-        #if len(alive_dims)==1:
-        all_expt_config.append(config)
+        if len(alive_dims)==1:
+            all_expt_config.append(config)
     
 
     #Now we will start the parallel experiment
