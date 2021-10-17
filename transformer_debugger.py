@@ -801,7 +801,7 @@ def transformer_trainer_stage1(data_args,model_args):
         for cidx,(cat,cat_ds) in enumerate(all_cat_ds.items()):
             #Trining theis classfifer for full one batch
             for data_batch in cat_ds:
-                classifier.train_step(cidx,data_batch,gate_tensor,"sentiment")
+                classifier.train_step_stage1(cidx,data_batch,gate_tensor,"sentiment")
 
             #Now we will print the metric for this category
             print("cat:{}\tceloss:{:0.5f}\tl1_loss:{:0.5f}\tvacc:{:0.5f}".format(
@@ -1216,7 +1216,7 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
 
             #Going over all the batches of this catefory for given classifier
             for data_batch in cat_ds:
-                classifier.valid_step(cidx,data_batch,gate_tensor,acc_op,"sentiment")
+                classifier.valid_step_stage1(cidx,data_batch,gate_tensor,acc_op,"sentiment")
             
             vacc = acc_op.result().numpy()
 
@@ -1409,7 +1409,7 @@ def load_and_analyze_transformer(data_args,model_args):
                                             only_indo=False,
                                             purpose="load",
     )
-    return ood_vacc,ood_meta_dict
+    return indo_vacc,ood_vacc,ood_meta_dict
 
     #Getting the spuriousness score using the drop in importance idea
     # sent_weights = get_sent_imp_weights(classifier)
@@ -1552,11 +1552,12 @@ def worker_kernel(problem_config):
     print("Validating the worker:{}".format(problem_config["alive_feature_dims"]))
     data_args["load_weight_path"]=data_args["expt_meta_path"]
     model_args["load_weight_epoch"]=model_args["epochs"]-1
-    ood_vacc,ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
+    indo_vacc,ood_vacc,ood_meta_dict = load_and_analyze_transformer(data_args,model_args)
 
     #Adding the result to the config
     problem_config["ood_meta_dict"]=ood_meta_dict
     problem_config["ood_vacc"]=ood_vacc
+    problem_config["indo_vacc"]=indo_vacc
 
 
     #Removing the dataset related objects
@@ -1675,8 +1676,8 @@ if __name__=="__main__":
     os.makedirs(meta_folder,exist_ok=True)
     data_args["expt_meta_path"]=meta_folder
 
-    transformer_trainer_stage2(data_args,model_args)
-    # run_parallel_jobs_subset_exp(data_args,model_args)
+    # transformer_trainer_stage2(data_args,model_args)
+    run_parallel_jobs_subset_exp(data_args,model_args)
     # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
 
