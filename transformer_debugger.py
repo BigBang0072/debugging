@@ -884,33 +884,47 @@ class SimpleNBOW(keras.Model):
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 
-        if task=="main":
+        if "main" in task:
             #Training the main task
             with tf.GradientTape() as tape:
                 #Encoding the input
                 enc_train = self._encoder(idx_train)
+                #Getting the projection (I for main full traning)
+                enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                 #Get the prediction probability
-                main_train_prob = self.get_main_task_pred_prob(enc_train)
+                main_train_prob = self.get_main_task_pred_prob(enc_proj_train)
+
                 #Getting the x-entropy lossss
                 main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
 
                 total_loss = main_xentropy_loss
 
             #Backpropagating
-            grads = tape.gradient(total_loss,self.trainable_weights)
-            self.optimizer.apply_gradients(
-                zip(grads,self.trainable_weights)
-            )
+            if task=="main":
+                grads = tape.gradient(total_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
+            elif task=="inlp_main":
+                #Only train the top head classifier
+                main_head_params = [] + self.main_task_classifier.trainable_variables
+                grads = tape.gradient(total_loss,main_head_params)
+                self.optimizer.apply_gradients(
+                    zip(grads,main_head_params)
+                )
+            else:
+                raise NotImplementedError()
             #Updating the total loss
             self.main_pred_xentropy.update_state(main_xentropy_loss)
 
 
             #Getting the validation loss
             enc_valid = self._encoder(idx_valid)
-            main_valid_prob = self.get_main_task_pred_prob(enc_valid)
+            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
             self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
 
-        elif task=="topic":
+        elif task=="inlp_topic":
             with tf.GradientTape() as tape:
                 #Encoding the input
                 enc_train = self._encoder(idx_train)
@@ -979,10 +993,10 @@ class SimpleNBOW(keras.Model):
         removed of the information.
         '''
         #Converting to the numpy array
-        X_enc = X_enc.numpy()
+        P_matrix = np.constant(P_matrix.T,dtype=tf.float32)
 
         #Now projecting this latent represention into null space
-        X_proj = tf.constant(np.matmul(X_enc,P_matrix.T),dtype=tf.float32)
+        X_proj = tf.matmul(X_enc,P_matrix)
 
         return X_proj
 
@@ -1258,6 +1272,7 @@ def nbow_trainer_stage2(data_args,model_args):
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
     optimal_vacc_main = None
+    P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
     for eidx in range(model_args["epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
@@ -1265,7 +1280,7 @@ def nbow_trainer_stage2(data_args,model_args):
             classifier_main.train_step_stage2(
                                     dataset_batch=data_batch,
                                     task="main",
-                                    P_matrix=None,
+                                    P_matrix=P_identity,
             )
         
         print("epoch:{:}\txloss:{:0.4f}\tmain_vacc:{:0.3f}".format(
@@ -1295,7 +1310,7 @@ def nbow_trainer_stage2(data_args,model_args):
             for data_batch in cat_dataset:
                 classifier_main.train_step_stage2(
                                     dataset_batch=data_batch,
-                                    task="topic",
+                                    task="inlp_topic",
                                     P_matrix=P_W,
                 )
 
@@ -1318,6 +1333,26 @@ def nbow_trainer_stage2(data_args,model_args):
                                         rowspace_projection_matrices=all_proj_matrix_list,
                                         input_dim=classifier_main.hlayer_dim
         )
+
+
+        #Step 3: Now we need to retrain the main task head, 
+        #to again get optimal classifier in this projected space
+        cbar = tqdm(range(model_args["topic_epochs"]))
+        for eidx in cbar:
+            for data_batch in cat_dataset:
+                classifier_main.train_step_stage2(
+                                    dataset_batch=data_batch,
+                                    task="inlp_main",
+                                    P_matrix=P_W,
+                )
+
+            #Updating the description of the tqdm
+            cbar.set_postfix_str("mceloss:{:0.4f},  mvacc:{:0.3f}".format(
+                                        classifier_main.main_pred_xentropy.result(),
+                                        classifier_main.main_valid_accuracy.result()
+            ))
+
+
         #Now we need to get the validation accuracy on this projected matrix
         classifier_main.reset_all_metrics()
         for data_batch in cat_dataset:
