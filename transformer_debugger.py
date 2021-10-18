@@ -1479,7 +1479,7 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
 
             #Now assignign the accuracy to appropriate place
             if cname==cat:
-                indo_vacc[cname]=vacc
+                indo_vacc[cname]=float(vacc)
             ood_vacc[cname][cat]=float(vacc)
         
         print("Indomain VAcc: ",indo_vacc[cname])
