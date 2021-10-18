@@ -1284,7 +1284,7 @@ def nbow_trainer_stage2(data_args,model_args):
     print("Stage 2: Removing the topic information!")
     #Next we will be going to use this trained classifier to do the null space projection
     all_proj_matrix_list = []
-    P_W = np.eye(2,classifier_main.hlayer_dim)
+    P_W = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
     for pidx in range(model_args["num_proj_iter"]):
         #Resetting all the metrics
         classifier_main.reset_all_metrics()
