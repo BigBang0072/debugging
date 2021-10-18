@@ -993,7 +993,7 @@ class SimpleNBOW(keras.Model):
         removed of the information.
         '''
         #Converting to the numpy array
-        P_matrix = np.constant(P_matrix.T,dtype=tf.float32)
+        P_matrix = tf.constant(P_matrix.T,dtype=tf.float32)
 
         #Now projecting this latent represention into null space
         X_proj = tf.matmul(X_enc,P_matrix)
