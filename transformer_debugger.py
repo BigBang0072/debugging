@@ -1839,7 +1839,7 @@ if __name__=="__main__":
     parser.add_argument('-num_samples',dest="num_samples",type=int,default=None)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int,default=None)
-    parser.add_argument('-l1_lambda',dest="l1_lambda",type=float)
+    parser.add_argument('-l1_lambda',dest="l1_lambda",type=float,default=0.0)
 
     parser.add_argument('-path',dest="path",type=str)
     parser.add_argument('-task_name',dest="task_name",type=str,default="sentiment")
@@ -1854,13 +1854,15 @@ if __name__=="__main__":
     
 
     parser.add_argument('-emb_path',dest="emb_path",type=str,default=None)
+
+    parser.add_argument('--extend_topic_set',default=False,action="store_true")
     parser.add_argument('-vocab_path',dest="vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
     parser.add_argument('-num_neigh',dest="num_neigh",type=int,default=None)
 
     parser.add_argument('--train_emb',default=False,action="store_true")
     parser.add_argument('--normalize_emb',default=False,action="store_true")
 
-    parser.add_argument("-temb_dim",dest="temb_dim",type=int)
+    parser.add_argument("-temb_dim",dest="temb_dim",type=int,default=None)
     parser.add_argument("--normalize_temb",default=False,action="store_true")
 
     parser.add_argument('-tfreq_ulim',dest="tfreq_ulim",type=float,default=1.0)
@@ -1907,6 +1909,7 @@ if __name__=="__main__":
     data_args["min_df"]=0.0
     data_args["max_df"]=1.0
     data_args["emb_path"]=args.emb_path
+    data_args["extend_topic_set"]=args.extend_topic_set
     data_args["vocab_path"]=args.vocab_path
     data_args["num_neigh"]=args.num_neigh
     # data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
@@ -1940,7 +1943,8 @@ if __name__=="__main__":
     data_args["expt_meta_path"]=meta_folder
 
     # transformer_trainer_stage2(data_args,model_args)
-    run_parallel_jobs_subset_exp(data_args,model_args)
+    nbow_trainer_stage2(data_args,model_args)
+    # run_parallel_jobs_subset_exp(data_args,model_args)
     # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
 

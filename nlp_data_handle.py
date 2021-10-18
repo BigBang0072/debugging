@@ -428,7 +428,7 @@ class DataHandleTransformer():
         }
         '''
         #First of all we get the topic list
-        if(self.data_args["emb_path"]!=None):
+        if(self.data_args["extend_topic_set"]==True):
             self._load_word_embedding_for_nbr_extn()
             self._create_topic_list(extend=True)
         else:
@@ -859,6 +859,9 @@ class DataHandleTransformer():
         index wrt to the word emebdding vectors which will be decoded in the training
         step directly from the embedding layer.
         '''
+        #Loading the gensim embedidng model
+        self._load_full_gensim_word_embedding()
+
         #First of all parsing the review documents into tensors
         doc_list = []
         all_index_list = []
