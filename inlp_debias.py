@@ -11,7 +11,7 @@ from the learnt encoder.
 from typing import Dict
 import numpy as np
 import scipy
-from src import classifier
+# from src import classifier
 from typing import List
 from tqdm import tqdm
 import random

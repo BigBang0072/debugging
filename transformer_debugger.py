@@ -840,27 +840,27 @@ class SimpleNBOW(keras.Model):
         
         return Xproj
 
-    def get_main_task_pred_prob(self,X_input):
+    def get_main_task_pred_prob(self,X_enc):
         '''
         Forward propagate the input for the main tasssk
         '''
-        Xproj = self._encoder(X_input)
+        # Xproj = self._encoder(X_input)
         #Getting the prediction
-        Xpred = self.main_task_classifier(Xproj)
+        Xpred = self.main_task_classifier(X_enc)
 
         return Xpred 
     
-    def get_topic_pred_prob(self,X_input):
+    def get_topic_pred_prob(self,X_enc):
         '''
         Forward propagate the input for the main tasssk
         '''
-        Xproj = self._encoder(X_input)
+        # Xproj = self._encoder(X_input)
         #Getting the prediction
-        Xpred = self.topic_task_classifier(Xproj)
+        Xpred = self.topic_task_classifier(X_enc)
 
         return Xpred
     
-    def train_step_stage2(self,dataset_batch,task):
+    def train_step_stage2(self,dataset_batch,task,P_matrix):
         '''
         '''
         #Getting the dataset splits for train and valid       
@@ -887,8 +887,10 @@ class SimpleNBOW(keras.Model):
         if task=="main":
             #Training the main task
             with tf.GradientTape() as tape:
+                #Encoding the input
+                enc_train = self._encoder(idx_train)
                 #Get the prediction probability
-                main_train_prob = self.get_main_task_pred_prob(idx_train)
+                main_train_prob = self.get_main_task_pred_prob(enc_train)
                 #Getting the x-entropy lossss
                 main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
 
@@ -904,13 +906,19 @@ class SimpleNBOW(keras.Model):
 
 
             #Getting the validation loss
-            main_valid_prob = self.get_main_task_pred_prob(idx_valid)
+            enc_valid = self._encoder(idx_valid)
+            main_valid_prob = self.get_main_task_pred_prob(enc_valid)
             self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
 
         elif task=="topic":
             with tf.GradientTape() as tape:
+                #Encoding the input
+                enc_train = self._encoder(idx_train)
+                #Getting the projection first
+                enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                 #Here we will train the topic classifier
-                topic_train_prob = self.get_topic_pred_prob(idx_train)
+                topic_train_prob = self.get_topic_pred_prob(enc_proj_train)
+
                 #Getting the x-entropy losssss for the topic
                 topic_xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
 
@@ -919,14 +927,16 @@ class SimpleNBOW(keras.Model):
             #Get the topic classifier parameters
             topic_params = [] + self.topic_task_classifier.trainable_variables
             grads = tape.gradient(topic_total_loss,topic_params)
-            self.optimizer.apply_gradient(
+            self.optimizer.apply_gradients(
                 zip(grads,topic_params)
             )
             #Updating the xentropy loss for the topic
             self.topic_pred_xentropy.update_state(topic_xentropy_loss)
 
             #Getting the validation loss for the topic
-            topic_valid_prob = self.get_topic_pred_prob(idx_valid)
+            enc_valid = self._encoder(idx_valid)
+            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid)
             self.topic_valid_accuracy.update_state(topic_label_valid,topic_valid_prob)
         else:
             raise NotImplementedError()
@@ -935,7 +945,7 @@ class SimpleNBOW(keras.Model):
         '''
         '''
         #Resetting all the metrics
-        self.reset_all_metrics()
+        # self.reset_all_metrics() this leads to empty metrci at end. Why?
 
         #Getting the dataset splits for train and valid       
         label = dataset_batch["label"]
@@ -951,9 +961,8 @@ class SimpleNBOW(keras.Model):
 
 
         #Getting the latent representaiton for the input
-        X_latent = self._encoder(idx_valid).numpy()
-        #Now projecting this latent represention into null space
-        X_proj = tf.constant(np.matmul(X_latent,P_matrix.T),dtype=tf.float32)
+        X_latent = self._encoder(idx_valid)
+        X_proj = self._get_proj_X_enc(X_latent,P_matrix)
 
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
@@ -963,7 +972,19 @@ class SimpleNBOW(keras.Model):
         #Getting the topic validation accuracy
         topic_valid_prob = self.topic_task_classifier(X_proj)
         self.topic_valid_accuracy.update_state(topic_label_valid,topic_valid_prob)
+    
+    def _get_proj_X_enc(self,X_enc,P_matrix):
+        '''
+        This will give the projected encoded latent representaion which will be furthur
+        removed of the information.
+        '''
+        #Converting to the numpy array
+        X_enc = X_enc.numpy()
 
+        #Now projecting this latent represention into null space
+        X_proj = tf.constant(np.matmul(X_enc,P_matrix.T),dtype=tf.float32)
+
+        return X_proj
 
 @tf.custom_gradient
 def grad_reverse(x):
@@ -1243,7 +1264,8 @@ def nbow_trainer_stage2(data_args,model_args):
         for data_batch in cat_dataset:
             classifier_main.train_step_stage2(
                                     dataset_batch=data_batch,
-                                    task="main"
+                                    task="main",
+                                    P_matrix=None,
             )
         
         print("epoch:{:}\txloss:{:0.4f}\tmain_vacc:{:0.3f}".format(
@@ -1262,6 +1284,7 @@ def nbow_trainer_stage2(data_args,model_args):
     print("Stage 2: Removing the topic information!")
     #Next we will be going to use this trained classifier to do the null space projection
     all_proj_matrix_list = []
+    P_W = np.eye(2,classifier_main.hlayer_dim)
     for pidx in range(model_args["num_proj_iter"]):
         #Resetting all the metrics
         classifier_main.reset_all_metrics()
@@ -1272,11 +1295,12 @@ def nbow_trainer_stage2(data_args,model_args):
             for data_batch in cat_dataset:
                 classifier_main.train_step_stage2(
                                     dataset_batch=data_batch,
-                                    task="topic"
+                                    task="topic",
+                                    P_matrix=P_W,
                 )
 
             #Updating the description of the tqdm
-            tbar.set_description("tceloss:{:0.4f}\ttvacc:{:0.3f}".format(
+            tbar.set_postfix_str("tceloss:{:0.4f},  tvacc:{:0.3f}".format(
                                         classifier_main.topic_pred_xentropy.result(),
                                         classifier_main.topic_valid_accuracy.result()
             ))
@@ -1285,7 +1309,7 @@ def nbow_trainer_stage2(data_args,model_args):
 
 
         #Step2: Remove the information and get the projection
-        topic_W_matrix = classifier_main.topic_task_classifier.get_weights()[0].numpy().T
+        topic_W_matrix = classifier_main.topic_task_classifier.get_weights()[0].T
         #Now getting the projection matrix
         P_W_curr = get_rowspace_projection(topic_W_matrix)
         all_proj_matrix_list.append(P_W_curr)
@@ -1296,7 +1320,7 @@ def nbow_trainer_stage2(data_args,model_args):
         )
         #Now we need to get the validation accuracy on this projected matrix
         classifier_main.reset_all_metrics()
-        for data_batch in cat_dataset():
+        for data_batch in cat_dataset:
             classifier_main.valid_step_stage2(
                                         dataset_batch=data_batch,
                                         P_matrix=P_W
@@ -1980,7 +2004,7 @@ if __name__=="__main__":
     parser.add_argument('-debug_tidx',dest="debug_tidx",type=int,default=None)
     parser.add_argument('--reverse_grad',default=False,action="store_true")
 
-    parser.add_argument('-topic_epoch',dest="topic_epoch",type=int,default=None)
+    parser.add_argument('-topic_epochs',dest="topic_epochs",type=int,default=None)
     parser.add_argument('-num_proj_iter',dest="num_proj_iter",type=int,default=None)
     
 
