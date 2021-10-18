@@ -7,7 +7,6 @@ import pandas as pd
 from tensorflow._api.v2 import data
 import scipy
 
-
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -23,9 +22,11 @@ from pprint import pprint as mypp
 from itertools import combinations
 from multiprocessing import Pool
 import multiprocessing
+from tqdm import tqdm
 
 
 from nlp_data_handle import *
+from inlp_debias import get_rowspace_projection,get_projection_to_intersection_of_nullspaces
 
 class TransformerClassifier(keras.Model):
     '''
@@ -551,7 +552,7 @@ class TransformerClassifier(keras.Model):
         label = single_ds["label"]
         idx = single_ds["input_idx"]
         mask = single_ds["attn_mask"]
-        topic_label = single_ds["topic_label"]
+        topic_label = single_ds["topic_label"]#Only the debug topic label is coming here
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
@@ -702,24 +703,36 @@ class SimpleNBOW(keras.Model):
         #Now initilaizing some of the layers for encoder
         self.nbow_avg_layer = self.get_nbow_avg_layer()
         self.hidden_layer_list = []
+        self.hlayer_dim = 50
         for _ in range(self.model_args["num_hidden_layer"]):
-            hlayer = layers.Dense(50,activation="relu")
+            hlayer = layers.Dense(self.hlayer_dim,activation="relu")
             self.hidden_layer_list.append(hlayer)
         
         #Initializing the classifier for the main task
         self.main_task_classifier = layers.Dense(2,activation="softmax")
+        #Initializing the classifier for the topic task
+        self.topic_task_classifier = layers.Dense(2,activation="softmax")
 
-        #Initializing some of the metrics
+        #Initializing some of the metrics for main task
         self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
         self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
+
+        #Initializing the metrics for the topic task
+        self.topic_pred_xentropy = keras.metrics.Mean(name="topic_spred_x")
+        self.topic_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="topic_vacc")
     
     def compile(self, optimizer):
         super(SimpleNBOW, self).compile()
         self.optimizer = optimizer 
 
     def reset_all_metrics(self,):
+        #Resetting the main task related metrics
         self.main_pred_xentropy.reset_state()
         self.main_valid_accuracy.reset_state()
+
+        #Ressting the topic related metrics
+        self.topic_pred_xentropy.reset_state()
+        self.topic_valid_accuracy.reset_state()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -729,11 +742,12 @@ class SimpleNBOW(keras.Model):
         class NBOWAvgLayer(keras.layers.Layer):
             '''
             '''
-            def __init__(self,embedding_layer,embedding_weight_layer,unk_widx):
+            def __init__(self,embedding_layer,embedding_weight_layer,unk_widx,normalize_emb):
                 super(NBOWAvgLayer,self).__init__()
                 self.embeddingLayerMain = embedding_layer
                 self.embeddingLayerWeight = embedding_weight_layer
                 self.unk_widx = unk_widx
+                self.normalize_emb = normalize_emb
 
             def call(self,X_input):
                 '''
@@ -769,13 +783,14 @@ class SimpleNBOW(keras.Model):
         
         #Get the embedding and weight matrix
         embedding_layer,embedding_weight_layer = self._initialize_embedding_layer()
-        self.nbow_avg_layer = NBOWAvgLayer(
+        nbow_avg_layer = NBOWAvgLayer(
                                 embedding_layer=embedding_layer,
                                 embedding_weight_layer=embedding_weight_layer,
-                                unk_widx=self.data_handler.emb_model.key_to_index["unk"]
+                                unk_widx=self.data_handler.emb_model.key_to_index["unk"],
+                                normalize_emb=self.model_args["normalize_emb"]
         )
 
-        return 
+        return nbow_avg_layer
 
     def _initialize_embedding_layer(self,):
         '''
@@ -812,27 +827,46 @@ class SimpleNBOW(keras.Model):
 
         return embedding_layer,embedding_weight_layer
 
-    def get_main_task_pred_prob(self,X_input):
+    def _encoder(self,X_input):
         '''
-        Forward propagate the input for the main tasssk
+        This function will be responsible to encode the input to the 
+        latent space for all the paths.
         '''
         #Get average embedding
         Xproj = self.nbow_avg_layer(X_input)
         #Passing through the hidden layer
         for hlayer in self.hidden_layer_list:
             Xproj = hlayer(Xproj)
+        
+        return Xproj
+
+    def get_main_task_pred_prob(self,X_input):
+        '''
+        Forward propagate the input for the main tasssk
+        '''
+        Xproj = self._encoder(X_input)
         #Getting the prediction
         Xpred = self.main_task_classifier(Xproj)
 
         return Xpred 
     
-    def train_step_stage2(self,dataset_batch,):
+    def get_topic_pred_prob(self,X_input):
+        '''
+        Forward propagate the input for the main tasssk
+        '''
+        Xproj = self._encoder(X_input)
+        #Getting the prediction
+        Xpred = self.topic_task_classifier(Xproj)
+
+        return Xpred
+    
+    def train_step_stage2(self,dataset_batch,task):
         '''
         '''
         #Getting the dataset splits for train and valid       
         label = dataset_batch["label"]
         idx = dataset_batch["input_idx"]
-        topic_label = dataset_batch["topic_label"]
+        topic_label = dataset_batch["topic_label"]#Only the debug topic is coming here (one rnow)
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
@@ -850,31 +884,59 @@ class SimpleNBOW(keras.Model):
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 
-        #Training the main task
-        with tf.GradientTape() as tape:
-            #Get the prediction probability
-            main_train_prob = self.get_main_task_pred_prob(idx_train)
-            #Getting the x-entropy lossss
-            main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
+        if task=="main":
+            #Training the main task
+            with tf.GradientTape() as tape:
+                #Get the prediction probability
+                main_train_prob = self.get_main_task_pred_prob(idx_train)
+                #Getting the x-entropy lossss
+                main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
 
-            total_loss = main_xentropy_loss
+                total_loss = main_xentropy_loss
 
-        #Backpropagating
-        grads = tape.gradient(total_loss,self.trainable_weights)
-        self.optimizer.apply_gradients(
-            zip(grads,self.trainable_weights)
-        )
-        #Updating the total loss
-        self.main_pred_xentropy.update_state(main_xentropy_loss)
+            #Backpropagating
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+            #Updating the total loss
+            self.main_pred_xentropy.update_state(main_xentropy_loss)
 
 
-        #Getting the validation loss
-        main_valid_prob = self.get_main_task_pred_prob(idx_valid)
-        self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
-    
-    def valid_step_stage2(self,dataset_batch):
+            #Getting the validation loss
+            main_valid_prob = self.get_main_task_pred_prob(idx_valid)
+            self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+
+        elif task=="topic":
+            with tf.GradientTape() as tape:
+                #Here we will train the topic classifier
+                topic_train_prob = self.get_topic_pred_prob(idx_train)
+                #Getting the x-entropy losssss for the topic
+                topic_xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
+
+                topic_total_loss = topic_xentropy_loss
+            
+            #Get the topic classifier parameters
+            topic_params = [] + self.topic_task_classifier.trainable_variables
+            grads = tape.gradient(topic_total_loss,topic_params)
+            self.optimizer.apply_gradient(
+                zip(grads,topic_params)
+            )
+            #Updating the xentropy loss for the topic
+            self.topic_pred_xentropy.update_state(topic_xentropy_loss)
+
+            #Getting the validation loss for the topic
+            topic_valid_prob = self.get_topic_pred_prob(idx_valid)
+            self.topic_valid_accuracy.update_state(topic_label_valid,topic_valid_prob)
+        else:
+            raise NotImplementedError()
+
+    def valid_step_stage2(self,dataset_batch,P_matrix):
         '''
         '''
+        #Resetting all the metrics
+        self.reset_all_metrics()
+
         #Getting the dataset splits for train and valid       
         label = dataset_batch["label"]
         idx = dataset_batch["input_idx"]
@@ -887,9 +949,20 @@ class SimpleNBOW(keras.Model):
         idx_valid = idx[valid_idx:]
         topic_label_valid = topic_label[valid_idx:]
 
+
+        #Getting the latent representaiton for the input
+        X_latent = self._encoder(idx_valid).numpy()
+        #Now projecting this latent represention into null space
+        X_proj = tf.constant(np.matmul(X_latent,P_matrix.T),dtype=tf.float32)
+
         #Getting the validation accuracy of the main task
-        main_valid_prob = self.get_main_task_pred_prob(idx_valid)
+        #TODO: This assumes that this is the last layer of the both branches
+        main_valid_prob = self.main_task_classifier(X_proj)
         self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+
+        #Getting the topic validation accuracy
+        topic_valid_prob = self.topic_task_classifier(X_proj)
+        self.topic_valid_accuracy.update_state(topic_label_valid,topic_valid_prob)
 
 
 @tf.custom_gradient
@@ -1168,12 +1241,16 @@ def nbow_trainer_stage2(data_args,model_args):
         print("==========================================")
         classifier_main.reset_all_metrics()
         for data_batch in cat_dataset:
-            classifier_main.train_step_stage2(data_batch)
+            classifier_main.train_step_stage2(
+                                    dataset_batch=data_batch,
+                                    task="main"
+            )
         
-            print("xloss:{:0.4f}\tmain_vacc:{:0.3f}".format(
-                                            classifier_main.main_pred_xentropy.result(),
-                                            classifier_main.main_valid_accuracy.result()
-            ))
+        print("epoch:{:}\txloss:{:0.4f}\tmain_vacc:{:0.3f}".format(
+                                        eidx,
+                                        classifier_main.main_pred_xentropy.result(),
+                                        classifier_main.main_valid_accuracy.result()
+        ))
 
         #Keeping track of the optimal vaccuracy of the main classifier
         optimal_vacc_main = classifier_main.main_valid_accuracy.result()
@@ -1181,7 +1258,57 @@ def nbow_trainer_stage2(data_args,model_args):
         #Saving the paramenters
         checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         classifier_main.save_weights(checkpoint_path)
+    
+    print("Stage 2: Removing the topic information!")
+    #Next we will be going to use this trained classifier to do the null space projection
+    all_proj_matrix_list = []
+    for pidx in range(model_args["num_proj_iter"]):
+        #Resetting all the metrics
+        classifier_main.reset_all_metrics()
 
+        #Step1: Training the topic classifier now
+        tbar = tqdm(range(model_args["topic_epochs"]))
+        for eidx in tbar:
+            for data_batch in cat_dataset:
+                classifier_main.train_step_stage2(
+                                    dataset_batch=data_batch,
+                                    task="topic"
+                )
+
+            #Updating the description of the tqdm
+            tbar.set_description("tceloss:{:0.4f}\ttvacc:{:0.3f}".format(
+                                        classifier_main.topic_pred_xentropy.result(),
+                                        classifier_main.topic_valid_accuracy.result()
+            ))
+        #Get the topic metrics aftertraining the classifier
+        topic_vacc_before = classifier_main.topic_valid_accuracy.result()
+
+
+        #Step2: Remove the information and get the projection
+        topic_W_matrix = classifier_main.topic_task_classifier.get_weights()[0].numpy().T
+        #Now getting the projection matrix
+        P_W_curr = get_rowspace_projection(topic_W_matrix)
+        all_proj_matrix_list.append(P_W_curr)
+        #Getting the aggregate projection matrix
+        P_W = get_projection_to_intersection_of_nullspaces(
+                                        rowspace_projection_matrices=all_proj_matrix_list,
+                                        input_dim=classifier_main.hlayer_dim
+        )
+        #Now we need to get the validation accuracy on this projected matrix
+        classifier_main.reset_all_metrics()
+        for data_batch in cat_dataset():
+            classifier_main.valid_step_stage2(
+                                        dataset_batch=data_batch,
+                                        P_matrix=P_W
+            )
+        
+        print("pidx:{:}\tmain_init:{:0.3f}\tmain_after:{:0.3f}\ttopic_before:{:0.3f}\ttopic_after:{:0.3f}".format(
+                                            pidx,
+                                            optimal_vacc_main,
+                                            classifier_main.main_valid_accuracy.result(),
+                                            topic_vacc_before,
+                                            classifier_main.topic_valid_accuracy.result()
+        ))
 
 
 def get_cat_temb_importance_weight_variance(classifier):
@@ -1840,6 +1967,7 @@ if __name__=="__main__":
     parser.add_argument('-num_topics',dest="num_topics",type=int)
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int,default=None)
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float,default=0.0)
+    parser.add_argument('-lr',dest="lr",type=float)
 
     parser.add_argument('-path',dest="path",type=str)
     parser.add_argument('-task_name',dest="task_name",type=str,default="sentiment")
@@ -1851,6 +1979,9 @@ if __name__=="__main__":
     parser.add_argument('-debug_cidx',dest="debug_cidx",type=int,default=None)
     parser.add_argument('-debug_tidx',dest="debug_tidx",type=int,default=None)
     parser.add_argument('--reverse_grad',default=False,action="store_true")
+
+    parser.add_argument('-topic_epoch',dest="topic_epoch",type=int,default=None)
+    parser.add_argument('-num_proj_iter',dest="num_proj_iter",type=int,default=None)
     
 
     parser.add_argument('-emb_path',dest="emb_path",type=str,default=None)
@@ -1920,7 +2051,7 @@ if __name__=="__main__":
     data_args["expt_name"]=model_args["expt_name"]
     model_args["load_weight_exp"]=args.load_weight_exp
     model_args["load_weight_epoch"]=args.load_weight_epoch
-    model_args["lr"]=0.001
+    model_args["lr"]=args.lr
     model_args["epochs"]=args.num_epochs
     model_args["l1_lambda"]=args.l1_lambda
     model_args["valid_split"]=0.2
@@ -1936,6 +2067,8 @@ if __name__=="__main__":
     model_args["train_emb"]=args.train_emb
     model_args["normalize_emb"]=args.normalize_emb
     model_args["num_hidden_layer"] = 1
+    model_args["num_proj_iter"]=args.num_proj_iter
+    model_args["topic_epochs"]=args.topic_epochs
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])

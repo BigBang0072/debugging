@@ -885,7 +885,7 @@ class DataHandleTransformer():
             token_list = df.iloc[ridx][pdoc_col_name]
             #Unknown words are being left out all together
             index_list = [
-                self.emb_model.get_vector(token) 
+                self.emb_model.key_to_index[token] 
                     for token in token_list
                         if token in self.emb_model.key_to_index
             ]
