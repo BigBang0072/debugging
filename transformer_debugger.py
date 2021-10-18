@@ -689,6 +689,208 @@ class TransformerClassifier(keras.Model):
         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
         acc_op.update_state(acc)
 
+class SimpleNBOW(keras.Model):
+    '''
+    This will be used for the Stage 2 when we want to start with simple NBOW model
+    '''
+    def __init__(self,data_args,model_args,data_handler):
+        super(SimpleNBOW,self).__init__()
+        self.data_args = data_args 
+        self.model_args = model_args
+        self.data_handler = data_handler
+
+        #Now initilaizing some of the layers for encoder
+        self.nbow_avg_layer = self.get_nbow_avg_layer()
+        self.hidden_layer_list = []
+        for _ in range(self.model_args["num_hidden_layer"]):
+            hlayer = layers.Dense(50,activation="relu")
+            self.hidden_layer_list.append(hlayer)
+        
+        #Initializing the classifier for the main task
+        self.main_task_classifier = layers.Dense(2,activation="softmax")
+
+        #Initializing some of the metrics
+        self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
+        self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
+    
+    def compile(self, optimizer):
+        super(SimpleNBOW, self).compile()
+        self.optimizer = optimizer 
+
+    def reset_all_metrics(self,):
+        self.main_pred_xentropy.reset_state()
+        self.main_valid_accuracy.reset_state()
+
+    def get_nbow_avg_layer(self,):
+        '''
+        This will create a new layer which will be used for averaging the 
+        bag of words correctly i.e by ignoring the unk value
+        '''
+        class NBOWAvgLayer(keras.layers.Layer):
+            '''
+            '''
+            def __init__(self,embedding_layer,embedding_weight_layer,unk_widx):
+                super(NBOWAvgLayer,self).__init__()
+                self.embeddingLayerMain = embedding_layer
+                self.embeddingLayerWeight = embedding_weight_layer
+                self.unk_widx = unk_widx
+
+            def call(self,X_input):
+                '''
+                X_inputs: This is the word --> idx 
+                X_emb   : This is the idx --> emb vectors
+                '''
+                #Creating our own mask and get number of non zero
+                non_unk_mask=tf.cast(
+                        tf.not_equal(X_input,self.unk_widx),
+                    dtype=tf.float32,
+                )
+                num_words=tf.reduce_sum(non_unk_mask,axis=1,keepdims=True)
+
+                #Now we will get the embedding of the inputs
+                X_emb = self.embeddingLayerMain(X_input)
+                #Normalizing the inputs
+                if self.normalize_emb:
+                    X_emb_norm = tf.math.l2_normalize(X_emb,axis=-1)
+                else:
+                    X_emb_norm = X_emb
+
+                #Getting the weights of the individual words
+                X_weight = self.embeddingLayerWeight(X_input)
+
+                #Getting the nonunk_mask ready
+                non_unk_mask = tf.expand_dims(non_unk_mask,axis=-1)
+                #Adding all the nonunk vectors
+                X_emb_weighted = X_emb_norm * tf.sigmoid(X_weight) * non_unk_mask
+                #Now we need to take average of the embedding (zero vec non-train)
+                X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),num_words)
+
+                return X_bow
+        
+        #Get the embedding and weight matrix
+        embedding_layer,embedding_weight_layer = self._initialize_embedding_layer()
+        self.nbow_avg_layer = NBOWAvgLayer(
+                                embedding_layer=embedding_layer,
+                                embedding_weight_layer=embedding_weight_layer,
+                                unk_widx=self.data_handler.emb_model.key_to_index["unk"]
+        )
+
+        return 
+
+    def _initialize_embedding_layer(self,):
+        '''
+        '''
+        #Normalizing the embedding matrix if we want to
+        if(self.model_args["normalize_emb"]==True):
+            self.data_handler.emb_model.unit_normalize_all()
+
+        #Creating the embedding layer
+        emb_matrix = self.data_handler.emb_model.vectors
+        vocab_len , emb_dim = emb_matrix.shape
+        embedding_layer = layers.Embedding(
+                                    vocab_len,
+                                    emb_dim,
+                                    input_length = self.data_args["max_len"],
+                                    trainable = self.model_args["train_emb"]
+        )
+        #Building the embedding layer
+        embedding_layer.build((None,))
+        embedding_layer.set_weights([emb_matrix])
+
+
+
+        #Creating the embedding weight layer
+        emb_weight_matrix = np.random.randn(vocab_len,1)
+        embedding_weight_layer = layers.Embedding(
+                                    vocab_len,
+                                    1,
+                                    input_length = self.data_args["max_len"],
+                                    trainable = True
+        )
+        embedding_weight_layer.build((None,))
+        embedding_weight_layer.set_weights([emb_weight_matrix])
+
+        return embedding_layer,embedding_weight_layer
+
+    def get_main_task_pred_prob(self,X_input):
+        '''
+        Forward propagate the input for the main tasssk
+        '''
+        #Get average embedding
+        Xproj = self.nbow_avg_layer(X_input)
+        #Passing through the hidden layer
+        for hlayer in self.hidden_layer_list:
+            Xproj = hlayer(Xproj)
+        #Getting the prediction
+        Xpred = self.main_task_classifier(Xproj)
+
+        return Xpred 
+    
+    def train_step_stage2(self,dataset_batch,):
+        '''
+        '''
+        #Getting the dataset splits for train and valid       
+        label = dataset_batch["label"]
+        idx = dataset_batch["input_idx"]
+        topic_label = dataset_batch["topic_label"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+
+        #Getting the train data
+        label_train = label[0:valid_idx]
+        idx_train = idx[0:valid_idx]
+        topic_label_train = topic_label[0:valid_idx]
+
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        topic_label_valid = topic_label[valid_idx:]
+
+        #Initializing the loss metric
+        scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+
+        #Training the main task
+        with tf.GradientTape() as tape:
+            #Get the prediction probability
+            main_train_prob = self.get_main_task_pred_prob(idx_train)
+            #Getting the x-entropy lossss
+            main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
+
+            total_loss = main_xentropy_loss
+
+        #Backpropagating
+        grads = tape.gradient(total_loss,self.trainable_weights)
+        self.optimizer.apply_gradients(
+            zip(grads,self.trainable_weights)
+        )
+        #Updating the total loss
+        self.main_pred_xentropy.update_state(main_xentropy_loss)
+
+
+        #Getting the validation loss
+        main_valid_prob = self.get_main_task_pred_prob(idx_valid)
+        self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+    
+    def valid_step_stage2(self,dataset_batch):
+        '''
+        '''
+        #Getting the dataset splits for train and valid       
+        label = dataset_batch["label"]
+        idx = dataset_batch["input_idx"]
+        topic_label = dataset_batch["topic_label"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        topic_label_valid = topic_label[valid_idx:]
+
+        #Getting the validation accuracy of the main task
+        main_valid_prob = self.get_main_task_pred_prob(idx_valid)
+        self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+
 
 @tf.custom_gradient
 def grad_reverse(x):
@@ -842,7 +1044,7 @@ def transformer_trainer_stage2(data_args,model_args):
                                                 data_args["cat_list"][data_args["debug_cidx"]],
                                                 data_args["debug_tidx"],
     ))
-    cat_dataset = data_handler._convert_df_to_dataset_stage2(
+    cat_dataset = data_handler._convert_df_to_dataset_stage2_transformer(
                             df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
                             doc_col_name="doc",
                             label_col_name="label",
@@ -887,7 +1089,7 @@ def transformer_trainer_stage2(data_args,model_args):
 
 
     #Step 2: Now we will remove the topic information and see if performance drops
-    print("Step 1: Training the Main Classifier (to be debugged later)")
+    print("Step 2: Training the Removal Classifier")
     #Creating the forst classifier
     classifier_trm = TransformerClassifier(data_args,model_args)
     #Now we will compile the model
@@ -925,6 +1127,60 @@ def transformer_trainer_stage2(data_args,model_args):
     
 
     print("vacc_main:{:0.5f}\nvacc_trm:{:0.5f}".format(optimal_vacc_main,optimal_vacc_trm))
+
+def nbow_trainer_stage2(data_args,model_args):
+    '''
+    This will train neural-BOW model for the stage 2.
+    '''
+    #Creating one single dataset for time saving and uniformity
+    data_handler = DataHandleTransformer(data_args)
+    if "amazon" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
+    elif "nlp_toy" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
+    else:
+        raise NotImplementedError()
+    #Getting the dataset for the required category and topic
+    print("Getting the dataset for: cat:{}\ttopic:{}".format(
+                                                data_args["cat_list"][data_args["debug_cidx"]],
+                                                data_args["debug_tidx"],
+    ))
+    cat_dataset = data_handler._convert_df_to_dataset_stage2_NBOW(
+                            df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
+                            pdoc_col_name="pdoc",
+                            label_col_name="label",
+                            topic_feature_col_name="topic_feature",
+                            debug_topic_idx=data_args["debug_tidx"]
+    )
+
+
+
+
+    print("Stage 1: Training the main classifier! (to be debugged later)")
+    #Creating the forst classifier
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+    optimal_vacc_main = None
+    for eidx in range(model_args["epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        for data_batch in cat_dataset:
+            classifier_main.train_step_stage2(data_batch)
+        
+            print("xloss:{:0.4f}\tmain_vacc:{:0.3f}".format(
+                                            classifier_main.main_pred_xentropy.result(),
+                                            classifier_main.main_valid_accuracy.result()
+            ))
+
+        #Keeping track of the optimal vaccuracy of the main classifier
+        optimal_vacc_main = classifier_main.main_valid_accuracy.result()
+
+        #Saving the paramenters
+        checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+        classifier_main.save_weights(checkpoint_path)
 
 
 
@@ -1601,6 +1857,9 @@ if __name__=="__main__":
     parser.add_argument('-vocab_path',dest="vocab_path",type=str,default="assets/word2vec_10000_200d_labels.tsv")
     parser.add_argument('-num_neigh',dest="num_neigh",type=int,default=None)
 
+    parser.add_argument('--train_emb',default=False,action="store_true")
+    parser.add_argument('--normalize_emb',default=False,action="store_true")
+
     parser.add_argument("-temb_dim",dest="temb_dim",type=int)
     parser.add_argument("--normalize_temb",default=False,action="store_true")
 
@@ -1671,6 +1930,9 @@ if __name__=="__main__":
     model_args["gate_weight_epoch"]=args.gate_weight_epoch
     model_args["gate_var_cutoff"]=args.gate_var_cutoff
     model_args["reverse_grad"]=args.reverse_grad
+    model_args["train_emb"]=args.train_emb
+    model_args["normalize_emb"]=args.normalize_emb
+    model_args["num_hidden_layer"] = 1
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])

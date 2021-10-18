@@ -429,7 +429,7 @@ class DataHandleTransformer():
         '''
         #First of all we get the topic list
         if(self.data_args["emb_path"]!=None):
-            self._load_word_embedding()
+            self._load_word_embedding_for_nbr_extn()
             self._create_topic_list(extend=True)
         else:
             self._create_topic_list(extend=False)
@@ -783,7 +783,7 @@ class DataHandleTransformer():
 
         return new_topic_set
     
-    def _load_word_embedding(self,):
+    def _load_word_embedding_for_nbr_extn(self,):
         #Loading the embedding from the gensim repo
         print("Loading the WordVectors via Gensim! Hold Tight!")
         emb_model = gensim_api.load(self.data_args["emb_path"])
@@ -812,7 +812,27 @@ class DataHandleTransformer():
                                         metric="minkowski",#DEBUG
                                         p=2,leaf_size=30,
                                         n_jobs=-1).fit(self.emb_matrix)
+    
+    def _load_full_gensim_word_embedding(self,):
+        '''
+        We will load the full given word embedding matrix in the memory.
+        This shouldn't be very expensive on memory as the maximum embedding
+        matrix size is in few GBs.
+        '''
+        #Loading the embedding from the gensim repo
+        print("Loading the WordVectors via Gensim! Hold Tight!")
+        emb_model = gensim_api.load(self.data_args["emb_path"])
+        self.emb_model = emb_model
 
+        '''
+        This has everything we need already:
+        1. index_to_key         : list of words sorted by the index
+        2. key_to_index         : word2index dict
+        4. get_vector           : one vector for the given word
+        5. vectors              : all the embedding matrix
+        '''
+        return 
+        
     def _save_topic_distiribution(self,model, vectorizer,fname, top_n=100):
         #Saving the topic distribution to a file
         file_path = "nlp_logs/{}/".format(self.data_args["expt_name"])
@@ -829,7 +849,70 @@ class DataHandleTransformer():
                 whandle.write(write_string)
                 print("Topic:{} \t\t Component:{}".format(idx,feature_vector))
 
-    def _convert_df_to_dataset_stage2(self,df,doc_col_name,label_col_name,
+    def _convert_df_to_dataset_stage2_NBOW(self,df,pdoc_col_name,label_col_name,
+                                        topic_feature_col_name,debug_topic_idx):
+        '''
+        This function will generate the tf dataset for the stage 2 when we are using 
+        the "neural" BOW model.
+
+        So here from the pdoc i.e the tokenized word list we will convert them to the 
+        index wrt to the word emebdding vectors which will be decoded in the training
+        step directly from the embedding layer.
+        '''
+        #First of all parsing the review documents into tensors
+        doc_list = []
+        all_index_list = []
+        label_list = []
+        topic_label_list = []
+        # topic_weight_list = []
+        for ridx in range(df.shape[0]):
+            #Getting the label
+            label_list.append(df.iloc[ridx][label_col_name])
+
+            #Getting the topic labels
+            topic_feature = df.iloc[ridx][topic_feature_col_name]
+            topic_label=0
+            if topic_feature[debug_topic_idx]>0:
+                topic_label=1
+            topic_label_list.append(topic_label)
+            
+            # topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
+
+            #Now processing the document to token idx
+            token_list = df.iloc[ridx][pdoc_col_name]
+            #Unknown words are being left out all together
+            index_list = [
+                self.emb_model.get_vector(token) 
+                    for token in token_list
+                        if token in self.emb_model.key_to_index
+            ]
+            #Making all the vector one-sized
+            padding = [self.emb_model.key_to_index["unk"]]*(self.data_args["max_len"]-len(index_list))
+            index_list = index_list + padding
+            all_index_list.append(index_list)
+
+
+
+        #Creating the dataset for this category
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    label=np.array(label_list),
+                                    input_idx = np.array(all_index_list),
+                                    # topic=np.array(topic_list),
+                                    # topic_weight=np.array(topic_weight_list),
+                                    # input_idx = input_idx,
+                                    # attn_mask = attn_mask,
+                                    # topic_feature=topic_feature,
+                                    topic_label = np.array(topic_label_list)
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset
+    
+    def _convert_df_to_dataset_stage2_transformer(self,df,doc_col_name,label_col_name,
                                         topic_feature_col_name,debug_topic_idx):
         '''
         This function will conver the dataframe to a tensorflow dataset
