@@ -986,6 +986,13 @@ class SimpleNBOW(keras.Model):
         #Getting the topic validation accuracy
         topic_valid_prob = self.topic_task_classifier(X_proj)
         self.topic_valid_accuracy.update_state(topic_label_valid,topic_valid_prob)
+
+        mmd_var_dict=dict(
+                        main_valid_prob = main_valid_prob,
+                        main_label = label_valid,
+                        topic_label = topic_label_valid
+        )
+        return mmd_var_dict
     
     def _get_proj_X_enc(self,X_enc,P_matrix):
         '''
@@ -1236,6 +1243,51 @@ def transformer_trainer_stage2(data_args,model_args):
 
     print("vacc_main:{:0.5f}\nvacc_trm:{:0.5f}".format(optimal_vacc_main,optimal_vacc_trm))
 
+def check_topic_usage_mmd(cat_dataset,classifier_main):
+    #initializing the var dict
+    mmd_var_dict = {
+        "main_valid_prob" : [],
+        "main_label"      : [],
+        "topic_label"     : []
+    }
+
+    #Getting the prediction and the labels
+    P_W = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+    for data_batch in cat_dataset:
+        var_dict = classifier_main.valid_step_stage2(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_W
+        )
+        for key in mmd_var_dict.keys():
+            mmd_var_dict[key].append(var_dict[key])
+    
+    #Consolidating all te variables
+    for key in mmd_var_dict.keys():
+        mmd_var_dict[key] = np.concatenate(mmd_var_dict[key],axis=0)
+    
+    #Now we could get the main distribution and conditional distribution
+    mmd_var_dict["main_valid_pred"] = np.argmax(mmd_var_dict["main_valid_prob"])
+
+    #Now getting the marginal distribution
+    marg_dist_dict = {}
+    for yval in [0,1]:
+        for zval in [0,1]:
+            #Now segmenting the results
+            ymask = mmd_var_dict["main_label"]==yval 
+            zmask = mmd_var_dict["topic_label"]==zval
+            overall_mask = np.logical_and(ymask,zmask)
+            #Getting the prediction in this segment
+            pred = mmd_var_dict["main_valid_pred"][overall_mask]
+            p1 = np.sum(pred)/(len(pred)+1e-15)
+
+            #Getting the marginal distribution for the 
+            marg_dist_dict["y={},z={}".format(yval,zval)]=[
+                                                    "p(f(x)=0)={:0.2f}".format(1-p1),
+                                                    "p(f(x)=1)={:0.2f}".format(p1)
+            ]
+    print("Marginal Distribution:")
+    mypp(marg_dist_dict)
+
 def nbow_trainer_stage2(data_args,model_args):
     '''
     This will train neural-BOW model for the stage 2.
@@ -1296,6 +1348,9 @@ def nbow_trainer_stage2(data_args,model_args):
         checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         classifier_main.save_weights(checkpoint_path)
     
+    #Getting the MMD metrics to see usage
+    check_topic_usage_mmd(cat_dataset,classifier_main)
+    
     print("Stage 2: Removing the topic information!")
     #Next we will be going to use this trained classifier to do the null space projection
     all_proj_matrix_list = []
@@ -1306,6 +1361,8 @@ def nbow_trainer_stage2(data_args,model_args):
 
         #Step1: Training the topic classifier now
         tbar = tqdm(range(model_args["topic_epochs"]))
+        #Resetting the topic classifier
+        classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
         for eidx in tbar:
             for data_batch in cat_dataset:
                 classifier_main.train_step_stage2(
@@ -1337,20 +1394,22 @@ def nbow_trainer_stage2(data_args,model_args):
 
         #Step 3: Now we need to retrain the main task head, 
         #to again get optimal classifier in this projected space
-        cbar = tqdm(range(model_args["topic_epochs"]))
-        for eidx in cbar:
-            for data_batch in cat_dataset:
-                classifier_main.train_step_stage2(
-                                    dataset_batch=data_batch,
-                                    task="inlp_main",
-                                    P_matrix=P_W,
-                )
+        #This seems like not a tright thing to do, as mechanisam change could happen and 
+        #we could get equaivalent performance from other feature, though the spurious was being used.
+        # cbar = tqdm(range(model_args["topic_epochs"]))
+        # for eidx in cbar:
+        #     for data_batch in cat_dataset:
+        #         classifier_main.train_step_stage2(
+        #                             dataset_batch=data_batch,
+        #                             task="inlp_main",
+        #                             P_matrix=P_W,
+        #         )
 
-            #Updating the description of the tqdm
-            cbar.set_postfix_str("mceloss:{:0.4f},  mvacc:{:0.3f}".format(
-                                        classifier_main.main_pred_xentropy.result(),
-                                        classifier_main.main_valid_accuracy.result()
-            ))
+        #     #Updating the description of the tqdm
+        #     cbar.set_postfix_str("mceloss:{:0.4f},  mvacc:{:0.3f}".format(
+        #                                 classifier_main.main_pred_xentropy.result(),
+        #                                 classifier_main.main_valid_accuracy.result()
+        #     ))
 
 
         #Now we need to get the validation accuracy on this projected matrix

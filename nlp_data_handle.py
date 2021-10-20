@@ -893,20 +893,36 @@ class DataHandleTransformer():
             padding = [self.emb_model.key_to_index["unk"]]*(self.data_args["max_len"]-len(index_list))
             index_list = index_list + padding
             all_index_list.append(index_list)
+        
+        #Printing the topic label distribution for both main task class
+        label_list = np.array(label_list)
+        topic_label_list=np.array(topic_label_list)
+        #Getting the main task class mask
+        main_class0_mask = (label_list==0)
+        main_class1_mask = (label_list==1)
+        def get_topic_segmentation(class_mask,topic_label_arr,name):
+            topic_label_class = topic_label_arr[class_mask]
+            print("class:{}\tnum_topic_0:{}\tnum_topic_1:{}".format(
+                                        name,
+                                        topic_label_class.shape[0]-np.sum(topic_label_class),
+                                        np.sum(topic_label_class)
+            ))
+        get_topic_segmentation(main_class0_mask,topic_label_list,"0")
+        get_topic_segmentation(main_class1_mask,topic_label_list,"1")
 
 
 
         #Creating the dataset for this category
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
-                                    label=np.array(label_list),
+                                    label=label_list,
                                     input_idx = np.array(all_index_list),
                                     # topic=np.array(topic_list),
                                     # topic_weight=np.array(topic_weight_list),
                                     # input_idx = input_idx,
                                     # attn_mask = attn_mask,
                                     # topic_feature=topic_feature,
-                                    topic_label = np.array(topic_label_list)
+                                    topic_label = topic_label_list
                                 )
         )
 
