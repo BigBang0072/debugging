@@ -582,7 +582,11 @@ class DataHandleTransformer():
         pos_adjective = set([
             "good","great","awesome","wonderful","terrific","graceful",
             "ecstatic", "lucid", "extraordinary", "impressive", "spectacular",
-            "happy", "delicious"
+            "happy", "delicious", "promoted", "powerful", "attractive",
+            "love", "outstanding", "intelligent", "tough", "brave", "gentleman",
+            "strong", "loving", "caring", "gentle", "well", "valuable", "pretty",
+            "trusted", "popular", "loyal", "interesting", "important", "nice",
+            "smart", "finest", "talented", "charismatic", "respectful"
         ])
         neg_adjective  = set([
             "bad", "dreadful", "awful", "horrible", "horrific", "terrible",
@@ -893,7 +897,7 @@ class DataHandleTransformer():
             padding = [self.emb_model.key_to_index["unk"]]*(self.data_args["max_len"]-len(index_list))
             index_list = index_list + padding
             all_index_list.append(index_list)
-        
+
         #Printing the topic label distribution for both main task class
         label_list = np.array(label_list)
         topic_label_list=np.array(topic_label_list)
@@ -909,6 +913,7 @@ class DataHandleTransformer():
             ))
         get_topic_segmentation(main_class0_mask,topic_label_list,"0")
         get_topic_segmentation(main_class1_mask,topic_label_list,"1")
+#         pdb.set_trace()
 
 
 

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from tensorflow._api.v2 import data
 import scipy
+from scipy.spatial import distance
 
 import tensorflow as tf
 from tensorflow import keras
@@ -1266,10 +1267,13 @@ def check_topic_usage_mmd(cat_dataset,classifier_main):
         mmd_var_dict[key] = np.concatenate(mmd_var_dict[key],axis=0)
     
     #Now we could get the main distribution and conditional distribution
-    mmd_var_dict["main_valid_pred"] = np.argmax(mmd_var_dict["main_valid_prob"])
+    mmd_var_dict["main_valid_pred"] = np.argmax(mmd_var_dict["main_valid_prob"],axis=-1)
 
     #Now getting the marginal distribution
     marg_dist_dict = {}
+    marg_dist_z_dict = {}
+    dist_matrix_yz = np.zeros((4,2),dtype=np.float32)
+    dist_matrix_z = np.zeros((2,2),dtype=np.float32)
     for yval in [0,1]:
         for zval in [0,1]:
             #Now segmenting the results
@@ -1278,15 +1282,37 @@ def check_topic_usage_mmd(cat_dataset,classifier_main):
             overall_mask = np.logical_and(ymask,zmask)
             #Getting the prediction in this segment
             pred = mmd_var_dict["main_valid_pred"][overall_mask]
-            p1 = np.sum(pred)/(len(pred)+1e-15)
+            p1 = np.sum(pred)/(len(pred)+1e-15) #if len(pred)!=0 else 0.5
+            print("y={},z={},len:{}".format(yval,zval,len(pred)))
 
             #Getting the marginal distribution for the 
             marg_dist_dict["y={},z={}".format(yval,zval)]=[
                                                     "p(f(x)=0)={:0.2f}".format(1-p1),
                                                     "p(f(x)=1)={:0.2f}".format(p1)
             ]
-    print("Marginal Distribution:")
+            dist_matrix_yz[2*yval+zval,0]=1-p1
+            dist_matrix_yz[2*yval+zval,1]=p1
+            
+            #Just getting marginal in z
+            pred_z = mmd_var_dict["main_valid_pred"][zmask]
+            p1_z = np.sum(pred_z)/(len(pred_z)+1e-15) #if len(pred_z)!=0 else 0.5
+            print("z={},len:{}".format(zval,len(pred_z)))
+            marg_dist_z_dict["z={}".format(zval)]=[
+                                                    "p(f(x)=0)={:0.2f}".format(1-p1_z),
+                                                    "p(f(x)=1)={:0.2f}".format(p1_z)
+            ]
+            dist_matrix_z[zval,0]=1-p1_z
+            dist_matrix_z[zval,1]=p1_z
+            
+    print("Conditional Distribution:")
     mypp(marg_dist_dict)
+    print("Conditional Distribution: Z")
+    mypp(marg_dist_z_dict)
+    
+    causal_distance = (distance.jensenshannon(dist_matrix_yz[0,:],dist_matrix_yz[1,:])
+                       +distance.jensenshannon(dist_matrix_yz[2,:],dist_matrix_yz[3,:]))
+    anticausal_distance = distance.jensenshannon(dist_matrix_z[0,:],dist_matrix_z[1,:])
+    print("js_yz:{:0.5f}\n js_z :{:0.5f}".format(causal_distance,anticausal_distance))
 
 def nbow_trainer_stage2(data_args,model_args):
     '''
