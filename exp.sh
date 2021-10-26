@@ -315,11 +315,25 @@ mkdir nlp_logs
 
 
 #Making the current very toyish dataset more clear
-python transformer_debugger.py -expt_num "ct11.0" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.85 -stage 1
-python transformer_debugger.py -expt_num "ct11.1" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.88 -stage 1
-python transformer_debugger.py -expt_num "ct11.2" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.91 -stage 1
-python transformer_debugger.py -expt_num "ct11.3" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.94 -stage 1
-python transformer_debugger.py -expt_num "ct11.4" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.97 -stage 1
-python transformer_debugger.py -expt_num "ct11.5" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 1.0 -stage 1
+# python transformer_debugger.py -expt_num "ct11.0" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.85 -stage 1
+# python transformer_debugger.py -expt_num "ct11.1" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.88 -stage 1
+# python transformer_debugger.py -expt_num "ct11.2" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.91 -stage 1
+# python transformer_debugger.py -expt_num "ct11.3" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.94 -stage 1
+# python transformer_debugger.py -expt_num "ct11.4" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 0.97 -stage 1
+# python transformer_debugger.py -expt_num "ct11.5" -num_topics 10 -num_epochs 70 -transformer "bert-base-uncased" -l1_lambda 0.0 -temb_dim 1 -path "dataset/nlp_toy/data/" -causal_ratio 0.85 -spurious_ratio 1.0 -stage 1
+
+
+#New stage2 base using the NBOW
+# python transformer_debugger.py -expt_num "ct12.main" -num_topics 10 -num_epochs 100 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 1.0 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 0 -lr 0.005
+# python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 6 -lr 0.005 -num_proj_iter 10 -topic_epochs 0 #--extend_topic_set -num_neigh 10
+# python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 0 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
+python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 1 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
+python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 2 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
+python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 3 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
+python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 6 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
+python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 7 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
+python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 0 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
+
+python transformer_debugger.py -expt_num "ct12.inlp" -num_topics 10 -num_epochs 30 -path "dataset/nlp_toy/data/" -emb_path "glove-wiki-gigaword-100" -causal_ratio 0.85 -spurious_ratio 0.90 -stage 2 --normalize_emb -debug_cidx 1 -debug_tidx 9 -lr 0.005 -num_proj_iter 10 -topic_epochs 0
 
 
