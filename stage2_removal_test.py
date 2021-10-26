@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial import distance
 
 import tensorflow as tf
 from tensorflow import keras
@@ -9,7 +10,7 @@ import pdb
 from pprint import pprint
 import matplotlib.pyplot as plt
 
-
+from inlp_debias import get_rowspace_projection,get_projection_to_intersection_of_nullspaces
 
 class INLPRemover():
     '''
@@ -94,6 +95,7 @@ class INLPRemover():
                                                         model.main_xentropy_loss.result(),
                                                         model.main_valid_acc.result()
             ))
+        main_init_vacc = model.main_valid_acc.result() 
         
         #Next we will train all the topic classifier
         print("Training the Topics!!")
@@ -118,6 +120,69 @@ class INLPRemover():
                                                     model.topic_xentropy_loss_list[tidx].result(),
                                                     model.topic_valid_acc_list[tidx].result()
                 ))
+        
+        #Saving the model
+        self.model = model
+        topic_init_vacc = {
+                    tidx:model.topic_valid_acc_list[tidx].result() 
+                        for tidx in range(self.args["num_topics"])
+        }
+
+        #Getting the direction correlation
+        self.get_all_direction()
+  
+        #Now removing the topic information one by one and checking the validation accuracy
+        for tidx in range(self.args["num_topics"]):
+            print("Removing the topic : {}".format(tidx))
+
+            #Getting the projection matrix
+            topic_W_matrix = model.topic_classifier_list[tidx].get_weights()[0].T
+            #Now getting the projection matrix
+            P_W_curr = get_rowspace_projection(topic_W_matrix)
+            all_proj_matrix_list = [P_W_curr]
+            #Getting the aggregate projection matrix
+            P_W = get_projection_to_intersection_of_nullspaces(
+                                            rowspace_projection_matrices=all_proj_matrix_list,
+                                            input_dim=model.args["latent_space_dim"]
+            )
+
+            #Getting the validation accuracy for main and this topic
+            model.reset_all_metrics()
+            for data_batch in dataset:
+                model.valid_step(
+                        data_batch=data_batch,
+                        tidx=tidx,
+                        P_matrix=P_W
+                )
+            
+            print("Removing topic:{:}\tmain_init:{:0.2f}\tmain_final:{:0.2f}\ttopic_init:{:0.2f}\ttopic_final:{:0.2f}".format(
+                                                tidx,
+                                                main_init_vacc,
+                                                model.main_valid_acc.result(),
+                                                topic_init_vacc[tidx],
+                                                model.topic_valid_acc_list[tidx].result()
+            ))
+
+        return model
+    
+    def get_all_direction(self,):
+        #Now we will get all the direction vector for each of the topic
+        main_task_dir = np.squeeze(self.model.main_task_classifier.trainable_weights[0].numpy())
+        print("Main Direction:")
+        pprint(main_task_dir)
+
+        #Now getting all the topic direction and getting their cosine similarity with the main task
+        all_topic_cosine = {}
+        for tidx in range(self.args["num_topics"]):
+            topic_dir = np.squeeze(self.model.topic_classifier_list[tidx].trainable_weights[0].numpy())
+            topic_dist = distance.cosine(main_task_dir,topic_dir)
+            print("\nTopic:{} Direction".format(tidx))
+            pprint(topic_dir)
+
+            all_topic_cosine[tidx]=topic_dist
+        
+        print("All topic cosine-distance")
+        pprint(all_topic_cosine)
 
 
 class MyModel(keras.Model):
@@ -128,6 +193,7 @@ class MyModel(keras.Model):
     def __init__(self,args):
         super(MyModel,self).__init__()
         self.args=args
+        self.args["latent_space_dim"]=self.args["num_topics"]#for now
 
         #Creating the main task classifier
         self.main_task_classifier = layers.Dense(1,activation="sigmoid")
@@ -230,6 +296,44 @@ class MyModel(keras.Model):
 
         else:
             raise NotImplementedError()
+    
+    def valid_step(self,data_batch,tidx,P_matrix):
+        '''
+        '''
+        #Getting the dataset
+        valid_idx = int( (1-self.args["valid_split"]) * self.args["batch_size"] )
+
+        #Getting the valid dataset
+        valid_X = data_batch["X"][valid_idx:]
+        valid_main_Y = data_batch["main_Y"][valid_idx:]
+        valid_topic_Y = data_batch["topic_Y"][valid_idx:]
+
+        #Getting the validation accuracy on every task
+        #Getting the encoded X
+        X_proj = self._get_proj_X_enc(valid_X,P_matrix)
+
+        #Now getting the main task accuracy
+        main_pred = self.main_task_classifier(X_proj)
+        if(valid_X.shape[0]!=0):
+            self.main_valid_acc.update_state(valid_main_Y,main_pred)
+
+        #Now getting the topic task accuracy
+        topic_pred = self.topic_classifier_list[tidx](X_proj)
+        if(valid_X.shape[0]!=0):
+            self.topic_valid_acc_list[tidx].update_state(valid_topic_Y[:,tidx],topic_pred)
+   
+    def _get_proj_X_enc(self,X_enc,P_matrix):
+        '''
+        This will give the projected encoded latent representaion which will be furthur
+        removed of the information.
+        '''
+        #Converting to the numpy array
+        P_matrix = tf.constant(P_matrix.T,dtype=tf.float32)
+
+        #Now projecting this latent represention into null space
+        X_proj = tf.matmul(X_enc,P_matrix)
+
+        return X_proj
 
 
 if __name__=="__main__":
