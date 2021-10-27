@@ -133,7 +133,7 @@ class INLPRemover():
   
         #Now removing the topic information one by one and checking the validation accuracy
         for tidx in range(self.args["num_topics"]):
-            print("Removing the topic : {}".format(tidx))
+            print("\nRemoving the topic : {}".format(tidx))
 
             #Getting the projection matrix
             topic_W_matrix = model.topic_classifier_list[tidx].get_weights()[0].T
@@ -148,20 +148,22 @@ class INLPRemover():
 
             #Getting the validation accuracy for main and this topic
             model.reset_all_metrics()
-            for data_batch in dataset:
-                model.valid_step(
-                        data_batch=data_batch,
-                        tidx=tidx,
-                        P_matrix=P_W
-                )
+            #Lets see how this removal affects other topics also
+            for other_tidx in range(self.args["num_topics"]):
+                for data_batch in dataset:
+                    model.valid_step(
+                            data_batch=data_batch,
+                            tidx=other_tidx,
+                            P_matrix=P_W
+                    )
             
-            print("Removing topic:{:}\tmain_init:{:0.2f}\tmain_final:{:0.2f}\ttopic_init:{:0.2f}\ttopic_final:{:0.2f}".format(
-                                                tidx,
-                                                main_init_vacc,
-                                                model.main_valid_acc.result(),
-                                                topic_init_vacc[tidx],
-                                                model.topic_valid_acc_list[tidx].result()
-            ))
+                print("main_init:{:0.2f}\tmain_final:{:0.2f}\ttopic:{:}\ttopic_init:{:0.2f}\ttopic_final:{:0.2f}".format(
+                                                    main_init_vacc,
+                                                    model.main_valid_acc.result(),
+                                                    other_tidx,
+                                                    topic_init_vacc[other_tidx],
+                                                    model.topic_valid_acc_list[other_tidx].result()
+                ))
 
         return model
     
@@ -169,7 +171,7 @@ class INLPRemover():
         #Now we will get all the direction vector for each of the topic
         main_task_dir = np.squeeze(self.model.main_task_classifier.trainable_weights[0].numpy())
         print("Main Direction:")
-        pprint(main_task_dir)
+        pprint(main_task_dir/np.linalg.norm(main_task_dir))
 
         #Now getting all the topic direction and getting their cosine similarity with the main task
         all_topic_cosine = {}
@@ -177,7 +179,7 @@ class INLPRemover():
             topic_dir = np.squeeze(self.model.topic_classifier_list[tidx].trainable_weights[0].numpy())
             topic_dist = distance.cosine(main_task_dir,topic_dir)
             print("\nTopic:{} Direction".format(tidx))
-            pprint(topic_dir)
+            pprint(topic_dir/np.linalg.norm(topic_dir))
 
             all_topic_cosine[tidx]=topic_dist
         
@@ -193,7 +195,18 @@ class MyModel(keras.Model):
     def __init__(self,args):
         super(MyModel,self).__init__()
         self.args=args
-        self.args["latent_space_dim"]=self.args["num_topics"]#for now
+
+        #Creting the encoder layers
+        self.encoder_layer_list=[]
+        for lidx in range(self.args["num_hlayer"]):
+            self.encoder_layer_list.append(
+                        layers.Dense(self.args["hlayer_dim"],activation="relu")
+            )
+        if(self.args["num_hlayer"]!=0):
+            self.args["latent_space_dim"]=self.args["hlayer_dim"]#for now
+        else:
+            self.args["latent_space_dim"]=self.args["num_topics"]#for now
+        
 
         #Creating the main task classifier
         self.main_task_classifier = layers.Dense(1,activation="sigmoid")
@@ -234,6 +247,13 @@ class MyModel(keras.Model):
         super(MyModel, self).compile()
         self.optimizer = optimizer 
     
+    def pass_via_encoder(self,X):
+        '''
+        '''
+        for hlayer in self.encoder_layer_list:
+            X = hlayer(X)
+        return X
+    
     def train_step(self,data_batch,tidx,task):
         '''
         '''
@@ -256,13 +276,18 @@ class MyModel(keras.Model):
         if task=="main":
             with tf.GradientTape() as tape:
                 #Making the forward pass
-                train_prob = self.main_task_classifier(train_X)
+                train_enc = self.pass_via_encoder(train_X)
+                train_prob = self.main_task_classifier(train_enc)
                 main_loss = bxentropy_loss(train_main_Y,train_prob)
             
             #Training the main task params
-            grads = tape.gradient(main_loss,self.main_task_classifier.trainable_weights)
+            params = []
+            for hlayer in self.encoder_layer_list:
+                params += hlayer.trainable_weights
+            params += self.main_task_classifier.trainable_weights
+            grads = tape.gradient(main_loss,params)
             self.optimizer.apply_gradients(
-                zip(grads,self.main_task_classifier.trainable_weights)
+                zip(grads,params)
             )
 
             #Updating the loss
@@ -270,14 +295,16 @@ class MyModel(keras.Model):
 
             #Getting the validation accuracy
             if(valid_X.shape[0]!=0):
-                valid_pred = self.main_task_classifier(valid_X)
+                valid_enc = self.pass_via_encoder(valid_X)
+                valid_pred = self.main_task_classifier(valid_enc)
                 self.main_valid_acc.update_state(valid_main_Y,valid_pred)
 
         elif task=="topic":
             #Training a particular topic classifier
             with tf.GradientTape() as tape:
                 #Forward pass though the topic classifier
-                train_pred = self.topic_classifier_list[tidx](train_X)
+                train_enc = self.pass_via_encoder(train_X)
+                train_pred = self.topic_classifier_list[tidx](train_enc)
                 topic_loss = bxentropy_loss(train_topic_Y[:,tidx],train_pred)
             
             #Training the topic classifier
@@ -291,7 +318,8 @@ class MyModel(keras.Model):
 
             #Getting the validation accuracy of the topic
             if(valid_X.shape[0]!=0):
-                valid_pred = self.topic_classifier_list[tidx](valid_X)
+                valid_enc = self.pass_via_encoder(valid_X)
+                valid_pred = self.topic_classifier_list[tidx](valid_enc)
                 self.topic_valid_acc_list[tidx].update_state(valid_topic_Y[:,tidx],valid_pred)
 
         else:
@@ -310,7 +338,8 @@ class MyModel(keras.Model):
 
         #Getting the validation accuracy on every task
         #Getting the encoded X
-        X_proj = self._get_proj_X_enc(valid_X,P_matrix)
+        valid_enc = self.pass_via_encoder(valid_X)
+        X_proj = self._get_proj_X_enc(valid_enc,P_matrix)
 
         #Now getting the main task accuracy
         main_pred = self.main_task_classifier(X_proj)
@@ -347,6 +376,9 @@ if __name__=="__main__":
     args["lr"]=0.005
     args["main_epochs"]=10
     args["topic_epochs"]=10
+
+    args["num_hlayer"] = 0
+    args["hlayer_dim"] = -1
 
 
     
