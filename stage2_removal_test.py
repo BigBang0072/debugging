@@ -1,5 +1,7 @@
+from typing import DefaultDict
 import numpy as np
 from scipy.spatial import distance
+from collections import defaultdict
 
 import tensorflow as tf
 from tensorflow import keras
@@ -475,27 +477,58 @@ class MyModel(keras.Model):
 
 
 if __name__=="__main__":
-    #Getting the required arguments
-    args = {}
-    args["num_examples"]=1000
-    args["batch_size"]=128
-    args["valid_split"]=0.2
-    args["viz_data"]=True 
-
-    args["lr"]=0.005
-    args["main_epochs"]=1
-    args["topic_epochs"]=50
-
-    args["num_hlayer"] = 0
-    args["hlayer_dim"] = -1
-
-
-    args["beta"] = 1.0
-    args["label_noise"] = 1-0.5  #not-so-perfect correlatedness
-
-
+    #CONVERGENCE EXPERIMENT
+    label_corr_prob = np.arange(0.5,1.0,0.1)
+    num_rerun = 5
     
-    #Buying the 10 rs "remover"
-    remover = INLPRemover(args)
-    remover.trainer()
+    convergence_result_dict=defaultdict(list)
+    for lprob in label_corr_prob:
+        for ridx in range(num_rerun):
+            #Getting the required arguments
+            args = {}
+            args["num_examples"]=1000
+            args["batch_size"]=128
+            args["valid_split"]=0.2
+            args["viz_data"]=False 
+
+            args["lr"]=0.005
+            args["main_epochs"]=1
+            args["topic_epochs"]=40
+
+            args["num_hlayer"] = 0
+            args["hlayer_dim"] = -1
+
+
+            args["beta"] = 1.0
+            args["label_noise"] = 1-lprob  #not-so-perfect correlatedness
+
+
+            #Buying the 10 rs "remover"
+            remover = INLPRemover(args)
+            all_topic_angle = remover.trainer()
+
+            convergence_result_dict[lprob].append(all_topic_angle)
+    #Plotting the result
+    mean_topic_angle,std_topic_angle =[[],[]],[[],[]]
+    print(convergence_result_dict)
+    for lprob in label_corr_prob:
+        topic1_angle,topic2_angle = zip(*convergence_result_dict[lprob])
+        #Getting the mean topic angle across runs
+        mean_topic_angle[0].append(np.mean(topic1_angle))
+        mean_topic_angle[1].append(np.mean(topic2_angle))
+        #Getting the std across runs
+        std_topic_angle[0].append(np.std(topic1_angle))
+        std_topic_angle[1].append(np.std(topic2_angle))
+    
+    print(mean_topic_angle,std_topic_angle)
+    x=label_corr_prob
+    plt.errorbar(x,np.array(mean_topic_angle[0]),fmt="o-",yerr=np.array(std_topic_angle[0]),label="topic1_angle")
+    plt.errorbar(x,np.array(mean_topic_angle[1]),fmt="o-",yerr=np.array(std_topic_angle[1]),label="topic2_angle")
+    plt.legend()
+    plt.ylim((0.0,1.0))
+    plt.xlabel("p (perfect-correlatedness)")
+    plt.ylabel("angle (multiple of pi)")
+    plt.grid()
+    plt.show()
+
 
