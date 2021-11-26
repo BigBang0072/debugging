@@ -22,7 +22,7 @@ class INLPRemover():
         '''
         self.args=args
     
-    def generate_dataset(self,):
+    def generate_dataset_old(self,):
         '''
         '''
         #Causal Features/Topics
@@ -67,11 +67,86 @@ class INLPRemover():
 
         return dataset
     
+    def generate_dataset_2D(self,):
+        '''
+        Here we will test the following things in 2D
+        1. Convergence of the individual topics in presence not-perfect correlation
+        2. Removal and new topic direction convergence
+        3. Removal with subsequent iteration.
+        '''
+        print("Generating the dataset")
+        #Creating the first topic (main topic)
+        x1 = np.random.uniform(low=-1,high=1,size=self.args["num_examples"])
+        y1 = 1*(x1>=0.0)
+
+        #Creating the second topic (corrupting wrt to the main topic labels)
+        '''
+        Design Choices:
+        1. Have a linear correlation with the first topic
+        2. Have non-linear correlation with the first topic
+        '''
+        #Creating the no-so-perfect correlation (by reversing the labels)
+        label_noise = self.args["label_noise"]
+        y2=y1.copy()
+        y2[np.where(y1==1)[0][0:int(self.args["num_examples"]/2*label_noise)]]= 0
+        y2[np.where(y1==0)[0][0:int(self.args["num_examples"]/2*label_noise)]]= 1
+        print("Num example reversed:",int(self.args["num_examples"]/2*label_noise))
+        print("Overall disagreement: ", np.sum(y2==y1)/y2.shape[0])
+        #Now creating the perfect data based on this label as topic 2
+        #Case 1: linear correaltion with the data
+        x2 = x1.copy()
+        x2[y2==0] = -1* np.abs(x2[y2==0])
+        x2[y2==1] = +1* np.abs(x2[y2==1])
+        #Case 2: Non linear
+        #Case 3: Random correlation (i.e non-functional)
+
+        #Creating the topic direction
+        self.ref_all_topic_dirs = [ 
+                            [1.0,0.0],
+                            [1.0,0.0]
+        ]
+
+
+        #Getting the statistics of the points
+        print("topic x1: num_pos:{}\tnum_neg:{}".format(np.sum(y1==1),np.sum(y1==0)))
+        print("topic x2: num_pos:{}\tnum_neg:{}".format(np.sum(y2==1),np.sum(y2==0)))
+        #Plotting to check this relationship
+        if(self.args["viz_data"]):
+            color = np.zeros((self.args["num_examples"],3))
+            color[y1==1]=[0,255,0]
+            color[y1==0]=[255,0,0]
+            plt.scatter(x1,x2,c=color/255.0)
+            plt.show()
+
+            color = np.zeros((self.args["num_examples"],3))
+            color[y2==1]=[0,255,0]
+            color[y2==0]=[255,0,0]
+            plt.scatter(x1,x2,c=color/255.0)
+            plt.show()
+
+
+        #Creating the dataset
+        X = np.stack([x1,x2],axis=-1)
+        main_Y = y1.copy()*0.0
+        topic_Y = np.stack([y1,y2],axis=-1)
+        self.args["num_topics"]=X.shape[-1]
+
+        dataset = tf.data.Dataset.from_tensor_slices(
+                                        dict(
+                                            X = X.astype(np.float32),
+                                            topic_Y = topic_Y.astype(np.int32),
+                                            main_Y = main_Y.astype(np.int32)
+                                        )
+        )
+        dataset = dataset.batch(self.args["batch_size"])
+
+        return dataset
+   
     def trainer(self,):
         '''
         '''
         #Creating the dataset
-        dataset = self.generate_dataset()
+        dataset = self.generate_dataset_2D()
         #Creating the model
         model = MyModel(self.args)
         model.compile(
@@ -129,8 +204,17 @@ class INLPRemover():
         }
 
         #Getting the direction correlation
-        self.get_all_direction()
+        all_topic_dir = self.get_all_direction()
+        all_topic_angles = self.get_topic_convergence_angle(
+                                    conv_all_topic_dirs=all_topic_dir,
+                                    ref_all_topic_dirs=self.ref_all_topic_dirs,
+        )
+        return all_topic_angles
+
+
   
+
+        pdb.set_trace()
         #Now removing the topic information one by one and checking the validation accuracy
         for tidx in range(self.args["num_topics"]):
             print("\nRemoving the topic : {}".format(tidx))
@@ -175,8 +259,10 @@ class INLPRemover():
 
         #Now getting all the topic direction and getting their cosine similarity with the main task
         all_topic_cosine = {}
+        all_topic_dir = []
         for tidx in range(self.args["num_topics"]):
             topic_dir = np.squeeze(self.model.topic_classifier_list[tidx].trainable_weights[0].numpy())
+            all_topic_dir.append(topic_dir)
             topic_dist = distance.cosine(main_task_dir,topic_dir)
             print("\nTopic:{} Direction".format(tidx))
             pprint(topic_dir/np.linalg.norm(topic_dir))
@@ -185,6 +271,29 @@ class INLPRemover():
         
         print("All topic cosine-distance")
         pprint(all_topic_cosine)
+
+        return all_topic_dir
+    
+    def get_topic_convergence_angle(self,ref_all_topic_dirs,conv_all_topic_dirs):
+        '''
+        Currently assuming all the topic directions
+
+        ref_all_topic_dirs      : direction from which to measure the angle
+        '''
+        conv_all_topic_angles = []
+        for tidx in range(self.args["num_topics"]):
+            actual_topic_dir = ref_all_topic_dirs[tidx]
+            conv_topic_dir = conv_all_topic_dirs[tidx]
+
+            #Getting the angle
+            theta = np.arccos(
+                                np.sum((actual_topic_dir*conv_topic_dir))\
+                                    /(np.linalg.norm(actual_topic_dir)*np.linalg.norm(conv_topic_dir))
+            )/np.pi
+            print("topic:{}\tangle:{}".format(tidx,theta))
+            conv_all_topic_angles.append(theta)
+        
+        return conv_all_topic_angles
 
 
 class MyModel(keras.Model):
@@ -368,17 +477,21 @@ class MyModel(keras.Model):
 if __name__=="__main__":
     #Getting the required arguments
     args = {}
-    args["num_examples"]=10000
+    args["num_examples"]=1000
     args["batch_size"]=128
     args["valid_split"]=0.2
-    args["viz_data"]=False 
+    args["viz_data"]=True 
 
     args["lr"]=0.005
-    args["main_epochs"]=10
-    args["topic_epochs"]=10
+    args["main_epochs"]=1
+    args["topic_epochs"]=50
 
     args["num_hlayer"] = 0
     args["hlayer_dim"] = -1
+
+
+    args["beta"] = 1.0
+    args["label_noise"] = 1-0.5  #not-so-perfect correlatedness
 
 
     
