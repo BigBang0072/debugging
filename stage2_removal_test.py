@@ -9,6 +9,7 @@ from tensorflow._api.v2 import data
 from tensorflow.keras import layers
 
 import pdb
+from tqdm import tqdm
 from pprint import pprint
 import matplotlib.pyplot as plt
 
@@ -155,48 +156,11 @@ class INLPRemover():
             optimizer=keras.optimizers.Adam(learning_rate=self.args["lr"])
         )
 
-        #Now we will start the main task training
-        for enum in range(self.args["main_epochs"]):
-            #Resetting the metrics
-            model.reset_all_metrics()
-
-            #Training the model for one full pass
-            for data_batch in dataset:
-                model.train_step(
-                            data_batch=data_batch,
-                            tidx=None,
-                            task="main"
-                )
-            print("epoch:{:}\txentropy:{:0.3f}\tmain_vacc:{:0.2f}".format(
-                                                        enum,
-                                                        model.main_xentropy_loss.result(),
-                                                        model.main_valid_acc.result()
-            ))
-        main_init_vacc = model.main_valid_acc.result() 
+        #Training the main task classifier  
+        main_init_vacc = self.train_main_task_classifier(dataset,model,None) 
         
         #Next we will train all the topic classifier
-        print("Training the Topics!!")
-        for enum in range(self.args["topic_epochs"]):
-            #Resetting the metrics
-            model.reset_all_metrics()
-            print("###################################")
-            print("Starting new Epoch!")
-
-            #Traing each topic one by one
-            for tidx in range(self.args["num_topics"]):
-                for data_batch in dataset:
-                    model.train_step(
-                                data_batch=data_batch,
-                                tidx=tidx,
-                                task="topic"
-                    )
-            
-                print("epoch:{:}\ttopic:{:}\txentropy:{:0.3f}\ttopic_vacc:{:0.2f}".format(
-                                                    enum,
-                                                    tidx,
-                                                    model.topic_xentropy_loss_list[tidx].result(),
-                                                    model.topic_valid_acc_list[tidx].result()
-                ))
+        self.train_all_topic_classifiers(dataset,model,None)
         
         #Saving the model
         self.model = model
@@ -211,12 +175,7 @@ class INLPRemover():
                                     conv_all_topic_dirs=all_topic_dir,
                                     ref_all_topic_dirs=self.ref_all_topic_dirs,
         )
-        return all_topic_angles
 
-
-  
-
-        pdb.set_trace()
         #Now removing the topic information one by one and checking the validation accuracy
         for tidx in range(self.args["num_topics"]):
             print("\nRemoving the topic : {}".format(tidx))
@@ -253,6 +212,144 @@ class INLPRemover():
 
         return model
     
+    def trainer_with_inlp(self,):
+        '''
+        '''
+        #Creating the dataset
+        dataset = self.generate_dataset_2D()
+        #Creating the model
+        model = MyModel(self.args)
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=self.args["lr"])
+        )
+        self.model=model
+        #Getting the main task primed (not needed right now)
+        main_init_vacc = self.train_main_task_classifier(dataset,model,None) 
+
+        #Initializing the P_matrix
+        P_matrix = None
+        P_matrix_list = []
+        #Next we will run the iterative null space projection
+        # for inum in range(2):#self.args["num_inlp_iter"]):
+
+        #TODO Resetting the final topic classifiers so that we dont inject initialization bias
+
+        #First of all we will train the topic classifiers
+        self.train_all_topic_classifiers(dataset,model,P_matrix)
+        #Getting the convergence metrics
+        all_topic_dir = self.get_all_direction()
+        all_topic_angles = self.get_topic_convergence_angle(
+                                    conv_all_topic_dirs=all_topic_dir,
+                                    ref_all_topic_dirs=self.ref_all_topic_dirs,
+        )
+        print("Initial Topic Angle")
+        print(all_topic_angles)
+        self.get_angle_diff([0.0,0.5],all_topic_angles)
+
+
+
+
+
+
+
+        print("\n\nStarting Removal Step!")
+        #Next we will apply the nul space removal
+        #Getting the projection matrix for topic 0
+        topic_W_matrix = model.topic_classifier_list[self.args["remove_tidx"]].get_weights()[0].T
+        #Now getting the projection matrix
+        P_W_curr = get_rowspace_projection(topic_W_matrix)
+        P_matrix_list.append(P_W_curr)
+        #Getting the aggregate projection matrix
+        P_matrix_1 = get_projection_to_intersection_of_nullspaces(
+                                        rowspace_projection_matrices=P_matrix_list,
+                                        input_dim=model.args["latent_space_dim"]
+        )
+
+        #Now we will gather the after-removal metrics
+        iter2_topic_theory_direction = [
+            np.array([np.sin(np.pi*all_topic_angles[0])   , np.cos(np.pi*all_topic_angles[0])]),#(t(1) dir)
+            np.array([-1*np.sin(np.pi*all_topic_angles[0]), np.cos(np.pi*all_topic_angles[0])]),#(s(1) dir)
+        ]
+        #Getting the new topic directions
+        new_topic_theory_angles = self.get_topic_convergence_angle(
+                                        conv_all_topic_dirs=iter2_topic_theory_direction,
+                                        ref_all_topic_dirs=self.ref_all_topic_dirs
+        )
+        print("\n\nNew topic theoretical angles (*pi):")
+        print(new_topic_theory_angles)
+
+        #Getting the components in that directions
+        # print("Component in new theoretical direction")
+        # print("t(1): angle:{}\ttheory_comp:{}\t")
+
+        #Now retraining the topic classifier
+        self.train_all_topic_classifiers(dataset,model,P_matrix_1)
+        all_topic_dir = self.get_all_direction()
+        all_topic_angles = self.get_topic_convergence_angle(
+                                    conv_all_topic_dirs=all_topic_dir,
+                                    ref_all_topic_dirs=self.ref_all_topic_dirs,
+        )
+        print("\n\nNew Converged topic angle (*pi):")
+        print(all_topic_angles)
+        self.get_angle_diff(new_topic_theory_angles,all_topic_angles)
+    
+    def train_main_task_classifier(self,dataset,model,P_matrix):
+        '''
+        '''
+        #Now we will start the main task training
+        for enum in range(self.args["main_epochs"]):
+            #Resetting the metrics
+            model.reset_all_metrics()
+
+            #Training the model for one full pass
+            for data_batch in dataset:
+                model.train_step(
+                            data_batch=data_batch,
+                            tidx=None,
+                            task="main",
+                            P_matrix=P_matrix,
+                )
+            print("epoch:{:}\txentropy:{:0.3f}\tmain_vacc:{:0.2f}".format(
+                                                        enum,
+                                                        model.main_xentropy_loss.result(),
+                                                        model.main_valid_acc.result()
+            ))
+        main_init_vacc = model.main_valid_acc.result() 
+
+    def train_all_topic_classifiers(self,dataset,model,P_matrix):
+        '''
+        '''
+        print("Training the Topics!!")
+        tbar = tqdm(range(self.args["topic_epochs"]))
+        for enum in tbar:
+            #Resetting the metrics
+            model.reset_all_metrics()
+            # print("###################################")
+            # print("Starting new Epoch!")
+
+            #Traing each topic one by one
+            for tidx in range(self.args["num_topics"]):
+                for data_batch in dataset:
+                    model.train_step(
+                                data_batch=data_batch,
+                                tidx=tidx,
+                                task="topic",
+                                P_matrix=P_matrix
+                    )
+            
+                # tbar.set_postfix_str("epoch:{:}\ttopic:{:}\txentropy:{:0.3f}\ttopic_vacc:{:0.2f}".format(
+                #                                     enum,
+                #                                     tidx,
+                #                                     model.topic_xentropy_loss_list[tidx].result(),
+                #                                     model.topic_valid_acc_list[tidx].result()
+                # ))
+
+            tbar.set_postfix_str("epoch:{:}, topic0_vacc:{:0.2f}, topic1_vacc:{:0.2f}".format(
+                                                enum,
+                                                model.topic_valid_acc_list[0].result(),
+                                                model.topic_valid_acc_list[1].result()
+            ))
+
     def get_all_direction(self,):
         #Now we will get all the direction vector for each of the topic
         main_task_dir = np.squeeze(self.model.main_task_classifier.trainable_weights[0].numpy())
@@ -283,7 +380,7 @@ class INLPRemover():
         ref_all_topic_dirs      : direction from which to measure the angle
         '''
         conv_all_topic_angles = []
-        for tidx in range(self.args["num_topics"]):
+        for tidx in range(len(ref_all_topic_dirs)):
             actual_topic_dir = ref_all_topic_dirs[tidx]
             conv_topic_dir = conv_all_topic_dirs[tidx]
 
@@ -297,6 +394,21 @@ class INLPRemover():
         
         return conv_all_topic_angles
 
+    def get_angle_diff(self,angle_list_ref,angle_list_compare):
+        '''
+        '''
+        print("Getting angle diff list:")
+        diff_list=[]
+        for aidx,(angle1,angle2) in enumerate(zip(angle_list_ref,angle_list_compare)):
+            print("aidx:{}\taref:{}\tacomp:{}\tdiff:{}".format(
+                            aidx,
+                            angle1*180.0,
+                            angle2*180.0,
+                            (angle2-angle1)*180.0,
+            ))
+            diff_list.append((angle2-angle1)*180.0)
+        
+        return diff_list
 
 class MyModel(keras.Model):
     '''
@@ -365,7 +477,7 @@ class MyModel(keras.Model):
             X = hlayer(X)
         return X
     
-    def train_step(self,data_batch,tidx,task):
+    def train_step(self,data_batch,tidx,task,P_matrix):
         '''
         '''
         #Getting the dataset
@@ -388,7 +500,8 @@ class MyModel(keras.Model):
             with tf.GradientTape() as tape:
                 #Making the forward pass
                 train_enc = self.pass_via_encoder(train_X)
-                train_prob = self.main_task_classifier(train_enc)
+                train_proj = self._get_proj_X_enc(train_enc,P_matrix)
+                train_prob = self.main_task_classifier(train_proj)
                 main_loss = bxentropy_loss(train_main_Y,train_prob)
             
             #Training the main task params
@@ -415,7 +528,8 @@ class MyModel(keras.Model):
             with tf.GradientTape() as tape:
                 #Forward pass though the topic classifier
                 train_enc = self.pass_via_encoder(train_X)
-                train_pred = self.topic_classifier_list[tidx](train_enc)
+                train_proj = self._get_proj_X_enc(train_enc,P_matrix)
+                train_pred = self.topic_classifier_list[tidx](train_proj)
                 topic_loss = bxentropy_loss(train_topic_Y[:,tidx],train_pred)
             
             #Training the topic classifier
@@ -430,7 +544,8 @@ class MyModel(keras.Model):
             #Getting the validation accuracy of the topic
             if(valid_X.shape[0]!=0):
                 valid_enc = self.pass_via_encoder(valid_X)
-                valid_pred = self.topic_classifier_list[tidx](valid_enc)
+                valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
+                valid_pred = self.topic_classifier_list[tidx](valid_proj)
                 self.topic_valid_acc_list[tidx].update_state(valid_topic_Y[:,tidx],valid_pred)
 
         else:
@@ -467,6 +582,10 @@ class MyModel(keras.Model):
         This will give the projected encoded latent representaion which will be furthur
         removed of the information.
         '''
+        #Handle the case when P matrix is none
+        if type(P_matrix)!=type(np.array([0.1])):
+            P_matrix = np.eye(self.args["latent_space_dim"])
+        
         #Converting to the numpy array
         P_matrix = tf.constant(P_matrix.T,dtype=tf.float32)
 
@@ -476,11 +595,7 @@ class MyModel(keras.Model):
         return X_proj
 
 
-if __name__=="__main__":
-    #CONVERGENCE EXPERIMENT
-    label_corr_prob = np.arange(0.5,1.0,0.1)
-    num_rerun = 5
-    
+def run_convergence_experiment(label_corr_prob,num_rerun):
     convergence_result_dict=defaultdict(list)
     for lprob in label_corr_prob:
         for ridx in range(num_rerun):
@@ -505,7 +620,7 @@ if __name__=="__main__":
 
             #Buying the 10 rs "remover"
             remover = INLPRemover(args)
-            all_topic_angle = remover.trainer()
+            all_topic_angle = remover.trainer_with_inlp(),
 
             convergence_result_dict[lprob].append(all_topic_angle)
     #Plotting the result
@@ -530,5 +645,44 @@ if __name__=="__main__":
     plt.ylabel("angle (multiple of pi)")
     plt.grid()
     plt.show()
+
+def run_removal_experiment(lprob):
+    args = {}
+    args["num_examples"]=1000
+    args["batch_size"]=128
+    args["valid_split"]=0.2
+    args["viz_data"]=False 
+
+    args["lr"]=0.005
+    args["main_epochs"]=1
+    args["topic_epochs"]=100
+
+    args["num_hlayer"] = 0
+    args["hlayer_dim"] = -1
+
+
+    args["beta"] = 1.0
+    args["label_noise"] = 1-lprob  #not-so-perfect correlatedness
+
+    args["num_inlp_iter"] = 2
+    args["remove_tidx"] = 0
+
+    remover = INLPRemover(args)
+    remover.trainer_with_inlp()
+
+
+if __name__=="__main__":
+    #CONVERGENCE EXPERIMENT
+    label_corr_prob = np.arange(0.5,1.0,0.1)
+    num_rerun = 5
+    # run_convergence_experiment(label_corr_prob,num_rerun)
+
+    #REMOVAL and new TOPIC direction Experiment
+    run_removal_experiment(0.5)
+    
+
+
+    
+    
 
 
