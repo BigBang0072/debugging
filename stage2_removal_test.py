@@ -82,6 +82,34 @@ class INLPRemover():
         x1 = np.random.uniform(low=-1,high=1,size=self.args["num_examples"])
         y1 = 1*(x1>=0.0)
 
+        #If we want to inject some inherent noise in the first topic itself
+        if("inject_noise" in self.args):
+            # noise_level = self.args["inject_noise"]
+            # num_reverse = int(self.args["num_exmaples"]//2)
+
+            noise_mean  = self.args["noise_mean"]
+            noise_sigma = self.args["noise_sigma"] #will control number of example
+
+            #Reversing the positive labels
+            positive_mask = np.logical_and(
+                                x1>(noise_mean-noise_sigma),
+                                x1<(noise_mean+noise_sigma)
+            )
+            y1[positive_mask]=0
+
+            #Reversing the negative labels
+            negative_mask = np.logical_and(
+                                x1>(-1*noise_mean-noise_sigma),
+                                x1<(-1*noise_mean+noise_sigma)
+            )
+            y1[negative_mask]=1
+
+            print("Number of points flipped: pos:{}\tneg:{}".format( 
+                                            np.sum(positive_mask),
+                                            np.sum(negative_mask)
+            ))
+            
+
         #Creating the second topic (corrupting wrt to the main topic labels)
         '''
         Design Choices:
@@ -108,6 +136,7 @@ class INLPRemover():
                             [1.0,0.0],
                             [1.0,0.0]
         ]
+        x2 = x2*0.0
 
 
         #Getting the statistics of the points
@@ -115,28 +144,21 @@ class INLPRemover():
         print("topic x2: num_pos:{}\tnum_neg:{}".format(np.sum(y2==1),np.sum(y2==0)))
         #Plotting to check this relationship
         if(self.args["viz_data"]):
-            color = np.zeros((self.args["num_examples"],3))
-            color[y1==1]=[0,255,0]
-            color[y1==0]=[255,0,0]
-            plt.scatter(x1,x2,c=color/255.0)
-            plt.show()
-
-            color = np.zeros((self.args["num_examples"],3))
-            color[y2==1]=[0,255,0]
-            color[y2==0]=[255,0,0]
-            plt.scatter(x1,x2,c=color/255.0)
-            plt.show()
+            self.plot_2D_dataset(x1,x2,y1,y2)
 
 
         #Creating the dataset
-        X = np.stack([x1,x2],axis=-1)
-        main_Y = y1.copy()*0.0
+        topic_X = np.stack([x1,x2],axis=-1)
         topic_Y = np.stack([y1,y2],axis=-1)
-        self.args["num_topics"]=X.shape[-1]
+        self.args["num_topics"]=topic_X.shape[-1]
+
+        main_X = np.stack([x1,x2*0.0],axis=-1)
+        main_Y = y1.copy()
 
         dataset = tf.data.Dataset.from_tensor_slices(
                                         dict(
-                                            X = X.astype(np.float32),
+                                            X = topic_X.astype(np.float32),
+                                            main_X = main_X.astype(np.float32),
                                             topic_Y = topic_Y.astype(np.int32),
                                             main_Y = main_Y.astype(np.int32)
                                         )
@@ -224,7 +246,12 @@ class INLPRemover():
         )
         self.model=model
         #Getting the main task primed (not needed right now)
-        main_init_vacc = self.train_main_task_classifier(dataset,model,None) 
+        main_init_vacc = self.train_main_task_classifier(dataset,model,None)
+        topic_epochs = self.args["topic_epochs"]
+        self.args["topic_epochs"]=1
+        self.train_all_topic_classifiers(dataset,model,None)
+        self.args["topic_epochs"]=topic_epochs
+        init_weights = model.get_weights() 
 
         #Initializing the P_matrix
         P_matrix = None
@@ -245,6 +272,10 @@ class INLPRemover():
         print("Initial Topic Angle")
         print(all_topic_angles)
         self.get_angle_diff([0.0,0.5],all_topic_angles)
+
+        #Getting the topic accuracy
+        topic1_accuracy = model.topic_valid_acc_list[0].result()
+        return all_topic_angles,topic1_accuracy
 
 
 
@@ -267,7 +298,7 @@ class INLPRemover():
 
         #Now we will gather the after-removal metrics
         iter2_topic_theory_direction = [
-            np.array([np.sin(np.pi*all_topic_angles[0])   , np.cos(np.pi*all_topic_angles[0])]),#(t(1) dir)
+            np.array([np.sin(np.pi*all_topic_angles[0])   , -1*np.cos(np.pi*all_topic_angles[0])]),#(t(1) dir)
             np.array([-1*np.sin(np.pi*all_topic_angles[0]), np.cos(np.pi*all_topic_angles[0])]),#(s(1) dir)
         ]
         #Getting the new topic directions
@@ -281,6 +312,20 @@ class INLPRemover():
         #Getting the components in that directions
         # print("Component in new theoretical direction")
         # print("t(1): angle:{}\ttheory_comp:{}\t")
+
+        #TODO Resetting the classifier to get rid of the old converged topic classifier
+        # model.initialize_topic_related_machinery()
+        # model = MyModel(self.args)
+        # model.compile(
+        #     optimizer=keras.optimizers.Adam(learning_rate=self.args["lr"])
+        # )
+        # self.model=model
+        # #Getting the main task primed (not needed right now)
+        # main_init_vacc = self.train_main_task_classifier(dataset,model,None)
+
+        #Vizualiing the projected data once
+        self.get_projected_dataset(dataset,P_matrix_1)
+        model.set_weights(init_weights)
 
         #Now retraining the topic classifier
         self.train_all_topic_classifiers(dataset,model,P_matrix_1)
@@ -364,7 +409,7 @@ class INLPRemover():
             all_topic_dir.append(topic_dir)
             topic_dist = distance.cosine(main_task_dir,topic_dir)
             print("\nTopic:{} Direction".format(tidx))
-            pprint(topic_dir/np.linalg.norm(topic_dir))
+            pprint(topic_dir)
 
             all_topic_cosine[tidx]=topic_dist
         
@@ -409,6 +454,49 @@ class INLPRemover():
             diff_list.append((angle2-angle1)*180.0)
         
         return diff_list
+    
+    def get_projected_dataset(self,dataset,P_matrix):
+        '''
+        '''
+        X_list,topic_Y_list= [],[]
+        for data_batch in dataset:
+            X,Y=self.model.get_projected_dataset(data_batch,P_matrix)
+            X_list.append(X)
+            topic_Y_list.append(Y)
+        
+        #Getting the full dataset
+        X = np.concatenate(X_list)
+        topic_Y = np.concatenate(topic_Y_list)
+
+        #Plotting the dataset
+        if(self.args["viz_data"]):
+            self.plot_2D_dataset(X[:,0],X[:,1],topic_Y[:,0],topic_Y[:,1])
+        
+    def plot_2D_dataset(self,x1,x2,y1,y2):
+        '''
+        '''
+        #Sampling the points
+        perm = np.random.permutation(np.arange(0,x1.shape[0]))[0:100]
+        x1=x1[perm]
+        x2=x2[perm]
+        y1=y1[perm]
+        y2=y2[perm]
+
+
+        color = np.zeros((y1.shape[0],3))
+        color[y1==1]=[0,255,0]
+        color[y1==0]=[255,0,0]
+        plt.scatter(x1,x2,c=color/255.0,alpha=0.5)
+        plt.xlim(-1.5,1.5)
+        plt.show()
+
+        color = np.zeros((y2.shape[0],3))
+        color[y2==1]=[0,255,0]
+        color[y2==0]=[255,0,0]
+        plt.scatter(x1,x2,c=color/255.0,alpha=0.5)
+        plt.xlim(-1.5,1.5)
+        plt.show()
+
 
 class MyModel(keras.Model):
     '''
@@ -438,6 +526,14 @@ class MyModel(keras.Model):
         self.main_valid_acc = keras.metrics.BinaryAccuracy(name="main_vacc",threshold=0.5)
 
         #Creating the topic classifier
+        self.initialize_topic_related_machinery()
+          
+    def initialize_topic_related_machinery(self,):
+        '''
+        This function will used again to create new topic realted layer
+        in case we want to retrain the topic classifier for multi-step
+        removal.
+        '''
         self.topic_classifier_list=[]
         self.topic_xentropy_loss_list = []
         self.topic_valid_acc_list = []
@@ -592,7 +688,21 @@ class MyModel(keras.Model):
         #Now projecting this latent represention into null space
         X_proj = tf.matmul(X_enc,P_matrix)
 
-        return X_proj
+        return X_proj 
+    
+    def get_projected_dataset(self,data_batch,P_matrix):
+        '''
+        '''
+        #Getting the dataset
+        all_X = data_batch["X"]
+        all_main_Y = data_batch["main_Y"]
+        all_topic_Y = data_batch["topic_Y"]
+
+        all_enc = self.pass_via_encoder(all_X)
+        X_proj = self._get_proj_X_enc(all_enc,P_matrix)
+
+        return X_proj.numpy(), all_topic_Y.numpy()
+
 
 
 def run_convergence_experiment(label_corr_prob,num_rerun):
@@ -651,7 +761,7 @@ def run_removal_experiment(lprob):
     args["num_examples"]=1000
     args["batch_size"]=128
     args["valid_split"]=0.2
-    args["viz_data"]=False 
+    args["viz_data"]=True 
 
     args["lr"]=0.005
     args["main_epochs"]=1
@@ -670,6 +780,73 @@ def run_removal_experiment(lprob):
     remover = INLPRemover(args)
     remover.trainer_with_inlp()
 
+def run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun):
+    '''
+    '''
+    fig,ax = plt.subplots(2,1)
+    for sigma in noise_sigma:
+        convergence_angle=defaultdict(list)
+        topic1_accuracy = defaultdict(list)
+        for noise in noise_mean:
+            for rnum in range(num_rerun):
+                args = {}
+                args["num_examples"]=1000
+                args["batch_size"]=128
+                args["valid_split"]=0.2
+                args["viz_data"]=False
+
+                args["lr"]=0.005
+                args["main_epochs"]=1
+                args["topic_epochs"]=40
+
+                args["num_hlayer"] = 0
+                args["hlayer_dim"] = -1
+
+
+                args["beta"] = 1.0
+                args["label_noise"] = 0.5  #not-so-perfect correlatedness
+
+                args["inject_noise"]=True
+                args["noise_mean"] = noise
+                args["noise_sigma"] = sigma
+
+
+                #Buying the 10 rs "remover"
+                remover = INLPRemover(args)
+                all_topic_angle,topic1_acc = remover.trainer_with_inlp()
+
+                #Saving the converged angle
+                convergence_angle[noise].append(all_topic_angle[0])
+                topic1_accuracy[noise].append(topic1_acc)
+    
+        mean_angle,std_angle = [],[]
+        mean_acc, std_acc = [],[]
+        #Plotting the result
+        for noise in noise_mean:
+            mean_angle.append(np.mean(convergence_angle[noise]))
+            std_angle.append(np.std(convergence_angle[noise]))
+
+            mean_acc.append(np.mean(topic1_accuracy[noise]))
+            std_acc.append(np.std(topic1_accuracy[noise]))
+        
+        ax[0].errorbar(noise_mean,mean_angle,yerr=std_angle,fmt="-o",label="sigma={}".format(sigma))
+        ax[1].errorbar(noise_mean,mean_acc,yerr=std_acc,fmt="-o",label="sigma={}".format(sigma))
+
+    
+    
+    ax[0].set_ylim((0.0,1.0))
+    ax[0].set_xlabel("noise mean")
+    ax[0].set_ylabel("angle (multiple of pi)")
+    ax[0].legend()
+    ax[0].grid(True)
+
+    ax[1].set_ylim((0.0,1.0))
+    ax[1].set_xlabel("noise mean")
+    ax[1].set_ylabel("topic accuracy")
+    ax[1].legend()
+    ax[1].grid(True)
+    plt.show()
+
 
 if __name__=="__main__":
     #CONVERGENCE EXPERIMENT
@@ -678,7 +855,13 @@ if __name__=="__main__":
     # run_convergence_experiment(label_corr_prob,num_rerun)
 
     #REMOVAL and new TOPIC direction Experiment
-    run_removal_experiment(0.5)
+    # run_removal_experiment(0.5)
+
+    #Convergence with noise experiment
+    noise_mean = [0.3,0.4,0.5,0.6] #np.arange(0.7,1.5,0.1).tolist()
+    noise_sigma = np.arange(0.1,0.26,0.05).tolist()
+    num_rerun=3
+    run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun)
     
 
 
