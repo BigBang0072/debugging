@@ -1,3 +1,4 @@
+from re import search
 from typing import DefaultDict
 import numpy as np
 from scipy.spatial import distance
@@ -166,7 +167,70 @@ class INLPRemover():
         dataset = dataset.batch(self.args["batch_size"])
 
         return dataset
-   
+    
+    def generate_dataset_1D_point(self,):
+        '''
+        This will be used to test the convergence in presence of noise
+        first using the point strategy and then matching with the theory.
+        
+        Next we will then test the results when we have a data distribution 
+        instead of the point mass and then check the convergence.
+
+        Next we will then test the scenrio that will happen after the projection
+        of the 2D topic i.e mixing of fully predictive and the partially predictive
+        resulting in again a noisy dataset.
+        '''
+        #Creating the split between noise and actual mechnism
+        num_examples = self.args["num_examples"]
+        num_mech_noise = int(num_examples*self.args["noise_ratio"])
+        num_mech_act  = num_examples - num_mech_noise
+
+        #Creating the first topic (main topic)
+        m_val = self.args["noise_pos"]
+        self.args["mval"]=m_val
+        x1 = np.array([-1.0,1.0]*num_mech_act + [-1.0*m_val,m_val]*num_mech_noise,dtype=np.float32)
+        y1 = np.array([0,1]*num_mech_act + [1,0]*num_mech_noise, dtype=np.int32)
+        #Shuffling the examples
+        perm = np.random.permutation(self.args["num_examples"])
+        x1,y1 = x1[perm],y1[perm]
+
+        #Creating the topic direction
+        self.ref_all_topic_dirs = [ 
+                            [1.0,0.0],
+        ]
+
+        #Dummy x2 variable
+        x2 = x1.copy()*0.0
+        y2 = y1.copy()
+
+
+        #Getting the statistics of the points
+        print("topic x1: num_pos:{}\tnum_neg:{}".format(np.sum(y1==1),np.sum(y1==0)))
+        #Plotting to check this relationship
+        if(self.args["viz_data"]):
+            self.plot_2D_dataset(x1,x1*0.0,y1,y1)
+
+
+        #Creating the dataset
+        topic_X = np.stack([x1,x2],axis=-1)
+        topic_Y = np.stack([y1,y2],axis=-1)
+        self.args["num_topics"]=topic_X.shape[-1]
+
+        main_X = np.stack([x1,x2*0.0],axis=-1)
+        main_Y = y1.copy()
+
+        dataset = tf.data.Dataset.from_tensor_slices(
+                                        dict(
+                                            X = topic_X.astype(np.float32),
+                                            main_X = main_X.astype(np.float32),
+                                            topic_Y = topic_Y.astype(np.int32),
+                                            main_Y = main_Y.astype(np.int32)
+                                        )
+        )
+        dataset = dataset.batch(self.args["batch_size"])
+
+        return dataset
+  
     def trainer(self,):
         '''
         '''
@@ -338,6 +402,49 @@ class INLPRemover():
         print(all_topic_angles)
         self.get_angle_diff(new_topic_theory_angles,all_topic_angles)
     
+    def trainer_convergence(self,):
+        '''
+        '''
+        #Creating the dataset
+        dataset = self.generate_dataset_1D_point()
+        #Creating the model
+        model = MyModel(self.args)
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=self.args["lr"])
+        )
+        self.model=model
+        #Getting the main task primed (not needed right now)
+        main_init_vacc = self.train_main_task_classifier(dataset,model,None)
+        topic_epochs = self.args["topic_epochs"]
+        self.args["topic_epochs"]=1
+        self.train_all_topic_classifiers(dataset,model,None)
+        self.args["topic_epochs"]=topic_epochs
+        init_weights = model.get_weights() 
+
+        #Initializing the P_matrix
+        P_matrix = None
+        P_matrix_list = []
+        #Next we will run the iterative null space projection
+        # for inum in range(2):#self.args["num_inlp_iter"]):
+
+        #TODO Resetting the final topic classifiers so that we dont inject initialization bias
+
+        #First of all we will train the topic classifiers
+        self.train_all_topic_classifiers(dataset,model,P_matrix)
+        #Getting the convergence metrics
+        all_topic_dir = self.get_all_direction()
+        all_topic_angles = self.get_topic_convergence_angle(
+                                    conv_all_topic_dirs=all_topic_dir,
+                                    ref_all_topic_dirs=self.ref_all_topic_dirs,
+        )
+        print("Initial Topic Angle")
+        print(all_topic_angles)
+        self.get_angle_diff([0.0,0.5],all_topic_angles)
+
+        #Getting the topic accuracy
+        topic1_accuracy = model.topic_valid_acc_list[0].result()
+        return all_topic_angles,topic1_accuracy
+    
     def train_main_task_classifier(self,dataset,model,P_matrix):
         '''
         '''
@@ -496,7 +603,73 @@ class INLPRemover():
         plt.scatter(x1,x2,c=color/255.0,alpha=0.5)
         plt.xlim(-1.5,1.5)
         plt.show()
+    
+    def get_converged_angle_with_noise_theory(self,):
+        '''
+        This will calculate the location where the angle should converge based
+        on the noise position and the noise ratio.
+        '''
+        #Getting the alpha factor (alpha_major/alpha_minor)
+        alpha_minor = self.args["noise_ratio"]
+        alpha_major = 1.0-alpha_minor
+        alpha = alpha_major/alpha_minor #malfoy manor :)
 
+        #Getting the relative position value (resacale if noise pos)
+        m = self.args["mval"]
+        assert self.args["noise_pos"]==self.args["mval"]
+
+        #getting the search value
+        search_val = alpha/m 
+
+        #Checking if roots are possible or not
+        LB = (1+np.exp(-1))/(1+np.exp(m))
+        UB = (1+np.exp(1))/(1+np.exp(-m))
+        print("LB:{}\t UB:{}\t alpha/m:{}".format(LB,UB,search_val))
+        assert LB<=UB,"Bound Error"
+
+        if(search_val<LB):
+            print("No root exist cuz alpha/m less than LB")
+            print("Convergence angle: {}pi".format(1))
+            return np.pi 
+        elif (search_val>UB):
+            print("No root exist cuz alpha/m greater than UB")
+            print("Convergence angle: {}pi".format(0))
+            return 0.0
+        elif (search_val<1):
+            print("Root exist")
+            print("Convergence in [pi/2,pi]")
+        elif (search_val>1):
+            print("Root Exist")
+            print("Convergence in [0,pi/2]")
+        
+        
+
+        #Now binary searching the correction convergence angle
+        theta_left = 0.0
+        theta_right = np.pi
+        theta_mid=None
+        print("Searching for the root for theoretical convergence angle")
+        while(True):
+            theta_mid = (theta_left+theta_right)/2
+
+            #getting the function value at this theta
+            func_val = (np.exp(np.cos(theta_mid))+1) / (np.exp(-m * np.cos(theta_mid))+1)
+            print("search value:{}\tfunc_value:{}".format(search_val,func_val))
+            #Stopping if we found it
+            if(np.abs(func_val-search_val)<1e-9):
+                break
+            
+            #Othwise we shift the padestal
+            if(func_val>search_val):
+                theta_left=theta_mid 
+            else:
+                theta_right=theta_mid
+        
+        return theta_mid
+    
+    def get_point_convergence_theory_bound(self,):
+        '''
+        '''
 
 class MyModel(keras.Model):
     '''
@@ -847,6 +1020,147 @@ def run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun):
     ax[1].grid(True)
     plt.show()
 
+def run_convergece_with_noise_with_theory(mvals,epsilon,num_alpha):
+    fig,ax = plt.subplots(len(mvals),2,gridspec_kw={'width_ratios': [3, 1]})
+    for midx,m in enumerate(mvals):
+        #Getting the bound
+        LB = (1+np.exp(-1))/(1+np.exp(m))
+        UB = (1+np.exp(1))/(1+np.exp(-m))
+
+        #Now creating the alpha range based on the mvalue 
+        LB_alpha = (LB - epsilon)*m
+        UB_alpha = (UB + epsilon)*m
+
+        LB_alpha = LB_alpha if LB_alpha>1.0 else 1.0
+
+        print("\n\n\n\nm:{}\tLB_alpha:{}\tUB_alpha:{}".format(m,LB_alpha,UB_alpha))
+
+        alpha = np.linspace(LB_alpha,UB_alpha,num=num_alpha)
+        noise_ratios = (alpha/(1+alpha)).tolist()
+        print("alpha_list:",noise_ratios)
+
+        alpha_by_m = (alpha/m).tolist()
+
+        expected_angle = []
+        actual_angle = []
+        valid_accuracy = []
+        for nratio in noise_ratios:
+            args = {}
+            args["num_examples"]=1000
+            args["batch_size"]=128
+            args["valid_split"]=0.2
+            args["viz_data"]=False
+
+            args["lr"]=0.005
+            args["main_epochs"]=1
+            args["topic_epochs"]=40
+
+            args["num_hlayer"] = 0
+            args["hlayer_dim"] = -1
+
+
+            args["noise_ratio"]=nratio #amount of noise --> alpha value
+            args["noise_pos"] = m #the relative noise location --> m value
+
+
+            #Buying the 10 rs "remover"
+            remover = INLPRemover(args)
+            all_topic_angle,topic1_acc = remover.trainer_convergence()
+            theory_converged_angle = remover.get_converged_angle_with_noise_theory()/np.pi
+
+            print("converged angle: theory:{}\tactual:{}".format(
+                                                theory_converged_angle,
+                                                all_topic_angle[0])
+            )
+
+            #Adding the angle to the list
+            expected_angle.append(theory_converged_angle)
+            actual_angle.append(all_topic_angle[0])
+            valid_accuracy.append(topic1_acc)
+        
+        #Plotting the result
+        ax[midx,0].plot(alpha_by_m,expected_angle,"-o",label="expected")
+        ax[midx,0].plot(alpha_by_m,actual_angle,"-o",label="converged")
+
+        #Plotting the upper and lowe bound
+        num_yline_point = 10
+        y_line = np.linspace(0.0,1.0,num_yline_point)
+        LB_x = [LB,]*num_yline_point
+        UB_x = [UB,]*num_yline_point
+
+        ax[midx,0].plot(LB_x,y_line,"--",c='k')
+        ax[midx,0].plot(UB_x,y_line,"--",c='k')
+
+
+        ax[midx,0].grid(True)
+        ax[midx,0].set_ylim((0.0,2.0))
+        ax[midx,0].set_xlabel("alpha/m (m={})".format(m))
+        ax[midx,0].set_ylabel("angle (multiple of pi)")
+        ax[midx,0].legend()
+        # ax[midx].title.set_text('noise_position (m) = {}'.format(m))
+
+        ax[midx,1].plot(alpha_by_m,valid_accuracy,"-o")
+        ax[midx,1].set_ylim((0.0,1.1))
+        ax[midx,1].grid(True)
+        ax[midx,1].set_xlabel("alpha/m (m={})".format(m))
+        ax[midx,1].set_ylabel("Valid Acc")
+    
+    plt.show()
+
+def test_func1():
+    '''
+    Just testing how does the plot of the convergence equation varies as we
+    change the value of theta.
+    '''
+    all_m= np.linspace(0.1,1.0,3).tolist()+ [2.0,4.0,8.0,16.0] #np.linspace(0.1,128,num=10).tolist()
+    theta = np.linspace(0.0,np.pi,num=50)
+
+    sol_theta = []
+    for m in all_m:
+        # func_val = (np.exp(np.cos(theta))+1)/(np.exp(-m*np.cos(theta))+1)
+        # plt.plot(theta,func_val,label="m={:0.3f}".format(m))
+        # plt.plot(theta,theta*0.0+(1.0/m),label="1/m")
+    
+        # plt.legend()
+        # plt.show()
+        search_val = 1.0/m
+        print("\n\n\nFinding the sol for m: {}\t search_val:{}".format(m,search_val))
+
+        
+        UB = (1+np.exp(1))/(1+np.exp(-m))
+        if(search_val>UB):
+            sol_theta.append(0.0)
+            continue
+        #there wont be a violation of the upper bound
+
+        #Getting the solution for this m in theta
+        theta_left = 0.0
+        theta_right = np.pi 
+        while(True):
+            theta_mid = (theta_left + theta_right)/2
+            func_val = (np.exp(np.cos(theta_mid))+1)/(np.exp(-m*np.cos(theta_mid))+1)
+            print("search_val:{}\tfunc_val:{}".format(search_val,func_val))
+
+            if(np.abs(func_val-search_val)<1e-8):
+                sol_theta.append(theta_mid)
+                break 
+            
+            #Otherwise we will move our position
+            if(func_val>search_val):
+                theta_left = theta_mid 
+            else:
+                theta_right = theta_mid
+            
+    
+    plt.plot(all_m,sol_theta,"-o")
+    plt.show()
+
+    # m = np.linspace(0.0,2.0,num=100)
+    # plt.plot(np.exp(m-1))
+    # plt.plot(m)
+    # plt.show()
+
+
 
 if __name__=="__main__":
     #CONVERGENCE EXPERIMENT
@@ -858,10 +1172,20 @@ if __name__=="__main__":
     # run_removal_experiment(0.5)
 
     #Convergence with noise experiment
-    noise_mean = [0.3,0.4,0.5,0.6] #np.arange(0.7,1.5,0.1).tolist()
-    noise_sigma = np.arange(0.1,0.26,0.05).tolist()
-    num_rerun=3
-    run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun)
+    # noise_mean = [0.3,0.4,0.5,0.6] #np.arange(0.7,1.5,0.1).tolist()
+    # noise_sigma = np.arange(0.1,0.26,0.05).tolist()
+    # num_rerun=3
+    # run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun)
+
+    #Convergence with noise experiment with theory
+    mvals = [0.1,0.5,1.0,2.0,3.0,4.0]                    #noise position
+    run_convergece_with_noise_with_theory(
+                                    mvals=mvals,
+                                    epsilon=1.0,
+                                    num_alpha=5,
+    )
+
+    # test_func1()
     
 
 
