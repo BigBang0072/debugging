@@ -184,15 +184,21 @@ class INLPRemover():
         num_examples = self.args["num_examples"]
         num_mech_noise = int(num_examples*self.args["noise_ratio"])
         num_mech_act  = num_examples - num_mech_noise
+        print("num_mech_noise:{}\tnum_mech_act{}".format(
+                                                    num_mech_noise,
+                                                    num_mech_act
+        ))
 
         #Creating the first topic (main topic)
         m_val = self.args["noise_pos"]
         self.args["mval"]=m_val
         x1 = np.array([-1.0,1.0]*num_mech_act + [-1.0*m_val,m_val]*num_mech_noise,dtype=np.float32)
         y1 = np.array([0,1]*num_mech_act + [1,0]*num_mech_noise, dtype=np.int32)
+        # print(np.stack([x1,y1],axis=-1))
         #Shuffling the examples
-        perm = np.random.permutation(self.args["num_examples"])
+        perm = np.random.permutation(2*self.args["num_examples"])
         x1,y1 = x1[perm],y1[perm]
+        # print(np.stack([x1,y1],axis=-1)[-100:])
 
         #Creating the topic direction
         self.ref_all_topic_dirs = [ 
@@ -202,6 +208,32 @@ class INLPRemover():
         #Dummy x2 variable
         x2 = x1.copy()*0.0
         y2 = y1.copy()
+
+        #Cehcking the dataset stats in the validation set
+        vratio = self.args["valid_split"]
+        vstart = int(vratio*x1.shape[0])
+        x1_valid = x1[-vstart:]
+        y1_valid = y1[-vstart:]
+        num_positive_labels = np.sum(y1_valid==1)
+        num_actual_mech = np.sum(np.logical_and(x1_valid>0,y1_valid>0))
+        print("num_valid:{}\tnratio:{}\tnum_positive:{}\tnum_actual_positive:{}".format(
+                                                    x1_valid.shape[0],
+                                                    self.args["noise_ratio"],
+                                                    num_positive_labels,
+                                                    num_actual_mech,
+        ))
+
+        #Checking overall statistics
+        num_positive_labels = np.sum(y1==1)
+        num_actual_mech = np.sum(np.logical_and(x1>0,y1>0))
+        print("num_all:{}\tnratio:{}\tnum_positive:{}\tnum_actual_positive:{}".format(
+                                                    x1.shape[0],
+                                                    self.args["noise_ratio"],
+                                                    num_positive_labels,
+                                                    num_actual_mech,
+        ))
+        # pdb.set_trace()
+
 
 
         #Getting the statistics of the points
@@ -1036,7 +1068,7 @@ def run_convergece_with_noise_with_theory(mvals,epsilon,num_alpha):
         print("\n\n\n\nm:{}\tLB_alpha:{}\tUB_alpha:{}".format(m,LB_alpha,UB_alpha))
 
         alpha = np.linspace(LB_alpha,UB_alpha,num=num_alpha)
-        noise_ratios = (alpha/(1+alpha)).tolist()
+        noise_ratios = (1.0/(1+alpha)).tolist()#this is alpha_minor
         print("alpha_list:",noise_ratios)
 
         alpha_by_m = (alpha/m).tolist()
@@ -1093,7 +1125,7 @@ def run_convergece_with_noise_with_theory(mvals,epsilon,num_alpha):
 
 
         ax[midx,0].grid(True)
-        ax[midx,0].set_ylim((0.0,2.0))
+        ax[midx,0].set_ylim((0.0,1.0))
         ax[midx,0].set_xlabel("alpha/m (m={})".format(m))
         ax[midx,0].set_ylabel("angle (multiple of pi)")
         ax[midx,0].legend()
@@ -1178,7 +1210,7 @@ if __name__=="__main__":
     # run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun)
 
     #Convergence with noise experiment with theory
-    mvals = [0.1,0.5,1.0,2.0,3.0,4.0]                    #noise position
+    mvals = [0.5,1.0,2.0,3.0]                    #noise position
     run_convergece_with_noise_with_theory(
                                     mvals=mvals,
                                     epsilon=1.0,
