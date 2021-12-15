@@ -82,16 +82,28 @@ class INLPRemover():
         #Creating the first topic (main topic)
         x1 = np.random.uniform(low=-1,high=1,size=self.args["num_examples"])
         y1 = 1*(x1>=0.0)
+        # point_density = 2.0/self.args["num_example"]
+        # actual_mean = 0.5
 
         #If we want to inject some inherent noise in the first topic itself
-        if("inject_noise" in self.args):
+        if("inject_noise" in self.args and self.args["inject_noise"]==True):
             # noise_level = self.args["inject_noise"]
             # num_reverse = int(self.args["num_exmaples"]//2)
+            # mval = self.args["noise_pos"]
+            # noise_ratio = self.args["noise_ratio"]
+
+            # noise_mean  = mval * actual_mean  #self.args["noise_mean"]
+            # noise_sigma =  noise_ratio/(1+noise_ratio) #self.args["noise_sigma"] #will control number of example
+
+            # #Setting the m-value
+            # self.args["mval"] = mval
+
+            #Adding extra point
 
             noise_mean  = self.args["noise_mean"]
-            noise_sigma = self.args["noise_sigma"] #will control number of example
+            noise_sigma =  self.args["noise_sigma"] #will control number of example
 
-            #Reversing the positive labels
+            # Reversing the positive labels
             positive_mask = np.logical_and(
                                 x1>(noise_mean-noise_sigma),
                                 x1<(noise_mean+noise_sigma)
@@ -109,6 +121,13 @@ class INLPRemover():
                                             np.sum(positive_mask),
                                             np.sum(negative_mask)
             ))
+
+            #Adding the stats for the calculating the angle theoretically
+            actual_point_mask = np.logical_and(x1>0,y1==1)
+            actual_mean = np.mean(x1[actual_point_mask])
+            self.args["mval"] = noise_mean/actual_mean 
+            self.args["noise_ratio"] = np.sum(positive_mask)/np.sum(x1>=0.0)
+
             
 
         #Creating the second topic (corrupting wrt to the main topic labels)
@@ -191,8 +210,10 @@ class INLPRemover():
 
         #Creating the first topic (main topic)
         m_val = self.args["noise_pos"]
+        pov_pos = 2.0
+        neg_pos = m_val * pov_pos
         self.args["mval"]=m_val
-        x1 = np.array([-1.0,1.0]*num_mech_act + [-1.0*m_val,m_val]*num_mech_noise,dtype=np.float32)
+        x1 = np.array([-pov_pos,pov_pos]*num_mech_act + [-1.0*neg_pos,neg_pos]*num_mech_noise,dtype=np.float32)
         y1 = np.array([0,1]*num_mech_act + [1,0]*num_mech_noise, dtype=np.int32)
         # print(np.stack([x1,y1],axis=-1))
         #Shuffling the examples
@@ -648,7 +669,8 @@ class INLPRemover():
 
         #Getting the relative position value (resacale if noise pos)
         m = self.args["mval"]
-        assert self.args["noise_pos"]==self.args["mval"]
+        #Assert this when we are having the acual pos as 1.0
+        # assert self.args["noise_pos"]==self.args["mval"]
 
         #getting the search value
         search_val = alpha/m 
@@ -988,9 +1010,10 @@ def run_removal_experiment(lprob):
 def run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun):
     '''
     '''
-    fig,ax = plt.subplots(2,1)
-    for sigma in noise_sigma:
+    fig,ax = plt.subplots(len(noise_sigma),2,gridspec_kw={'width_ratios': [3, 1]})
+    for sidx,sigma in enumerate(noise_sigma):
         convergence_angle=defaultdict(list)
+        theory_converged_angle=defaultdict(list)
         topic1_accuracy = defaultdict(list)
         for noise in noise_mean:
             for rnum in range(num_rerun):
@@ -1019,13 +1042,16 @@ def run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun):
                 #Buying the 10 rs "remover"
                 remover = INLPRemover(args)
                 all_topic_angle,topic1_acc = remover.trainer_with_inlp()
+                theory_angle = remover.get_converged_angle_with_noise_theory()/np.pi
 
                 #Saving the converged angle
                 convergence_angle[noise].append(all_topic_angle[0])
+                theory_converged_angle[noise].append(theory_angle)
                 topic1_accuracy[noise].append(topic1_acc)
     
         mean_angle,std_angle = [],[]
         mean_acc, std_acc = [],[]
+        mean_cangle,std_cangle = [],[]
         #Plotting the result
         for noise in noise_mean:
             mean_angle.append(np.mean(convergence_angle[noise]))
@@ -1033,23 +1059,27 @@ def run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun):
 
             mean_acc.append(np.mean(topic1_accuracy[noise]))
             std_acc.append(np.std(topic1_accuracy[noise]))
+
+            mean_cangle.append(np.mean(theory_converged_angle[noise]))
+            std_cangle.append(np.std(theory_converged_angle[noise]))
         
-        ax[0].errorbar(noise_mean,mean_angle,yerr=std_angle,fmt="-o",label="sigma={}".format(sigma))
-        ax[1].errorbar(noise_mean,mean_acc,yerr=std_acc,fmt="-o",label="sigma={}".format(sigma))
+        ax[sidx,0].errorbar(noise_mean,mean_angle,yerr=std_angle,fmt="-o",label="converged (sigma={:0.3f})".format(sigma))
+        ax[sidx,0].errorbar(noise_mean,mean_cangle,yerr=std_cangle,fmt="-o",label="theory (sigma={:0.3f})".format(sigma))
+        ax[sidx,1].errorbar(noise_mean,mean_acc,yerr=std_acc,fmt="-o")#,label="sigma={}".format(sigma))
 
     
     
-    ax[0].set_ylim((0.0,1.0))
-    ax[0].set_xlabel("noise mean")
-    ax[0].set_ylabel("angle (multiple of pi)")
-    ax[0].legend()
-    ax[0].grid(True)
+        ax[sidx,0].set_ylim((0.0,1.0))
+        ax[sidx,0].set_xlabel("noise mean")
+        ax[sidx,0].set_ylabel("angle (multiple of pi)")
+        ax[sidx,0].legend()
+        ax[sidx,0].grid(True)
 
-    ax[1].set_ylim((0.0,1.0))
-    ax[1].set_xlabel("noise mean")
-    ax[1].set_ylabel("topic accuracy")
-    ax[1].legend()
-    ax[1].grid(True)
+        ax[sidx,1].set_ylim((0.0,1.0))
+        ax[sidx,1].set_xlabel("noise mean")
+        ax[sidx,1].set_ylabel("topic accuracy")
+        ax[sidx,1].legend()
+        ax[sidx,1].grid(True)
     plt.show()
 
 def run_convergece_with_noise_with_theory(mvals,epsilon,num_alpha):
@@ -1090,7 +1120,12 @@ def run_convergece_with_noise_with_theory(mvals,epsilon,num_alpha):
             args["num_hlayer"] = 0
             args["hlayer_dim"] = -1
 
+            #This is for second topic so not relavant here
+            args["beta"] = 1.0
+            args["label_noise"] = 0.5  #not-so-perfect correlatedness
 
+
+            args["inject_noise"] = True
             args["noise_ratio"]=nratio #amount of noise --> alpha value
             args["noise_pos"] = m #the relative noise location --> m value
 
@@ -1098,6 +1133,7 @@ def run_convergece_with_noise_with_theory(mvals,epsilon,num_alpha):
             #Buying the 10 rs "remover"
             remover = INLPRemover(args)
             all_topic_angle,topic1_acc = remover.trainer_convergence()
+            # all_topic_angle,topic1_acc = remover.trainer_with_inlp()
             theory_converged_angle = remover.get_converged_angle_with_noise_theory()/np.pi
 
             print("converged angle: theory:{}\tactual:{}".format(
@@ -1204,18 +1240,18 @@ if __name__=="__main__":
     # run_removal_experiment(0.5)
 
     #Convergence with noise experiment
-    # noise_mean = [0.3,0.4,0.5,0.6] #np.arange(0.7,1.5,0.1).tolist()
-    # noise_sigma = np.arange(0.1,0.26,0.05).tolist()
-    # num_rerun=3
-    # run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun)
+    noise_mean = [0.3,0.4,0.5,0.6] #np.arange(0.7,1.5,0.1).tolist()
+    noise_sigma = np.arange(0.1,0.26,0.05).tolist()
+    num_rerun=1
+    run_convergence_with_noise_experiment(noise_mean,noise_sigma,num_rerun)
 
-    #Convergence with noise experiment with theory
-    mvals = [0.5,1.0,2.0,3.0]                    #noise position
-    run_convergece_with_noise_with_theory(
-                                    mvals=mvals,
-                                    epsilon=1.0,
-                                    num_alpha=5,
-    )
+    # Convergence with noise experiment with theory
+    # mvals = [0.5,1.0,2.0,3.0]                    #noise position
+    # run_convergece_with_noise_with_theory(
+    #                                 mvals=mvals,
+    #                                 epsilon=1.0,
+    #                                 num_alpha=5,
+    # )
 
     # test_func1()
     
