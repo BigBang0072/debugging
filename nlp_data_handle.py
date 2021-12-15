@@ -1337,17 +1337,17 @@ class DataHandleTransformer():
             #Creating the topics 1
             tidx0 = 0
             point_sample = np.random.uniform(0.0,1.0,1)
-            tpos_word = np.random.choice(number_words,1,replace=True)
-            tneg_word = np.random.choice(non_number_word,1,replace=True)
+            tpos_word = np.random.choice(number_words,10,replace=True).tolist()
+            tneg_word = np.random.choice(non_number_word,10,replace=True).tolist()
             if point_sample<=self.data_args["topic_corr_list"][tidx0]:
-                pos_example += " {}".format(tpos_word)
-                neg_example += " {}".format(tneg_word)
+                pos_example += " ".join(tpos_word)+ " "
+                neg_example += " ".join(tneg_word)+ " "
 
                 pos_label_list.append(1)
                 neg_label_list.append(0)
             else:
-                neg_example += " {}".format(tpos_word)
-                pos_example += " {}".format(tneg_word)
+                neg_example += " ".join(tpos_word)
+                pos_example += " ".join(tneg_word)
 
                 pos_label_list.append(0)
                 neg_label_list.append(1)
@@ -1391,7 +1391,7 @@ class DataHandleTransformer():
             all_index_list.append(index_list)
         
         #Creating the dataset object
-        all_index_arr = np.array(all_index_list,np.float32)
+        all_index_arr = np.array(all_index_list,np.int32)
         all_label_arr = np.array(all_label_list,np.int32)
         #Shuffling the dataser (no need right now they are balanced)
         

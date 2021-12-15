@@ -947,7 +947,7 @@ class SimpleNBOW(keras.Model):
                 topic_total_loss = topic_xentropy_loss
             
             #Get the topic classifier parameters
-            topic_params = [] + self.topic_task_classifier.trainable_variables
+            topic_params = [] + self.topic_task_classifier_list[cidx].trainable_variables
             grads = tape.gradient(topic_total_loss,topic_params)
             self.optimizer.apply_gradients(
                 zip(grads,topic_params)
@@ -1401,7 +1401,7 @@ def nbow_trainer_stage2(data_args,model_args):
             #Step1: Training the topic classifier now
             tbar = tqdm(range(model_args["topic_epochs"]))
             #Resetting the topic classifier
-            classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
+            # classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
             for eidx in tbar:
                 for data_batch in cat_dataset:
                     classifier_main.train_step_stage2(
@@ -1457,7 +1457,8 @@ def nbow_trainer_stage2(data_args,model_args):
         for data_batch in cat_dataset:
             classifier_main.valid_step_stage2(
                                         dataset_batch=data_batch,
-                                        P_matrix=P_W
+                                        P_matrix=P_W,
+                                        cidx=None
             )
         
         print("pidx:{:}\tmain_init:{:0.3f}\tmain_after:{:0.3f}\ttopic_before:{:0.3f}\ttopic_after:{:0.3f}".format(
