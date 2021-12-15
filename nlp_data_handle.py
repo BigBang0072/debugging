@@ -1325,7 +1325,7 @@ class DataHandleTransformer():
         #Creating the examples
         all_example_list = []
         all_label_list= []
-        for sidx in self.data_args["num_examples"]:
+        for sidx in range(self.data_args["num_sample"]):
             pos_label_list = [1,]
             neg_label_list = [0,]
 

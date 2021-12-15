@@ -719,7 +719,7 @@ class SimpleNBOW(keras.Model):
         self.topic_task_classifier_list = []
         self.topic_pred_xentropy_list = []
         self.topic_valid_accuracy_list = []
-        for tidx in self.model_args["num_topics"]:
+        for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
             self.topic_task_classifier_list.append(layers.Dense(2,activation="softmax"))
 
@@ -737,8 +737,9 @@ class SimpleNBOW(keras.Model):
         self.main_valid_accuracy.reset_state()
 
         #Ressting the topic related metrics
-        self.topic_pred_xentropy.reset_state()
-        self.topic_valid_accuracy.reset_state()
+        for tidx in range(self.data_args["num_topics"]):
+            self.topic_pred_xentropy_list[tidx].reset_state()
+            self.topic_valid_accuracy_list[tidx].reset_state()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -881,12 +882,12 @@ class SimpleNBOW(keras.Model):
         #Getting the train data
         label_train = label[0:valid_idx]
         idx_train = idx[0:valid_idx]
-        topic_label_train = topic_label[0:valid_idx]
+        topic_label_train = topic_label[0:valid_idx,cidx]
 
         #Getting the validation data
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
-        topic_label_valid = topic_label[valid_idx:]
+        topic_label_valid = topic_label[valid_idx:,cidx]
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
@@ -978,7 +979,7 @@ class SimpleNBOW(keras.Model):
         #Getting the validation data
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
-        topic_label_valid = topic_label[valid_idx:]
+        topic_label_valid = topic_label[valid_idx:,cidx]
 
 
         #Getting the latent representaiton for the input
@@ -1328,10 +1329,10 @@ def nbow_trainer_stage2(data_args,model_args):
     data_handler = DataHandleTransformer(data_args)
     if "amazon" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
-    elif "nlp_toy" in data_args["path"]:
-        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
     elif "nlp_toy2" in data_args["path"]:
         cat_dataset = data_handler.toy_nlp_dataset_handler2()
+    elif "nlp_toy" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
     else:
         raise NotImplementedError()
     
@@ -1386,7 +1387,7 @@ def nbow_trainer_stage2(data_args,model_args):
         classifier_main.save_weights(checkpoint_path)
     
     #Getting the MMD metrics to see usage
-    check_topic_usage_mmd(cat_dataset,classifier_main)
+    # check_topic_usage_mmd(cat_dataset,classifier_main)
     
     print("Stage 2: Removing the topic information!")
     #Next we will be going to use this trained classifier to do the null space projection
@@ -2190,10 +2191,11 @@ if __name__=="__main__":
     data_args["shuffle_size"]=data_args["batch_size"]*3
     if "amazon" in data_args["path"]:
         data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
-    elif "nlp_toy" in data_args["path"]:
-        data_args["cat_list"]=["gender","race","orientation"]
     elif "nlp_toy2" in data_args["path"]:
         data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
+    elif "nlp_toy" in data_args["path"]:
+        data_args["cat_list"]=["gender","race","orientation"]
+
     data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
     data_args["per_topic_class"]=2 #Each of the topic is binary (later could have more)
