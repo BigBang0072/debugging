@@ -711,16 +711,21 @@ class SimpleNBOW(keras.Model):
         
         #Initializing the classifier for the main task
         self.main_task_classifier = layers.Dense(2,activation="softmax")
-        #Initializing the classifier for the topic task
-        self.topic_task_classifier = layers.Dense(2,activation="softmax")
-
         #Initializing some of the metrics for main task
         self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
         self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
 
-        #Initializing the metrics for the topic task
-        self.topic_pred_xentropy = keras.metrics.Mean(name="topic_spred_x")
-        self.topic_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="topic_vacc")
+        #Creating the topic classifiers
+        self.topic_task_classifier_list = []
+        self.topic_pred_xentropy_list = []
+        self.topic_valid_accuracy_list = []
+        for tidx in self.model_args["num_topics"]:
+            #Initializing the classifier for the topic task
+            self.topic_task_classifier_list.append(layers.Dense(2,activation="softmax"))
+
+            #Initializing the metrics for the topic task
+            self.topic_pred_xentropy_list.append(keras.metrics.Mean(name="topic_{}_spred_x".format(tidx)))
+            self.topic_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_vacc".format(tidx)))
     
     def compile(self, optimizer):
         super(SimpleNBOW, self).compile()
@@ -851,18 +856,19 @@ class SimpleNBOW(keras.Model):
 
         return Xpred 
     
-    def get_topic_pred_prob(self,X_enc):
+    def get_topic_pred_prob(self,X_enc,tidx):
         '''
         Forward propagate the input for the main tasssk
         '''
         # Xproj = self._encoder(X_input)
         #Getting the prediction
-        Xpred = self.topic_task_classifier(X_enc)
+        Xpred = self.topic_task_classifier_list[tidx](X_enc)
 
         return Xpred
     
-    def train_step_stage2(self,dataset_batch,task,P_matrix):
+    def train_step_stage2(self,dataset_batch,task,P_matrix,cidx):
         '''
+        cidx    : the classifier index we want to evaluate on (mainly for topic)
         '''
         #Getting the dataset splits for train and valid       
         label = dataset_batch["label"]
@@ -932,7 +938,7 @@ class SimpleNBOW(keras.Model):
                 #Getting the projection first
                 enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                 #Here we will train the topic classifier
-                topic_train_prob = self.get_topic_pred_prob(enc_proj_train)
+                topic_train_prob = self.get_topic_pred_prob(enc_proj_train,cidx)
 
                 #Getting the x-entropy losssss for the topic
                 topic_xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
@@ -946,17 +952,17 @@ class SimpleNBOW(keras.Model):
                 zip(grads,topic_params)
             )
             #Updating the xentropy loss for the topic
-            self.topic_pred_xentropy.update_state(topic_xentropy_loss)
+            self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
 
             #Getting the validation loss for the topic
             enc_valid = self._encoder(idx_valid)
             enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
-            topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid)
-            self.topic_valid_accuracy.update_state(topic_label_valid,topic_valid_prob)
+            topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,cidx)
+            self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
         else:
             raise NotImplementedError()
 
-    def valid_step_stage2(self,dataset_batch,P_matrix):
+    def valid_step_stage2(self,dataset_batch,P_matrix,cidx):
         '''
         '''
         #Resetting all the metrics
@@ -985,8 +991,8 @@ class SimpleNBOW(keras.Model):
         self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
 
         #Getting the topic validation accuracy
-        topic_valid_prob = self.topic_task_classifier(X_proj)
-        self.topic_valid_accuracy.update_state(topic_label_valid,topic_valid_prob)
+        topic_valid_prob = self.topic_task_classifier_list[cidx](X_proj)
+        self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
 
         mmd_var_dict=dict(
                         main_valid_prob = main_valid_prob,
@@ -1359,6 +1365,7 @@ def nbow_trainer_stage2(data_args,model_args):
                                     dataset_batch=data_batch,
                                     task="main",
                                     P_matrix=P_identity,
+                                    cidx=None,
             )
         
         print("epoch:{:}\txloss:{:0.4f}\tmain_vacc:{:0.3f}".format(
@@ -1395,6 +1402,7 @@ def nbow_trainer_stage2(data_args,model_args):
                                     dataset_batch=data_batch,
                                     task="inlp_topic",
                                     P_matrix=P_W,
+                                    cidx=
                 )
 
             #Updating the description of the tqdm
