@@ -1299,6 +1299,114 @@ class DataHandleTransformer():
         
 
         return all_cat_ds,all_topic_ds,new_all_cat_df
+    
+    def toy_nlp_dataset_handler2(self,):
+        '''
+        In this handler we will add multiple topics at a time into
+        the text and then test the removal and the topic convergence.
+        1. Create main topic with p_main (fully predictive)
+        2. Create topic_i with p_i correlation with the main topic
+        '''
+        #Loading the gensim embedidng model
+        self._load_full_gensim_word_embedding()
+
+        #Creating the main topic in the dataset
+        number_words = [
+            "one","two","three","four","five","six","seven","eight","nine","ten",
+            "eleven","twelve","thirteen","fourteen","fifteeen","sixteen","seventeen",
+            "eighteen","twenty","thirty","fourty","fifty","sixty","seventy","eighty",
+            "ninety","hundred","thousand"
+        ]
+        non_number_word = [
+            "nice","device","try","picture","signature","trailer","harry","potter",
+            "malfoy","john","switch","taste","glove","baloon"
+        ]
+
+        #Creating the examples
+        all_example_list = []
+        all_label_list= []
+        for sidx in self.data_args["num_examples"]:
+            pos_label_list = [1,]
+            neg_label_list = [0,]
+
+            #Creating the positive example
+            pos_example = "this is a positive template "
+            neg_example = "this is a negative example "
+
+
+            #Creating the topics 1
+            tidx0 = 0
+            point_sample = np.random.uniform(0.0,1.0,1)
+            tpos_word = np.random.choice(number_words,1,replace=True)
+            tneg_word = np.random.choice(non_number_word,1,replace=True)
+            if point_sample<=self.data_args["topic_corr_list"][tidx0]:
+                pos_example += " {}".format(tpos_word)
+                neg_example += " {}".format(tneg_word)
+
+                pos_label_list.append(1)
+                neg_label_list.append(0)
+            else:
+                neg_example += " {}".format(tpos_word)
+                pos_example += " {}".format(tneg_word)
+
+                pos_label_list.append(0)
+                neg_label_list.append(1)
+            
+
+            #Creating the topic 2
+            tidx1 = 1
+            if point_sample<=self.data_args["topic_corr_list"][tidx1]:
+                pos_example += " ".join(["fill"]*10)
+
+                pos_label_list.append(1)
+                neg_label_list.append(0)
+            else:
+                neg_example += " ".join(["fill"]*10)
+
+                pos_label_list.append(0)
+                neg_label_list.append(1)
+
+            #Converting the examples to the token
+
+            #Adding the example and lable
+            all_example_list+=[pos_example,neg_example]
+            all_label_list+=[pos_label_list,neg_label_list]
+
+
+        all_index_list = []
+        #Converting the example to token idx
+        for eidx,example in enumerate(all_example_list):
+            #Splitting and tokenizing
+            token_list = example.split()
+            #Tokenizing the example
+            index_list = [
+                self.emb_model.key_to_index[token] 
+                    for token in token_list
+                        if token in self.emb_model.key_to_index
+            ]
+
+            #Padding the examples to the fixed length
+            padding = [self.emb_model.key_to_index["unk"]]*(self.data_args["max_len"]-len(index_list))
+            index_list = index_list + padding
+            all_index_list.append(index_list)
+        
+        #Creating the dataset object
+        all_index_arr = np.array(all_index_list,np.float32)
+        all_label_arr = np.array(all_label_list,np.int32)
+        #Shuffling the dataser (no need right now they are balanced)
+        
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    label=all_label_arr[:,0],
+                                    input_idx = all_index_arr,
+                                    topic_label = all_label_arr[:,1:]
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset
 
     def _tnlp_load_template_dataset(self,task_name):
         #Loading all the dataset for the given task

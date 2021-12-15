@@ -1330,20 +1330,24 @@ def nbow_trainer_stage2(data_args,model_args):
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
     elif "nlp_toy" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
+    elif "nlp_toy2" in data_args["path"]:
+        cat_dataset = data_handler.toy_nlp_dataset_handler2()
     else:
         raise NotImplementedError()
-    #Getting the dataset for the required category and topic
-    print("Getting the dataset for: cat:{}\ttopic:{}".format(
-                                                data_args["cat_list"][data_args["debug_cidx"]],
-                                                data_args["debug_tidx"],
-    ))
-    cat_dataset = data_handler._convert_df_to_dataset_stage2_NBOW(
-                            df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
-                            pdoc_col_name="pdoc",
-                            label_col_name="label",
-                            topic_feature_col_name="topic_feature",
-                            debug_topic_idx=data_args["debug_tidx"]
-    )
+    
+    if "nlp_toy2" not in data_args["path"]:
+        #Getting the dataset for the required category and topic
+        print("Getting the dataset for: cat:{}\ttopic:{}".format(
+                                                    data_args["cat_list"][data_args["debug_cidx"]],
+                                                    data_args["debug_tidx"],
+        ))
+        cat_dataset = data_handler._convert_df_to_dataset_stage2_NBOW(
+                                df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
+                                pdoc_col_name="pdoc",
+                                label_col_name="label",
+                                topic_feature_col_name="topic_feature",
+                                debug_topic_idx=data_args["debug_tidx"]
+        )
 
 
 
@@ -1392,30 +1396,31 @@ def nbow_trainer_stage2(data_args,model_args):
         #Resetting all the metrics
         classifier_main.reset_all_metrics()
 
-        #Step1: Training the topic classifier now
-        tbar = tqdm(range(model_args["topic_epochs"]))
-        #Resetting the topic classifier
-        classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
-        for eidx in tbar:
-            for data_batch in cat_dataset:
-                classifier_main.train_step_stage2(
-                                    dataset_batch=data_batch,
-                                    task="inlp_topic",
-                                    P_matrix=P_W,
-                                    cidx=
-                )
+        for tidx in range(len(data_args["topic_corr_list"])):
+            #Step1: Training the topic classifier now
+            tbar = tqdm(range(model_args["topic_epochs"]))
+            #Resetting the topic classifier
+            classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
+            for eidx in tbar:
+                for data_batch in cat_dataset:
+                    classifier_main.train_step_stage2(
+                                        dataset_batch=data_batch,
+                                        task="inlp_topic",
+                                        P_matrix=P_W,
+                                        cidx=tidx,
+                    )
 
-            #Updating the description of the tqdm
-            tbar.set_postfix_str("tceloss:{:0.4f},  tvacc:{:0.3f}".format(
-                                        classifier_main.topic_pred_xentropy.result(),
-                                        classifier_main.topic_valid_accuracy.result()
-            ))
+                #Updating the description of the tqdm
+                tbar.set_postfix_str("tceloss:{:0.4f},  tvacc:{:0.3f}".format(
+                                            classifier_main.topic_pred_xentropy_list[tidx].result(),
+                                            classifier_main.topic_valid_accuracy_list[tidx].result()
+                ))
         #Get the topic metrics aftertraining the classifier
-        topic_vacc_before = classifier_main.topic_valid_accuracy.result()
+        topic_vacc_before = classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
 
 
         #Step2: Remove the information and get the projection
-        topic_W_matrix = classifier_main.topic_task_classifier.get_weights()[0].T
+        topic_W_matrix = classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].get_weights()[0].T
         #Now getting the projection matrix
         P_W_curr = get_rowspace_projection(topic_W_matrix)
         all_proj_matrix_list.append(P_W_curr)
@@ -1459,7 +1464,7 @@ def nbow_trainer_stage2(data_args,model_args):
                                             optimal_vacc_main,
                                             classifier_main.main_valid_accuracy.result(),
                                             topic_vacc_before,
-                                            classifier_main.topic_valid_accuracy.result()
+                                            classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         ))
 
 
@@ -2126,6 +2131,9 @@ if __name__=="__main__":
     parser.add_argument('-spurious_ratio',dest="spurious_ratio",type=float,default=None)
     parser.add_argument('-causal_ratio',dest="causal_ratio",type=float,default=None)
 
+    parser.add_argument('-topic0_corr',dest="topic0_corr",type=float,default=None)
+    parser.add_argument('-topic1_corr',dest="topic1_corr",type=float,default=None)
+
     parser.add_argument('-stage',dest="stage",type=int)
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
     parser.add_argument('-debug_cidx',dest="debug_cidx",type=int,default=None)
@@ -2184,6 +2192,8 @@ if __name__=="__main__":
         data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]
+    elif "nlp_toy2" in data_args["path"]:
+        data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
     data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
     data_args["per_topic_class"]=2 #Each of the topic is binary (later could have more)
