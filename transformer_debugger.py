@@ -932,7 +932,7 @@ class SimpleNBOW(keras.Model):
             main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
             self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
 
-        elif task=="inlp_topic":
+        elif "topic" in task:
             with tf.GradientTape() as tape:
                 #Encoding the input
                 enc_train = self._encoder(idx_train)
@@ -947,11 +947,22 @@ class SimpleNBOW(keras.Model):
                 topic_total_loss = topic_xentropy_loss
             
             #Get the topic classifier parameters
-            topic_params = [] + self.topic_task_classifier_list[cidx].trainable_variables
-            grads = tape.gradient(topic_total_loss,topic_params)
-            self.optimizer.apply_gradients(
-                zip(grads,topic_params)
-            )
+            if(task=="inlp_topic"):
+                #Here we will just train the topic classifier only
+                topic_params = [] + self.topic_task_classifier_list[cidx].trainable_variables
+                grads = tape.gradient(topic_total_loss,topic_params)
+                self.optimizer.apply_gradients(
+                    zip(grads,topic_params)
+                )
+            elif(task=="topic"):
+                #Here will will train encoder also (in pull out info in latent space)
+                grads = tape.gradient(topic_total_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
+            else:
+                raise NotImplementedError()
+
             #Updating the xentropy loss for the topic
             self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
 
@@ -1374,10 +1385,11 @@ def nbow_trainer_stage2(data_args,model_args):
                                     cidx=None,
             )
             #Training the topics too to ensure that topic information is there
+            #TODO: Here dont give task as inlp topic as they dont train the encoder. Create new task
             for tidx in range(len(data_args["topic_corr_list"])):
                 classifier_main.train_step_stage2(
                                         dataset_batch=data_batch,
-                                        task="inlp_topic",
+                                        task="topic",
                                         P_matrix=P_identity,
                                         cidx=tidx
                 )
