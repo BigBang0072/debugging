@@ -1397,7 +1397,7 @@ class DataHandleTransformer():
         
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
-                                    label=all_label_arr[:,0],
+                                    label=all_label_arr[:,1],
                                     input_idx = all_index_arr,
                                     topic_label = all_label_arr[:,1:]
                                 )

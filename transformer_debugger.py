@@ -1366,17 +1366,28 @@ def nbow_trainer_stage2(data_args,model_args):
         print("==========================================")
         classifier_main.reset_all_metrics()
         for data_batch in cat_dataset:
+            #Training the main task classifier
             classifier_main.train_step_stage2(
                                     dataset_batch=data_batch,
                                     task="main",
                                     P_matrix=P_identity,
                                     cidx=None,
             )
+            #Training the topics too to ensure that topic information is there
+            for tidx in range(len(data_args["topic_corr_list"])):
+                classifier_main.train_step_stage2(
+                                        dataset_batch=data_batch,
+                                        task="inlp_topic",
+                                        P_matrix=P_identity,
+                                        cidx=tidx
+                )
         
-        print("epoch:{:}\txloss:{:0.4f}\tmain_vacc:{:0.3f}".format(
+        print("epoch:{:}\txloss:{:0.4f}\tmain_vacc:{:0.3f}\ttopic0_vacc:{:0.3f}\ttopic1_vacc:{:0.3f}".format(
                                         eidx,
                                         classifier_main.main_pred_xentropy.result(),
-                                        classifier_main.main_valid_accuracy.result()
+                                        classifier_main.main_valid_accuracy.result(),
+                                        classifier_main.topic_valid_accuracy_list[0].result(),
+                                        classifier_main.topic_valid_accuracy_list[1].result()
         ))
 
         #Keeping track of the optimal vaccuracy of the main classifier
@@ -1458,7 +1469,7 @@ def nbow_trainer_stage2(data_args,model_args):
             classifier_main.valid_step_stage2(
                                         dataset_batch=data_batch,
                                         P_matrix=P_W,
-                                        cidx=None
+                                        cidx=0,
             )
         
         print("pidx:{:}\tmain_init:{:0.3f}\tmain_after:{:0.3f}\ttopic_before:{:0.3f}\ttopic_after:{:0.3f}".format(
