@@ -1025,6 +1025,45 @@ class SimpleNBOW(keras.Model):
         X_proj = tf.matmul(X_enc,P_matrix)
 
         return X_proj
+    
+    def get_angle_between_classifiers(self,class_idx):
+        '''
+        A utility function that will tell us where the convergence of each of the classifier
+        is happening with respect to one another since in high definition it dosent
+        make sense to choose any one reference point also.
+
+        Problems:
+        1. Here we could have multi-label classifier so we may not have just one direction
+            to remove + which direction to take into consideration?
+            (Try calculating the angle within the pos+neg class)
+
+        '''
+        #Getting the classifier angles
+        classifier_dict = {
+            "topic{}".format(tidx) : self.topic_task_classifier_list[tidx].get_weights()[0][:,class_idx]
+                for tidx in range(self.data_args["num_topics"])
+        }
+        classifier_dict["main"] = self.main_task_classifier.get_weights()[0][:,class_idx]
+
+        #Getting the norm of the classifier
+        classifier_norm = {
+            cname:np.linalg.norm(classifier_dict[cname])
+                for cname in classifier_dict.keys()
+        }
+        print("Classifiers Norm:")
+        mypp(classifier_norm)
+
+        #Now its time to get the angle among each of them
+        convergence_angle=defaultdict(dict)
+        for cname1,w1 in classifier_dict.items():
+            for cname2,w2 in classifier_dict.items():
+                norm1 = np.linalg.norm(w1)
+                norm2 = np.linalg.norm(w2)
+
+                angle = np.arccos(np.sum(w1*w2)/(w1*w2))
+                convergence_angle[cname1][cname2]=angle 
+        print("Convergence Angle:")
+        mypp(convergence_angle)
 
 @tf.custom_gradient
 def grad_reverse(x):
@@ -1408,6 +1447,9 @@ def nbow_trainer_stage2(data_args,model_args):
         #Saving the paramenters
         checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         classifier_main.save_weights(checkpoint_path)
+
+        #Getting the classifier information
+        classifier_main.get_angle_between_classifiers(class_idx=0)
     
     #Getting the MMD metrics to see usage
     # check_topic_usage_mmd(cat_dataset,classifier_main)
@@ -1491,6 +1533,9 @@ def nbow_trainer_stage2(data_args,model_args):
                                             topic_vacc_before,
                                             classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         ))
+
+        #Getting the classifier information
+        classifier_main.get_angle_between_classifiers(class_idx=0)
 
 
 def get_cat_temb_importance_weight_variance(classifier):
