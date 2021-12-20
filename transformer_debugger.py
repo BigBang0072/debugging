@@ -1073,7 +1073,7 @@ class SimpleNBOW(keras.Model):
         classifier_accuracy = {}
         classifier_accuracy["main"]=self.main_valid_accuracy.result()
         for tidx in range(self.data_args["num_topics"]):
-            classifier_accuracy["topic{}".format(tidx)]=self.topic_task_classifier_list[tidx].result()
+            classifier_accuracy["topic{}".format(tidx)]=self.topic_valid_accuracy_list[tidx].result().numpy()
         
         return classifier_accuracy
 
@@ -2234,6 +2234,7 @@ if __name__=="__main__":
 
     parser.add_argument('-topic0_corr',dest="topic0_corr",type=float,default=None)
     parser.add_argument('-topic1_corr',dest="topic1_corr",type=float,default=None)
+    parser.add_argument('-main_topic',dest="main_topic",type=int,default=None)
 
     parser.add_argument('-stage',dest="stage",type=int)
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
@@ -2293,6 +2294,7 @@ if __name__=="__main__":
         data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
     elif "nlp_toy2" in data_args["path"]:
         data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
+        data_args["main_topic"]=args.main_topic
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]
 
