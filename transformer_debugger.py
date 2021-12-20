@@ -1060,10 +1060,22 @@ class SimpleNBOW(keras.Model):
                 norm1 = np.linalg.norm(w1)
                 norm2 = np.linalg.norm(w2)
 
-                angle = np.arccos(np.sum(w1*w2)/(w1*w2))
+                angle = np.arccos(np.sum(w1*w2)/(norm1*norm2))/np.pi
                 convergence_angle[cname1][cname2]=angle 
-        print("Convergence Angle:")
+        print("Convergence Angle: (in multiple of pi)")
         mypp(convergence_angle)
+
+        return convergence_angle
+    
+    def get_all_classifier_accuracy(self,):
+        '''
+        '''
+        classifier_accuracy = {}
+        classifier_accuracy["main"]=self.main_valid_accuracy.result()
+        for tidx in range(self.data_args["num_topics"]):
+            classifier_accuracy["topic{}".format(tidx)]=self.topic_task_classifier_list[tidx].result()
+        
+        return classifier_accuracy
 
 @tf.custom_gradient
 def grad_reverse(x):
@@ -1448,8 +1460,16 @@ def nbow_trainer_stage2(data_args,model_args):
         checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         classifier_main.save_weights(checkpoint_path)
 
-        #Getting the classifier information
-        classifier_main.get_angle_between_classifiers(class_idx=0)
+    #Metrics to probe the classifiers
+    probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
+    #Getting the classifier information
+    init_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
+    #Getting the initial classifier accuracy
+    init_classifier_acc = classifier_main.get_all_classifier_accuracy()
+    probe_metric_list.append(dict(
+                conv_angle_dict = init_conv_angle,
+                classifier_acc_dict = init_classifier_acc
+    ))
     
     #Getting the MMD metrics to see usage
     # check_topic_usage_mmd(cat_dataset,classifier_main)
@@ -1535,7 +1555,18 @@ def nbow_trainer_stage2(data_args,model_args):
         ))
 
         #Getting the classifier information
-        classifier_main.get_angle_between_classifiers(class_idx=0)
+        conv_angle_dict = classifier_main.get_angle_between_classifiers(class_idx=0)
+        classifier_acc_dict = classifier_main.get_all_classifier_accuracy()
+        probe_metric_list.append(dict(
+                    conv_angle_dict=conv_angle_dict,
+                    classifier_acc_dict=classifier_acc_dict,
+        ))
+    
+    #Saving the probe metrics in a json file
+    probe_metric_path = "{}/probe_metric_list.json".format(data_args["expt_name"])
+    print("Dumping the probe metrics in: {}".format(probe_metric_path))
+    with open(probe_metric_path,"w") as whandle:
+        json.dump(probe_metric_list,whandle,indent="\t")
 
 
 def get_cat_temb_importance_weight_variance(classifier):
