@@ -1457,7 +1457,7 @@ def nbow_trainer_stage2(data_args,model_args):
         optimal_vacc_main = classifier_main.main_valid_accuracy.result()
 
         #Saving the paramenters
-        checkpoint_path = "{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+        checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         classifier_main.save_weights(checkpoint_path)
 
     #Metrics to probe the classifiers
@@ -1504,6 +1504,23 @@ def nbow_trainer_stage2(data_args,model_args):
         #Get the topic metrics aftertraining the classifier
         topic_vacc_before = classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
 
+        #Getting the classifiers angle (after this step of training)
+        classifier_main.reset_all_metrics()
+        for data_batch in cat_dataset:
+            for tidx in range(data_args["num_topics"]):
+                classifier_main.valid_step_stage2(
+                                            dataset_batch=data_batch,
+                                            P_matrix=P_W,
+                                            cidx=tidx,
+                )
+        
+        #Getting the classifier information
+        conv_angle_dict = classifier_main.get_angle_between_classifiers(class_idx=0)
+        classifier_acc_dict = classifier_main.get_all_classifier_accuracy()
+        probe_metric_list.append(dict(
+                    conv_angle_dict=conv_angle_dict,
+                    classifier_acc_dict=classifier_acc_dict,
+        ))
 
         #Step2: Remove the information and get the projection
         topic_W_matrix = classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].get_weights()[0].T
@@ -1540,11 +1557,12 @@ def nbow_trainer_stage2(data_args,model_args):
         #Now we need to get the validation accuracy on this projected matrix
         classifier_main.reset_all_metrics()
         for data_batch in cat_dataset:
-            classifier_main.valid_step_stage2(
-                                        dataset_batch=data_batch,
-                                        P_matrix=P_W,
-                                        cidx=0,
-            )
+            for tidx in range(data_args["num_topics"]):
+                classifier_main.valid_step_stage2(
+                                            dataset_batch=data_batch,
+                                            P_matrix=P_W,
+                                            cidx=tidx,
+                )
         
         print("pidx:{:}\tmain_init:{:0.3f}\tmain_after:{:0.3f}\ttopic_before:{:0.3f}\ttopic_after:{:0.3f}".format(
                                             pidx,
@@ -1553,17 +1571,9 @@ def nbow_trainer_stage2(data_args,model_args):
                                             topic_vacc_before,
                                             classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         ))
-
-        #Getting the classifier information
-        conv_angle_dict = classifier_main.get_angle_between_classifiers(class_idx=0)
-        classifier_acc_dict = classifier_main.get_all_classifier_accuracy()
-        probe_metric_list.append(dict(
-                    conv_angle_dict=conv_angle_dict,
-                    classifier_acc_dict=classifier_acc_dict,
-        ))
     
     #Saving the probe metrics in a json file
-    probe_metric_path = "{}/probe_metric_list.json".format(data_args["expt_name"])
+    probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
     print("Dumping the probe metrics in: {}".format(probe_metric_path))
     with open(probe_metric_path,"w") as whandle:
         json.dump(probe_metric_list,whandle,indent="\t")
