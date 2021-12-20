@@ -1061,7 +1061,7 @@ class SimpleNBOW(keras.Model):
                 norm2 = np.linalg.norm(w2)
 
                 angle = np.arccos(np.sum(w1*w2)/(norm1*norm2))/np.pi
-                convergence_angle[cname1][cname2]=angle 
+                convergence_angle[cname1][cname2]=float(angle) 
         print("Convergence Angle: (in multiple of pi)")
         mypp(convergence_angle)
 
@@ -1071,9 +1071,9 @@ class SimpleNBOW(keras.Model):
         '''
         '''
         classifier_accuracy = {}
-        classifier_accuracy["main"]=self.main_valid_accuracy.result()
+        classifier_accuracy["main"]=float(self.main_valid_accuracy.result().numpy())
         for tidx in range(self.data_args["num_topics"]):
-            classifier_accuracy["topic{}".format(tidx)]=self.topic_valid_accuracy_list[tidx].result().numpy()
+            classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
         
         return classifier_accuracy
 
