@@ -1412,6 +1412,8 @@ def nbow_trainer_stage2(data_args,model_args):
                                 debug_topic_idx=data_args["debug_tidx"]
         )
 
+        #Updating the number of topics
+        data_args["num_topics"]=len(data_handler.topic_list)
 
 
 
@@ -1437,7 +1439,7 @@ def nbow_trainer_stage2(data_args,model_args):
             )
             #Training the topics too to ensure that topic information is there
             #TODO: Here dont give task as inlp topic as they dont train the encoder. Create new task
-            for tidx in range(len(data_args["topic_corr_list"])):
+            for tidx in range(data_args["num_topics"]):
                 classifier_main.train_step_stage2(
                                         dataset_batch=data_batch,
                                         task="topic",
@@ -1572,11 +1574,11 @@ def nbow_trainer_stage2(data_args,model_args):
                                             classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         ))
     
-    #Saving the probe metrics in a json file
-    probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
-    print("Dumping the probe metrics in: {}".format(probe_metric_path))
-    with open(probe_metric_path,"w") as whandle:
-        json.dump(probe_metric_list,whandle,indent="\t")
+        #Saving the probe metrics in a json file
+        probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
+        print("Dumping the probe metrics in: {}".format(probe_metric_path))
+        with open(probe_metric_path,"w") as whandle:
+            json.dump(probe_metric_list,whandle,indent="\t")
 
 
 def get_cat_temb_importance_weight_variance(classifier):

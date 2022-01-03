@@ -707,8 +707,8 @@ class DataHandleTransformer():
         old_topic_list = [
             pos_adjective,neg_adjective,negations,adverbs,
             #religion,gender,electronics,pronoun,kitchen,genre,
-            #arts,books,clothes,groceries,movies,pets,phone,tools,
-            male,female,white,black,straight,gay,
+            arts,books,clothes,groceries,movies,pets,phone,tools,
+            #male,female,white,black,straight,gay,
         ]
 
         if(extend==True):
@@ -724,6 +724,9 @@ class DataHandleTransformer():
             self.topic_list = new_topic_list
         else:
             self.topic_list = old_topic_list
+        
+        #Updating the number of topics present
+        self.data_args["num_topics"]=len(self.topic_list)
 
     def _get_topic_annotation_manual(self,pdoc):
         '''
@@ -745,7 +748,7 @@ class DataHandleTransformer():
         topic_label = []
         for topic_set in topic_list:
             
-            #Binary Feature
+            #Binary Feature Here we can use them as topic label then otherwise we need to quantize
             # if len(pdoc_set.intersection(topic_set))!=0:
             #     topic_label.append(1.0)
             # else:
@@ -878,9 +881,17 @@ class DataHandleTransformer():
 
             #Getting the topic labels
             topic_feature = df.iloc[ridx][topic_feature_col_name]
-            topic_label=0
-            if topic_feature[debug_topic_idx]>0:
-                topic_label=1
+            # topic_label=0
+            # if topic_feature[debug_topic_idx]>0:
+            #     topic_label=1
+
+            #Keeping the label for all the topics
+            topic_label=[]
+            for fval in topic_feature:
+                if fval>0:
+                    topic_label.append(1)
+                else:
+                    topic_label.append(0)
             topic_label_list.append(topic_label)
             
             # topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
@@ -904,16 +915,22 @@ class DataHandleTransformer():
         #Getting the main task class mask
         main_class0_mask = (label_list==0)
         main_class1_mask = (label_list==1)
-        def get_topic_segmentation(class_mask,topic_label_arr,name):
+        def get_topic_segmentation(class_mask,topic_label_arr,name,tidx):
             topic_label_class = topic_label_arr[class_mask]
-            print("class:{}\tnum_topic_0:{}\tnum_topic_1:{}".format(
+            print("class:{}\ttidx:{}\tnum_topic_0:{}\tnum_topic_1:{}".format(
                                         name,
+                                        tidx,
                                         topic_label_class.shape[0]-np.sum(topic_label_class),
                                         np.sum(topic_label_class)
             ))
-        get_topic_segmentation(main_class0_mask,topic_label_list,"0")
-        get_topic_segmentation(main_class1_mask,topic_label_list,"1")
+        
+        for tidx in range(topic_label_list.shape[-1]):
+            get_topic_segmentation(main_class0_mask,topic_label_list[tidx],"0",tidx)
+            get_topic_segmentation(main_class1_mask,topic_label_list[tidx],"1",tidx)
         # pdb.set_trace()
+
+        #TODO: Calculate the topic correlation/predictive correlation with the main topic
+        #Should this be symmetric or directional correlation?
 
 
 
@@ -1355,6 +1372,8 @@ class DataHandleTransformer():
 
             #Creating the topic 2
             tidx1 = 1
+            #Taking a differnet sample for this topic
+            point_sample = np.random.uniform(0.0,1.0,1)
             if point_sample<=self.data_args["topic_corr_list"][tidx1]:
                 pos_example += " ".join(["fill"]*10)
 
@@ -1397,7 +1416,8 @@ class DataHandleTransformer():
         
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
-                                    label=all_label_arr[:,self.data_args["main_topic"]+1],
+                                    #label=all_label_arr[:,self.data_args["main_topic"]+1],
+                                    label=all_label_arr[:,0],
                                     input_idx = all_index_arr,
                                     topic_label = all_label_arr[:,1:]
                                 )
