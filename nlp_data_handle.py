@@ -910,8 +910,8 @@ class DataHandleTransformer():
             all_index_list.append(index_list)
 
         #Printing the topic label distribution for both main task class
-        label_list = np.array(label_list)
-        topic_label_list=np.array(topic_label_list)
+        label_list = np.array(label_list,np.int32)
+        topic_label_list=np.array(topic_label_list,np.int32)
         #Getting the main task class mask
         main_class0_mask = (label_list==0)
         main_class1_mask = (label_list==1)
@@ -940,7 +940,7 @@ class DataHandleTransformer():
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
                                     label=label_list,
-                                    input_idx = np.array(all_index_list),
+                                    input_idx = np.array(all_index_list,np.int32),
                                     # topic=np.array(topic_list),
                                     # topic_weight=np.array(topic_weight_list),
                                     # input_idx = input_idx,

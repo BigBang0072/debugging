@@ -1,6 +1,6 @@
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import pandas as pd
@@ -1447,13 +1447,21 @@ def nbow_trainer_stage2(data_args,model_args):
                                         cidx=tidx
                 )
         
-        print("epoch:{:}\txloss:{:0.4f}\tmain_vacc:{:0.3f}\ttopic0_vacc:{:0.3f}\ttopic1_vacc:{:0.3f}".format(
-                                        eidx,
-                                        classifier_main.main_pred_xentropy.result(),
-                                        classifier_main.main_valid_accuracy.result(),
-                                        classifier_main.topic_valid_accuracy_list[0].result(),
-                                        classifier_main.topic_valid_accuracy_list[1].result()
+        #Printing the classifier loss and accuracy
+        log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
+        print(log_format.format(
+                            eidx,
+                            "main",
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
         ))
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            eidx,
+                            "topic-{}".format(tidx),
+                            classifier_main.topic_pred_xentropy_list[tidx].result(),
+                            classifier_main.topic_valid_accuracy_list[tidx].result()
+            ))
 
         #Keeping track of the optimal vaccuracy of the main classifier
         optimal_vacc_main = classifier_main.main_valid_accuracy.result()
@@ -1484,7 +1492,7 @@ def nbow_trainer_stage2(data_args,model_args):
         #Resetting all the metrics
         classifier_main.reset_all_metrics()
 
-        for tidx in range(len(data_args["topic_corr_list"])):
+        for tidx in range(data_args["num_topics"]):
             #Step1: Training the topic classifier now
             tbar = tqdm(range(model_args["topic_epochs"]))
             #Resetting the topic classifier
