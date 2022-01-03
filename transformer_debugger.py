@@ -139,12 +139,12 @@ class TransformerClassifier(keras.Model):
         ]
     
     def reset_all_metrics(self):
-        self.sent_pred_xentropy.reset_state()
-        self.topic_pred_xentropy.reset_state()
+        self.sent_pred_xentropy.reset_states()
+        self.topic_pred_xentropy.reset_states()
         for tidx in range(len(self.data_args["topic_list"])):
-            self.topic_valid_acc_list[tidx].reset_state()
+            self.topic_valid_acc_list[tidx].reset_states()
         for cidx in range(len(self.data_args["cat_list"])):
-            self.sent_valid_acc_list[cidx].reset_state()
+            self.sent_valid_acc_list[cidx].reset_states()
 
     def compile(self, optimizer):
         super(TransformerClassifier, self).compile()
@@ -733,13 +733,13 @@ class SimpleNBOW(keras.Model):
 
     def reset_all_metrics(self,):
         #Resetting the main task related metrics
-        self.main_pred_xentropy.reset_state()
-        self.main_valid_accuracy.reset_state()
+        self.main_pred_xentropy.reset_states()
+        self.main_valid_accuracy.reset_states()
 
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
-            self.topic_pred_xentropy_list[tidx].reset_state()
-            self.topic_valid_accuracy_list[tidx].reset_state()
+            self.topic_pred_xentropy_list[tidx].reset_states()
+            self.topic_valid_accuracy_list[tidx].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1866,7 +1866,7 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
             print("Getting ood perf of :{}\t on:{}".format(cname,cat))
             #Getting a new accuracy op for fear of updating old one
             acc_op = keras.metrics.Mean(name="temp_acc_op")
-            acc_op.reset_state()
+            acc_op.reset_states()
 
             #Going over all the batches of this catefory for given classifier
             for data_batch in cat_ds:
@@ -1889,7 +1889,7 @@ def evaluate_ood_indo_performance(data_args,model_args,purpose,only_indo=False):
     #     print("Getting indo perf of :{}".format(tname))
     #     #Getting a new accuracy op for fear of updating old one
     #     acc_op = keras.metrics.Mean(name="temp_acc_op")
-    #     acc_op.reset_state()
+    #     acc_op.reset_states()
 
     #     #Going over all the batches of this catefory for given classifier
     #     for data_batch in all_topic_ds[tname]:

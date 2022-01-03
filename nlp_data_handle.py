@@ -924,9 +924,11 @@ class DataHandleTransformer():
                                         np.sum(topic_label_class)
             ))
         
+        print("\n\nGetting the topic segmentation")
         for tidx in range(topic_label_list.shape[-1]):
-            get_topic_segmentation(main_class0_mask,topic_label_list[tidx],"0",tidx)
-            get_topic_segmentation(main_class1_mask,topic_label_list[tidx],"1",tidx)
+            print("####################################################")
+            get_topic_segmentation(main_class0_mask,topic_label_list[:,tidx],"0",tidx)
+            get_topic_segmentation(main_class1_mask,topic_label_list[:,tidx],"1",tidx)
         # pdb.set_trace()
 
         #TODO: Calculate the topic correlation/predictive correlation with the main topic
@@ -1170,7 +1172,7 @@ class DataHandleTransformer():
         all_topic_df,new_all_cat_df = self._get_topic_labels_manual(
                                             all_cat_df=all_cat_df,
                                             doc_col_name="doc",
-                                            pdoc_name="pdoc",
+                                            pdoc_col_name="pdoc",
                                             label_col_name="label",
                                             # topic_col_name="topic",
                                             # topic_weight_col_name="topic_weight"
