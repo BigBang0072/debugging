@@ -841,7 +841,7 @@ class TransformerClassifier(keras.Model):
         else:
             raise NotImplementedError()
     
-    def valid_step_stage2_inlp(self,dataset_batch,task,P_matrix,cidx,tidx):
+    def valid_step_stage2_inlp(self,dataset_batch,P_matrix,cidx,tidx):
         '''
         This validation step will be used by the stage 2 of our debugger
         '''
@@ -857,22 +857,18 @@ class TransformerClassifier(keras.Model):
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
         mask_valid = mask[valid_idx:]
-        if "topic" in task:
-            topic_label_valid = topic_label[valid_idx:,tidx]
+        topic_label_valid = topic_label[valid_idx:,tidx]
 
         #Passing the input through the encoder
         _,valid_enc = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
         valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
 
         #Now we will make the forward pass and get the validation accuracy
-        if task=="main":
-            valid_prob = self.get_main_pred_prob_final(valid_proj,cidx)
-            self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
-        elif task=="topic":
-            topic_valid_prob = self.get_topic_pred_prob_final(valid_proj,tidx)
-            self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
-        else:
-            raise NotImplementedError()
+        valid_prob = self.get_main_pred_prob_final(valid_proj,cidx)
+        self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
+    
+        topic_valid_prob = self.get_topic_pred_prob_final(valid_proj,tidx)
+        self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
     
     def _get_proj_X_enc(self,X_enc,P_matrix):
         '''
@@ -1663,6 +1659,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
 
 
     # Step 1: Now we will start training the main task classifier
+    print("Stage 1: Training the main predictor (to be debugged later)")
     classifier_main = TransformerClassifier(data_args,model_args)
     #Now we will compile the model
     classifier_main.compile(
@@ -1735,6 +1732,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
 
     #Step 2: Next we will start the removal process
     #Next we will be going to use this trained classifier to do the null space projection
+    print("\n\nStage 2: Removing the topic information!")
     all_proj_matrix_list = []
     P_W = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
     for pidx in range(model_args["num_proj_iter"]):
@@ -1750,7 +1748,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
                 for data_batch in cat_dataset:
                     classifier_main.train_step_stage2_inlp(
                                         dataset_batch=data_batch,
-                                        task="inlp_topic",
+                                        task="topic_inlp",
                                         P_matrix=P_W,
                                         cidx=data_args["debug_cidx"],
                                         tidx=tidx,
