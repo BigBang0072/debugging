@@ -51,7 +51,7 @@ class TransformerClassifier(keras.Model):
                     layer.trainable = False
             
             #Setting the dimension of hidden layer
-            self.hlayer_dim = model_args["bemb_dim"]
+            self.hlayer_dim = model_args["hlayer_dim"]
 
         #Initializing the heads for each classifier (Domain Sntiment)
         self.cat_emb_layer_list = []
@@ -73,7 +73,7 @@ class TransformerClassifier(keras.Model):
                 self.cat_importance_weight_list.append(cat_imp_weight)
                 
                 #Creating an embedding layer
-                cat_emb_layer = layers.Dense(10,activation="relu")
+                cat_emb_layer = layers.Dense(self.hlayer_dim,activation="relu")
                 self.cat_emb_layer_list.append(cat_emb_layer)
                 
 
@@ -148,12 +148,12 @@ class TransformerClassifier(keras.Model):
         ]
     
     def reset_all_metrics(self):
-        self.sent_pred_xentropy.reset_states()
-        self.topic_pred_xentropy.reset_states()
         for tidx in range(len(self.data_args["topic_list"])):
             self.topic_valid_acc_list[tidx].reset_states()
+            self.topic_pred_xentropy_list[tidx].reset_states()
         for cidx in range(len(self.data_args["cat_list"])):
             self.sent_valid_acc_list[cidx].reset_states()
+            self.sent_pred_xentropy_list[cidx].reset_states()
 
     def compile(self, optimizer):
         super(TransformerClassifier, self).compile()
@@ -2546,6 +2546,7 @@ if __name__=="__main__":
 
     parser.add_argument('-topic_epochs',dest="topic_epochs",type=int,default=None)
     parser.add_argument('-num_proj_iter',dest="num_proj_iter",type=int,default=None)
+    parser.add_argument('-hlayer_dim',dest="hlayer_dim",type=int,default=None)
     
 
     parser.add_argument('-emb_path',dest="emb_path",type=str,default=None)
@@ -2625,6 +2626,7 @@ if __name__=="__main__":
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
     model_args["bemb_dim"] = 768 if args.stage==2 else len(data_args["topic_list"]) #The dimension of bert produced last layer
+    model_args["hlayer_dim"]=args.hlayer_dim
     model_args["temb_dim"] = args.temb_dim
     model_args["normalize_temb"] = args.normalize_temb
     model_args["shuffle_topic_batch"]=False
@@ -2644,7 +2646,8 @@ if __name__=="__main__":
     data_args["expt_meta_path"]=meta_folder
 
     # transformer_trainer_stage2(data_args,model_args)
-    nbow_trainer_stage2(data_args,model_args)
+    transformer_trainer_stage2_inlp(data_args,model_args)
+    # nbow_trainer_stage2(data_args,model_args)
     # run_parallel_jobs_subset_exp(data_args,model_args)
     # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
