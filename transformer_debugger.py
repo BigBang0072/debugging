@@ -98,7 +98,8 @@ class TransformerClassifier(keras.Model):
         self.topic_classifier_list = []
         self.topic_embedding_layer_list = []
         self.topic_importance_weight_list = []
-        for topic in self.data_args["topic_list"]:
+        num_topics=len(self.data_args["topic_list"]) if data_args["stage"]==1 else self.data_args["num_topics"]
+        for tidx in range(num_topics):
             #Creating the imporatance paramaters for each classifier
             topic_imp_weight = tf.Variable(
                 tf.random_normal_initializer(mean=0.0,stddev=1.0)(
@@ -136,15 +137,15 @@ class TransformerClassifier(keras.Model):
         #Initilaizing the trackers for topics classifier
         self.topic_pred_xentropy_list =[ 
             keras.metrics.Mean(name="topic{}_pred_x".format(tidx))
-                for tidx in self.data_args["topic_list"]
+                for tidx in range(num_topics)
         ] 
         self.topic_valid_acc_list = [
             tf.keras.metrics.SparseCategoricalAccuracy(name="t{}_valid_acc".format(topic))
-                for topic in self.data_args["topic_list"]
+                for topic in range(num_topics)
         ]
         self.topic_l1_loss_list = [ 
             tf.keras.metrics.Mean(name="t{}_l1_loss".format(cat))
-                for cat in self.data_args["topic_list"]
+                for cat in range(num_topics)
         ]
     
     def reset_all_metrics(self):
@@ -884,6 +885,57 @@ class TransformerClassifier(keras.Model):
         X_proj = tf.matmul(X_enc,P_matrix)
 
         return X_proj
+    
+    def get_angle_between_classifiers(self,class_idx):
+        '''
+        A utility function that will tell us where the convergence of each of the classifier
+        is happening with respect to one another since in high definition it dosent
+        make sense to choose any one reference point also.
+
+        Problems:
+        1. Here we could have multi-label classifier so we may not have just one direction
+            to remove + which direction to take into consideration?
+            (Try calculating the angle within the pos+neg class)
+
+        '''
+        #Getting the classifier angles
+        classifier_dict = {
+            "topic{}".format(tidx) : self.topic_classifier_list[tidx].get_weights()[0][:,class_idx]
+                for tidx in range(self.data_args["num_topics"])
+        }
+        classifier_dict["main"] = self.cat_classifier_list[self.data_args["debug_cidx"]].get_weights()[0][:,class_idx]
+
+        #Getting the norm of the classifier
+        classifier_norm = {
+            cname:np.linalg.norm(classifier_dict[cname])
+                for cname in classifier_dict.keys()
+        }
+        print("Classifiers Norm:")
+        mypp(classifier_norm)
+
+        #Now its time to get the angle among each of them
+        convergence_angle=defaultdict(dict)
+        for cname1,w1 in classifier_dict.items():
+            for cname2,w2 in classifier_dict.items():
+                norm1 = np.linalg.norm(w1)
+                norm2 = np.linalg.norm(w2)
+
+                angle = np.arccos(np.sum(w1*w2)/(norm1*norm2))/np.pi
+                convergence_angle[cname1][cname2]=float(angle) 
+        print("Convergence Angle: (in multiple of pi)")
+        mypp(convergence_angle)
+
+        return convergence_angle
+    
+    def get_all_classifier_accuracy(self,):
+        '''
+        '''
+        classifier_accuracy = {}
+        classifier_accuracy["main"]=float(self.sent_valid_acc_list[self.data_args["debug_cidx"]].result().numpy())
+        for tidx in range(self.data_args["num_topics"]):
+            classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_acc_list[tidx].result().numpy())
+        
+        return classifier_accuracy
     
     
 
@@ -1628,7 +1680,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
                                 task="main",
                                 P_matrix=P_identity,
                                 cidx=data_args["debug_cidx"],
-                                tidx=data_args["debug_tidx"]
+                                tidx=None,
             )
         
         #Training the topic classifier
@@ -1639,7 +1691,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
                     task="topic",
                     P_matrix=P_identity,
                     cidx=data_args["debug_cidx"],
-                    tidx=data_args["debug_tidx"],
+                    tidx=tidx,
                 )
         
         #Printing the classifier loss and accuracy
@@ -1662,6 +1714,18 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
         optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
     
     #Step 2: Next we will start the removal process
+    #Metrics to probe the classifiers
+    probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
+    #Getting the classifier information
+    init_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
+    #Getting the initial classifier accuracy
+    init_classifier_acc = classifier_main.get_all_classifier_accuracy()
+    probe_metric_list.append(dict(
+                conv_angle_dict = init_conv_angle,
+                classifier_acc_dict = init_classifier_acc
+    ))
+
+    
 
 
 

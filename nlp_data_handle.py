@@ -705,9 +705,11 @@ class DataHandleTransformer():
 
         #Creating the topic list
         old_topic_list = [
-            pos_adjective,neg_adjective,negations,adverbs,
+            pos_adjective,
+            neg_adjective,#negations,adverbs,
             #religion,gender,electronics,pronoun,kitchen,genre,
-            arts,books,clothes,groceries,movies,pets,phone,tools,
+            #arts,books,
+            clothes#,groceries,movies,pets,phone,tools,
             #male,female,white,black,straight,gay,
         ]
 
