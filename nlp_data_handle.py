@@ -978,9 +978,12 @@ class DataHandleTransformer():
 
             #Getting the topic labels
             topic_feature = df.iloc[ridx][topic_feature_col_name]
-            topic_label=0
-            if topic_feature[debug_topic_idx]>0:
-                topic_label=1
+            topic_label=[]
+            for fval in topic_feature:
+                if fval>0:
+                    topic_label.append(1)
+                else:
+                    topic_label.append(0)
             topic_label_list.append(topic_label)
             
             # topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
@@ -1000,13 +1003,13 @@ class DataHandleTransformer():
         #Creating the dataset for this category
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
-                                    label=np.array(label_list),
+                                    label=np.array(label_list,dtype=np.int32),
                                     # topic=np.array(topic_list),
                                     # topic_weight=np.array(topic_weight_list),
                                     input_idx = input_idx,
                                     attn_mask = attn_mask,
                                     # topic_feature=topic_feature,
-                                    topic_label = np.array(topic_label_list)
+                                    topic_label = np.array(topic_label_list,dtype=np.int32)
                                 )
         )
 

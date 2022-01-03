@@ -49,6 +49,9 @@ class TransformerClassifier(keras.Model):
             if model_args["train_bert"]==False:
                 for layer in self.bert_model.layers:
                     layer.trainable = False
+            
+            #Setting the dimension of hidden layer
+            self.hlayer_dim = model_args["bemb_dim"]
 
         #Initializing the heads for each classifier (Domain Sntiment)
         self.cat_emb_layer_list = []
@@ -117,7 +120,10 @@ class TransformerClassifier(keras.Model):
 
 
         #Initializing the trackers for sentiment classifier
-        self.sent_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
+        self.sent_pred_xentropy_list = [
+            keras.metrics.Mean(name="sent{}_pred_x".format(cat))
+                for cat in self.data_args["cat_list"]
+        ]
         self.sent_valid_acc_list = [
             tf.keras.metrics.SparseCategoricalAccuracy(name="c{}_valid_acc".format(cat))
                 for cat in self.data_args["cat_list"]
@@ -128,7 +134,10 @@ class TransformerClassifier(keras.Model):
         ]
 
         #Initilaizing the trackers for topics classifier
-        self.topic_pred_xentropy = keras.metrics.Mean(name="topic_pred_x")
+        self.topic_pred_xentropy_list =[ 
+            keras.metrics.Mean(name="topic{}_pred_x".format(tidx))
+                for tidx in self.data_args["topic_list"]
+        ] 
         self.topic_valid_acc_list = [
             tf.keras.metrics.SparseCategoricalAccuracy(name="t{}_valid_acc".format(topic))
                 for topic in self.data_args["topic_list"]
@@ -183,6 +192,20 @@ class TransformerClassifier(keras.Model):
 
         return cat_class_prob,gated_avg_embedding
     
+    def get_main_pred_prob_final(self,X_enc,cidx):
+        '''
+        Given the encoded (and projected) sentence embedding we will pass this
+        through the final main aka sentiment task classifier.
+        '''
+        X_prob = self.cat_classifier_list[cidx](X_enc)
+        return X_prob 
+    
+    def get_topic_pred_prob_final(self,X_enc,tidx):
+        '''
+        '''
+        X_prob = self.topic_classifier_list[tidx](X_enc)
+        return X_prob
+ 
     def get_topic_pred_prob_from_sentiment_emb(self,sentiment_emb,tidx,reverse_grad):
         '''
         This will be mainly used in the stage2, when we will try to remove the information
@@ -534,7 +557,7 @@ class TransformerClassifier(keras.Model):
         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
         acc_op.update_state(acc)
     
-    def train_step_stage2(self,cidx,tidx,single_ds,task,reverse_grad):
+    def train_step_stage2_advserial(self,cidx,tidx,single_ds,task,reverse_grad):
         '''
         This function will run one step of training for the classifier
         '''
@@ -661,7 +684,7 @@ class TransformerClassifier(keras.Model):
         else:
             raise NotImplementedError()
     
-    def valid_step_stage2(self,sidx,single_ds,gate_tensor,acc_op,task):
+    def valid_step_stage2_adversarial(self,sidx,single_ds,gate_tensor,acc_op,task):
         '''
         This validation step will be used by the stage 2 of our debugger
         '''
@@ -690,6 +713,179 @@ class TransformerClassifier(keras.Model):
         #Getting the validation accuracy
         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
         acc_op.update_state(acc)
+    
+    def train_step_stage2_inlp(self,dataset_batch,task,P_matrix,cidx,tidx):
+        '''
+        This function will run one step of training for the classifier
+
+        cidx: choose which category dataset to train the main classifier
+        tidx: the topic index
+        '''
+        scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        # cxentropy_loss = keras.losses.CategoricalCrossentropy(from_logits=False)
+
+        # #Get the dataset for each category
+        # cat_dataset_list = data
+
+        #Keeping track of classification accuracy
+        cat_accuracy_list = []
+
+        #Now getting the classification loss one by one each category        
+        # cat_total_loss = 0.0
+        # for cidx,cat in enumerate(self.data_args["cat_list"]):
+        label = dataset_batch["label"]
+        idx = dataset_batch["input_idx"]
+        mask = dataset_batch["attn_mask"]
+        topic_label = dataset_batch["topic_label"]#Only the debug topic label is coming here
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+
+        #Getting the train data
+        label_train = label[0:valid_idx]
+        idx_train = idx[0:valid_idx]
+        mask_train = mask[0:valid_idx]
+        if "topic" in task:
+            topic_label_train = topic_label[0:valid_idx,tidx]
+
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        mask_valid = mask[valid_idx:]
+        if "topic" in task:
+            topic_label_valid = topic_label[valid_idx:,tidx]
+
+        if "main" in task:
+            #First of all we need to get the topic embedding from all the 
+            with tf.GradientTape() as tape:
+                #Forward propagating the model
+                # train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
+                _,train_enc = self.get_sentiment_pred_prob(idx_train,mask_train,None,cidx)
+                #Passing this through the projection layer
+                train_proj = self._get_proj_X_enc(train_enc,P_matrix)
+                #Now getting the predction probability
+                train_prob = self.get_main_pred_prob_final(train_proj,cidx)
+
+                #Getting the loss for this classifier
+                xentropy_loss = scxentropy_loss(label_train,train_prob)
+                l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.cat_importance_weight_list[cidx])))
+                total_loss = xentropy_loss #+ self.model_args["l1_lambda"]*l1_loss
+
+            if task=="main":
+                #Now we have total classification loss, lets update the gradient
+                grads = tape.gradient(total_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
+            elif task=="main_inlp":
+                #Just update the classifier weights
+                main_head_params = [] + self.cat_classifier_list[cidx].trainable_variables
+                grads = tape.gradient(total_loss,main_head_params)
+                self.optimizer.apply_gradients(
+                    zip(grads,main_head_params)
+                )
+            else:
+                raise NotImplementedError()
+
+            #Getting the validation accuracy for this category
+            # valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
+            _,valid_enc = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+            valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
+            valid_prob = self.get_main_pred_prob_final(valid_proj,cidx)
+            self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
+    
+            #Updating the metrics to track
+            self.sent_pred_xentropy_list[cidx].update_state(xentropy_loss)
+            self.sent_l1_loss_list[cidx].update_state(l1_loss)
+        elif "topic" in task:
+            #First of all we need to get the topic embedding from all the 
+            with tf.GradientTape() as tape:
+                #Forward propagating the model
+               #We need to use the same encoder pipeline as the main task hence the sentiment pred_prob func
+                _,train_enc = self.get_sentiment_pred_prob(idx_train,mask_train,None,cidx)
+                train_proj = self._get_proj_X_enc(train_enc,P_matrix)
+                topic_train_prob = self.get_topic_pred_prob_final(train_proj,tidx)
+                
+                xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
+                l1_loss = tf.reduce_sum(tf.abs(tf.sigmoid(self.cat_importance_weight_list[cidx])))
+                topic_total_loss = xentropy_loss #+ self.model_args["l1_lambda"]*l1_loss
+            
+            #Now training the encoder to also retain the topic related info if want to have them
+            if task=="topic":
+                grads = tape.gradient(topic_total_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
+            elif task=="topic_inlp":
+                #Here we will only train the topic classiifer
+                topic_params = [] + self.topic_classifier_list[tidx].trainable_variables
+                grads = tape.gradient(topic_total_loss,topic_params)
+                self.optimizer.apply_gradients(
+                    zip(grads,topic_params)
+                )
+            else:
+                raise NotImplementedError()
+
+            #Getting the validation accuracy for this category
+            _,valid_enc = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+            valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
+            topic_valid_prob = self.get_topic_pred_prob_final(valid_proj,tidx)
+
+            
+            #Updating the metrics to track
+            self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
+            self.topic_pred_xentropy_list[tidx].update_state(xentropy_loss)
+            self.sent_l1_loss_list[cidx].update_state(l1_loss)
+        else:
+            raise NotImplementedError()
+    
+    def valid_step_stage2_inlp(self,dataset_batch,task,P_matrix,cidx,tidx):
+        '''
+        This validation step will be used by the stage 2 of our debugger
+        '''
+        label = dataset_batch["label"]
+        idx = dataset_batch["input_idx"]
+        mask = dataset_batch["attn_mask"]
+        topic_label = dataset_batch["topic_label"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+        mask_valid = mask[valid_idx:]
+        if "topic" in task:
+            topic_label_valid = topic_label[valid_idx:,tidx]
+
+        #Passing the input through the encoder
+        _,valid_enc = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+        valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
+
+        #Now we will make the forward pass and get the validation accuracy
+        if task=="main":
+            valid_prob = self.get_main_pred_prob_final(valid_proj,cidx)
+            self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
+        elif task=="topic":
+            topic_valid_prob = self.get_topic_pred_prob_final(valid_proj,tidx)
+            self.topic_valid_acc_list[tidx].update_state(topic_label_valid,topic_valid_prob)
+        else:
+            raise NotImplementedError()
+    
+    def _get_proj_X_enc(self,X_enc,P_matrix):
+        '''
+        This will give the projected encoded latent representaion which will be furthur
+        removed of the information.
+        '''
+        #Converting to the numpy array
+        P_matrix = tf.constant(P_matrix.T,dtype=tf.float32)
+
+        #Now projecting this latent represention into null space
+        X_proj = tf.matmul(X_enc,P_matrix)
+
+        return X_proj
+    
+    
 
 class SimpleNBOW(keras.Model):
     '''
@@ -1207,7 +1403,7 @@ def transformer_trainer_stage1(data_args,model_args):
     #Printing the variance of the importance weight
     # get_cat_temb_importance_weight_variance(classifier)
 
-def transformer_trainer_stage2(data_args,model_args):
+def transformer_trainer_stage2_adversarial(data_args,model_args):
     '''
     This transformer trainer is just for debugging purpose of the model trained on 
     a particular domain/dataset/merged one.
@@ -1382,6 +1578,92 @@ def check_topic_usage_mmd(cat_dataset,classifier_main):
                        +distance.jensenshannon(dist_matrix_yz[2,:],dist_matrix_yz[3,:]))
     anticausal_distance = distance.jensenshannon(dist_matrix_z[0,:],dist_matrix_z[1,:])
     print("js_yz:{:0.5f}\n js_z :{:0.5f}".format(causal_distance,anticausal_distance))
+
+def transformer_trainer_stage2_inlp(data_args,model_args):
+    '''
+    This trainer will train the transformer and then remove the topic using the
+    null space projection method.
+    '''
+    #Creating one single dataset for time saving and uniformity
+    data_handler = DataHandleTransformer(data_args)
+    if "amazon" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
+    elif "nlp_toy" in data_args["path"]:
+        all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
+    else:
+        raise NotImplementedError()
+    #Getting the dataset for the required category and topic
+    print("Getting the dataset for: cat:{}\ttopic:{}".format(
+                                                data_args["cat_list"][data_args["debug_cidx"]],
+                                                data_args["debug_tidx"],
+    ))
+    cat_dataset = data_handler._convert_df_to_dataset_stage2_transformer(
+                            df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
+                            doc_col_name="doc",
+                            label_col_name="label",
+                            topic_feature_col_name="topic_feature",
+                            debug_topic_idx=data_args["debug_tidx"]#redundant now all topics are there
+    )
+    data_args["num_topics"]=data_handler.data_args["num_topics"]
+
+
+
+
+    # Step 1: Now we will start training the main task classifier
+    classifier_main = TransformerClassifier(data_args,model_args)
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+    optimal_vacc_main = None
+    #Initializing the Identity P-matrix
+    P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+    for eidx in range(model_args["epochs"]):
+        print("============================================")
+        classifier_main.reset_all_metrics()
+        #Training the main classifier
+        for dataset_batch in cat_dataset:
+            classifier_main.train_step_stage2_inlp(
+                                dataset_batch=dataset_batch,
+                                task="main",
+                                P_matrix=P_identity,
+                                cidx=data_args["debug_cidx"],
+                                tidx=data_args["debug_tidx"]
+            )
+        
+        #Training the topic classifier
+        for tidx in range(data_args["num_topics"]):
+            for dataset_batch in cat_dataset:
+                classifier_main.train_step_stage2_inlp(
+                    dataset_batch=dataset_batch,
+                    task="topic",
+                    P_matrix=P_identity,
+                    cidx=data_args["debug_cidx"],
+                    tidx=data_args["debug_tidx"],
+                )
+        
+        #Printing the classifier loss and accuracy
+        log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
+        print(log_format.format(
+                            eidx,
+                            "main",
+                            classifier_main.sent_pred_xentropy_list[data_args["debug_cidx"]].result(),
+                            classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
+        ))
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            eidx,
+                            "topic-{}".format(tidx),
+                            classifier_main.topic_pred_xentropy_list[tidx].result(),
+                            classifier_main.topic_valid_acc_list[tidx].result()
+            ))
+
+        #Keeping track of the optimal vaccuracy of the main classifier
+        optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
+    
+    #Step 2: Next we will start the removal process
+
+
 
 def nbow_trainer_stage2(data_args,model_args):
     '''
