@@ -609,11 +609,11 @@ class DataHandleTransformer():
             "judaism", "hinduism", "christianity", "buddhism", "monk" 
         ])
 
-        gender =set([ 
-            "he", "she", "it", "male", "female", "john", "kennedy", "victoria", 
-            "peter", "luna", "harry", "ron", "susan", "actor", "actress", "father",
-            "mother", "nurse", "firefighter", "warrior", "man", "women", "god",
-            "goddess"
+        pos_gender= set([ 
+            "male","man","john","he","him","his","guy","boy","harry",
+            "adam","steve","actor","husband","father","uncle",
+            "gentleman","masculine","chap","bloke","lad","dude",
+            "bro","brother","son"
         ])
 
         electronics = set([ 
@@ -625,6 +625,7 @@ class DataHandleTransformer():
 
         pronoun = set([ 
             "he", "she", "it", "they", "them","i", "we", "themselves", "thy","thou",
+            "her","him",
         ])
 
         kitchen = set([ 
@@ -661,9 +662,12 @@ class DataHandleTransformer():
             "pasta", "corn", "dairy"
         ])
 
-        movies = set([ 
-            "movie", "animation", "film", "show", "theatre", "hollywood",
-            "disney", "producer", "director", "actor", "actress" 
+        pos_movies = set([ 
+            "romantic","comedy","romcom","action","matrix","inception",
+            "titanic","kung","fu","genius","harry","potter","shawshank",
+            "redemption","spiderman","hulk","knight","gump","ryan",
+            "interstellar","joker","batman","superman","avengers",
+            "300","prestige"
         ])
 
         pets = set([ 
@@ -706,10 +710,13 @@ class DataHandleTransformer():
         #Creating the topic list
         old_topic_list = [
             pos_adjective,
-            neg_adjective,#negations,adverbs,
-            #religion,gender,electronics,pronoun,kitchen,genre,
+            #neg_adjective,#negations,adverbs,
+            #religion,
+            pos_gender,#,electronics,
+            #pronoun,#,kitchen,genre,
             #arts,books,
-            clothes#,groceries,movies,pets,phone,tools,
+            #clothes#,groceries,
+            pos_movies#,pets,phone,tools,
             #male,female,white,black,straight,gay,
         ]
 
