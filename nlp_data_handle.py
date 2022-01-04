@@ -1021,13 +1021,14 @@ class DataHandleTransformer():
         #Calculating the predictive performance
         label=np.array(label_list,dtype=np.int32)
         topic_label = np.array(topic_label_list,dtype=np.int32)
-        print("\n\n Individual Distribution:")
+        print("\n\nIndividual Distribution:")
         print("main:\tclass0:{}\tclass1:{}".format(
                             np.sum(label==0),
                             np.sum(label==1)
         ))
         for tidx in range(self.data_args["num_topics"]):
             print("topic-{}:\tclass0:{}\tclass1:{}".format(
+                                        tidx,
                                         np.sum(topic_label[:,tidx]==0),
                                         np.sum(topic_label[:,tidx]==1)
             ))
