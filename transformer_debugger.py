@@ -1738,7 +1738,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
         better trained topic classifier than the others.
         '''
         data_args["debug_tidx"] = didx 
-        data_handler["debug_tidx"] = didx
+        data_handler.data_args["debug_tidx"] = didx
         #Giving it a separate probe metric list
         probe_metric_list = probe_metric_list_actual.copy() 
 

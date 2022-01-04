@@ -1018,6 +1018,43 @@ class DataHandleTransformer():
         #Batching the dataset
         cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
+        #Calculating the predictive performance
+        label=np.array(label_list,dtype=np.int32)
+        topic_label = np.array(topic_label_list,dtype=np.int32)
+        print("\n\n Individual Distribution:")
+        print("main:\tclass0:{}\tclass1:{}".format(
+                            np.sum(label==0),
+                            np.sum(label==1)
+        ))
+        for tidx in range(self.data_args["num_topics"]):
+            print("topic-{}:\tclass0:{}\tclass1:{}".format(
+                                        np.sum(topic_label[:,tidx]==0),
+                                        np.sum(topic_label[:,tidx]==1)
+            ))
+
+
+        
+        #Next we will print the conditional distribution:
+        print("\n\nConditional Distribution")
+        #Getting the main task class mask
+        main_class0_mask = (label==0)
+        main_class1_mask = (label==1)
+        def get_topic_segmentation(class_mask,topic_label,name,tidx):
+            topic_label_class = topic_label[class_mask]
+            print("class:{}\ttidx:{}\tnum_topic_0:{}\tnum_topic_1:{}".format(
+                                        name,
+                                        tidx,
+                                        topic_label_class.shape[0]-np.sum(topic_label_class),
+                                        np.sum(topic_label_class)
+            ))
+        
+        print("\n\nGetting the topic segmentation")
+        for tidx in range(topic_label.shape[-1]):
+            print("####################################################")
+            get_topic_segmentation(main_class0_mask,topic_label[:,tidx],"0",tidx)
+            get_topic_segmentation(main_class1_mask,topic_label[:,tidx],"1",tidx)
+
+
         return cat_dataset
     
     def _convert_df_to_dataset_stage1(self,df,doc_col_name,label_col_name,mask_feature_dims):
