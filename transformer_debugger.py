@@ -187,12 +187,12 @@ class TransformerClassifier(keras.Model):
         avg_embedding = masked_sum / (num_tokens+1e-10)
 
         #Now we will gate the dimension which are spurious
-        gated_avg_embedding = self.cat_emb_layer_list[cidx](avg_embedding)#*gate_tensor
+        # gated_avg_embedding = self.cat_emb_layer_list[cidx](avg_embedding)#*gate_tensor
         
         #Now we will apply the dense layer for this category
-        cat_class_prob = self.cat_classifier_list[cidx](gated_avg_embedding)
+        cat_class_prob = self.cat_classifier_list[cidx](avg_embedding)
 
-        return cat_class_prob,gated_avg_embedding
+        return cat_class_prob,avg_embedding
     
     def get_main_pred_prob_final(self,X_enc,cidx):
         '''
