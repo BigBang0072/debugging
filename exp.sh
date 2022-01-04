@@ -444,11 +444,11 @@ mkdir nlp_logs
 
 
 #Testing the main topic in presence of noise (now we dont have anything to get 100% accuracy)
-python transformer_debugger.py -expt_num "ct20.inlp.0" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.0" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.1" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.6 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
-python transformer_debugger.py -expt_num "ct20.inlp.2" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.7 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.2" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.7 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.3" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.8 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
-python transformer_debugger.py -expt_num "ct20.inlp.4" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.4" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.5" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.5 -topic1_corr 1.0 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 
 # python transformer_debugger.py -expt_num "ct20.inlp.6" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.6 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
@@ -458,11 +458,11 @@ python transformer_debugger.py -expt_num "ct20.inlp.4" -num_sample 1000 -num_top
 # python transformer_debugger.py -expt_num "ct20.inlp.10" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.6 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.11" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.6 -topic1_corr 1.0 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 
-python transformer_debugger.py -expt_num "ct20.inlp.12" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.12" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.13" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.6 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
-python transformer_debugger.py -expt_num "ct20.inlp.14" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.7 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.14" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.7 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.15" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.8 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
-python transformer_debugger.py -expt_num "ct20.inlp.16" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.16" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.17" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.7 -topic1_corr 1.0 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 
 # python transformer_debugger.py -expt_num "ct20.inlp.18" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.8 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
@@ -472,11 +472,11 @@ python transformer_debugger.py -expt_num "ct20.inlp.16" -num_sample 1000 -num_to
 # python transformer_debugger.py -expt_num "ct20.inlp.22" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.8 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.23" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.8 -topic1_corr 1.0 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 
-python transformer_debugger.py -expt_num "ct20.inlp.24" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.24" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.25" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.6 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
-python transformer_debugger.py -expt_num "ct20.inlp.26" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.7 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.26" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.7 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.27" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.8 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
-python transformer_debugger.py -expt_num "ct20.inlp.28" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
+# python transformer_debugger.py -expt_num "ct20.inlp.28" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.29" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 0.9 -topic1_corr 1.0 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 
 # python transformer_debugger.py -expt_num "ct20.inlp.30" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.5 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
@@ -484,7 +484,34 @@ python transformer_debugger.py -expt_num "ct20.inlp.28" -num_sample 1000 -num_to
 # python transformer_debugger.py -expt_num "ct20.inlp.32" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.7 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.33" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.8 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
 # python transformer_debugger.py -expt_num "ct20.inlp.34" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epochs 10
-# python transformer_debugger.py -expt_num "ct20.inlp.35" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 1.0 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epoch
+# python transformer_debugger.py -expt_num "ct20.inlp.35" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 1.0 -main_topic -1 -stage 2 --normalize_emb -debug_tidx 0 -lr 0.005 -num_proj_iter 30 -topic_epoch 10
+
+
+
+
+
+#Training the BOW on amazon dataset (BOW is not enough to train for this task)
+# python transformer_debugger.py -expt_num "ct21.inlp.0" -num_sample 1000 -num_topics -1 -num_epochs 10 -path "dataset/amazon/" -emb_path "glove-wiki-gigaword-100"  -stage 2 --normalize_emb -debug_cidx 3 -debug_tidx 0 -lr 0.01 -num_proj_iter 30 -topic_epoch 10
+
+#Training the transformer on the amazon dataset (changing the topic to remove)
+#Why not just use the convergence angle to show if the topic is being used or not? Why remove stuffs?
+
+#num topic epoch is also critical cuz if we are trining it wrong then could remove wrong stuff
+python transformer_debugger.py -expt_num "ct22.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
+python transformer_debugger.py -expt_num "ct22.inlp.1" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 1 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
+python transformer_debugger.py -expt_num "ct22.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 2 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
+
+
+#Changing the number of dimension of the latent space (maybe smallar latent space are more sensitive to removal)
+python transformer_debugger.py -expt_num "ct23.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
+python transformer_debugger.py -expt_num "ct23.inlp.1" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 1 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
+python transformer_debugger.py -expt_num "ct23.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 2 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
+
+
+
+
+
+
 
 
 
