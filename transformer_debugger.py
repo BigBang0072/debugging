@@ -1665,10 +1665,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
     #Lets now take out the weights of the of the topic classifier
-    topic_classifier_init_weight_list = [
-                classifier_main.topic_classifier_list[tidx].get_weights()
-                    for tidx in range(data_args["num_topics"])
-    ]
+    topic_classifier_init_weight_list = [] #not initialized here.
 
     optimal_vacc_main = None
     #Initializing the Identity P-matrix
@@ -1696,6 +1693,13 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
                     cidx=data_args["debug_cidx"],
                     tidx=tidx,
                 )
+        
+        #Since the weights are initialized when needed hence we need to caputre this here
+        if(len(topic_classifier_init_weight_list)==0):
+            topic_classifier_init_weight_list = [
+                classifier_main.topic_classifier_list[tidx].get_weights()
+                    for tidx in range(data_args["num_topics"])
+            ]
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
