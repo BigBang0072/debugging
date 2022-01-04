@@ -1642,16 +1642,15 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
     else:
         raise NotImplementedError()
     #Getting the dataset for the required category and topic
-    print("Getting the dataset for: cat:{}\ttopic:{}".format(
+    print("Getting the dataset for: cat:{}".format(
                                                 data_args["cat_list"][data_args["debug_cidx"]],
-                                                data_args["debug_tidx"],
     ))
     cat_dataset = data_handler._convert_df_to_dataset_stage2_transformer(
                             df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
                             doc_col_name="doc",
                             label_col_name="label",
                             topic_feature_col_name="topic_feature",
-                            debug_topic_idx=data_args["debug_tidx"]#redundant now all topics are there
+                            debug_topic_idx=None, #data_args["debug_tidx"]#redundant now all topics are there
     )
     data_args["num_topics"]=data_handler.data_args["num_topics"]
 
@@ -1712,12 +1711,12 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
         optimal_vacc_main = classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result()
     
     #Metrics to probe the classifiers
-    probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
+    probe_metric_list_actual = [] #list of  (conv_angle_dict,accracy_dict)
     #Getting the classifier information
     init_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
     #Getting the initial classifier accuracy
     init_classifier_acc = classifier_main.get_all_classifier_accuracy()
-    probe_metric_list.append(dict(
+    probe_metric_list_actual.append(dict(
                 conv_angle_dict = init_conv_angle,
                 classifier_acc_dict = init_classifier_acc
     ))
@@ -1732,112 +1731,125 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
 
     #Step 2: Next we will start the removal process
     #Next we will be going to use this trained classifier to do the null space projection
-    print("\n\nStage 2: Removing the topic information!")
-    all_proj_matrix_list = []
-    P_W = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
-    for pidx in range(model_args["num_proj_iter"]):
-        #Resetting all the metrics
-        classifier_main.reset_all_metrics()
+    for didx in range(data_args["num_topics"]):
+        #Updating the debug tidx
+        '''
+        The only problem with this iterating is that the first removal will have 
+        better trained topic classifier than the others.
+        '''
+        data_args["debug_tidx"] = didx 
+        data_handler["debug_tidx"] = didx
+        #Giving it a separate probe metric list
+        probe_metric_list = probe_metric_list_actual.copy() 
 
-        for tidx in range(data_args["num_topics"]):
-            #Step1: Training the topic classifier now
-            tbar = tqdm(range(model_args["topic_epochs"]))
-            #Resetting the topic classifier
-            # classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
-            for eidx in tbar:
-                for data_batch in cat_dataset:
-                    classifier_main.train_step_stage2_inlp(
-                                        dataset_batch=data_batch,
-                                        task="topic_inlp",
-                                        P_matrix=P_W,
-                                        cidx=data_args["debug_cidx"],
-                                        tidx=tidx,
+
+        print("\n\nStage 2: Removing the topic information for topic:{}".format(data_args["debug_tidx"]))
+        all_proj_matrix_list = []
+        P_W = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+        for pidx in range(model_args["num_proj_iter"]):
+            #Resetting all the metrics
+            classifier_main.reset_all_metrics()
+
+            for tidx in range(data_args["num_topics"]):
+                #Step1: Training the topic classifier now
+                tbar = tqdm(range(model_args["topic_epochs"]))
+                #Resetting the topic classifier
+                # classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
+                for eidx in tbar:
+                    for data_batch in cat_dataset:
+                        classifier_main.train_step_stage2_inlp(
+                                            dataset_batch=data_batch,
+                                            task="topic_inlp",
+                                            P_matrix=P_W,
+                                            cidx=data_args["debug_cidx"],
+                                            tidx=tidx,
+                        )
+
+                    #Updating the description of the tqdm
+                    tbar.set_postfix_str("tceloss:{:0.4f},  tvacc:{:0.3f}".format(
+                                                classifier_main.topic_pred_xentropy_list[tidx].result(),
+                                                classifier_main.topic_valid_acc_list[tidx].result()
+                    ))
+            #Get the topic metrics aftertraining the classifier
+            topic_vacc_before = classifier_main.topic_valid_acc_list[data_args["debug_tidx"]].result()
+
+            #Getting the classifiers angle (after this step of training)
+            classifier_main.reset_all_metrics()
+            for data_batch in cat_dataset:
+                for tidx in range(data_args["num_topics"]):
+                    classifier_main.valid_step_stage2_inlp(
+                                                dataset_batch=data_batch,
+                                                P_matrix=P_W,
+                                                cidx=data_args["debug_cidx"],
+                                                tidx=tidx,
                     )
+            
+            #Getting the classifier information
+            conv_angle_dict = classifier_main.get_angle_between_classifiers(class_idx=0)
+            classifier_acc_dict = classifier_main.get_all_classifier_accuracy()
+            probe_metric_list.append(dict(
+                        conv_angle_dict=conv_angle_dict,
+                        classifier_acc_dict=classifier_acc_dict,
+            ))
 
-                #Updating the description of the tqdm
-                tbar.set_postfix_str("tceloss:{:0.4f},  tvacc:{:0.3f}".format(
-                                            classifier_main.topic_pred_xentropy_list[tidx].result(),
-                                            classifier_main.topic_valid_acc_list[tidx].result()
-                ))
-        #Get the topic metrics aftertraining the classifier
-        topic_vacc_before = classifier_main.topic_valid_acc_list[data_args["debug_tidx"]].result()
+            #Step2: Remove the information and get the projection
+            topic_W_matrix = classifier_main.topic_classifier_list[data_args["debug_tidx"]].get_weights()[0].T
+            #Now getting the projection matrix
+            P_W_curr = get_rowspace_projection(topic_W_matrix)
+            all_proj_matrix_list.append(P_W_curr)
+            #Getting the aggregate projection matrix
+            P_W = get_projection_to_intersection_of_nullspaces(
+                                            rowspace_projection_matrices=all_proj_matrix_list,
+                                            input_dim=classifier_main.hlayer_dim
+            )
 
-        #Getting the classifiers angle (after this step of training)
-        classifier_main.reset_all_metrics()
-        for data_batch in cat_dataset:
-            for tidx in range(data_args["num_topics"]):
-                classifier_main.valid_step_stage2_inlp(
-                                            dataset_batch=data_batch,
-                                            P_matrix=P_W,
-                                            cidx=data_args["debug_cidx"],
-                                            tidx=tidx,
-                )
+
+            #Step 3: Now we need to retrain the main task head, 
+            #to again get optimal classifier in this projected space
+            #This seems like not a tright thing to do, as mechanisam change could happen and 
+            #we could get equaivalent performance from other feature, though the spurious was being used.
+            # cbar = tqdm(range(model_args["topic_epochs"]))
+            # for eidx in cbar:
+            #     for data_batch in cat_dataset:
+            #         classifier_main.train_step_stage2(
+            #                             dataset_batch=data_batch,
+            #                             task="inlp_main",
+            #                             P_matrix=P_W,
+            #         )
+
+            #     #Updating the description of the tqdm
+            #     cbar.set_postfix_str("mceloss:{:0.4f},  mvacc:{:0.3f}".format(
+            #                                 classifier_main.main_pred_xentropy.result(),
+            #                                 classifier_main.main_valid_accuracy.result()
+            #     ))
+
+
+            #Now we need to get the validation accuracy on this projected matrix
+            classifier_main.reset_all_metrics()
+            for data_batch in cat_dataset:
+                for tidx in range(data_args["num_topics"]):
+                    classifier_main.valid_step_stage2_inlp(
+                                                dataset_batch=data_batch,
+                                                P_matrix=P_W,
+                                                cidx=data_args["debug_cidx"],
+                                                tidx=tidx,
+                    )
+            
+            print("pidx:{:}\tmain_init:{:0.3f}\tmain_after:{:0.3f}\ttopic_before:{:0.3f}\ttopic_after:{:0.3f}".format(
+                                                pidx,
+                                                optimal_vacc_main,
+                                                classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
+                                                topic_vacc_before,
+                                                classifier_main.topic_valid_acc_list[data_args["debug_tidx"]].result()
+            ))
         
-        #Getting the classifier information
-        conv_angle_dict = classifier_main.get_angle_between_classifiers(class_idx=0)
-        classifier_acc_dict = classifier_main.get_all_classifier_accuracy()
-        probe_metric_list.append(dict(
-                    conv_angle_dict=conv_angle_dict,
-                    classifier_acc_dict=classifier_acc_dict,
-        ))
-
-        #Step2: Remove the information and get the projection
-        topic_W_matrix = classifier_main.topic_classifier_list[data_args["debug_tidx"]].get_weights()[0].T
-        #Now getting the projection matrix
-        P_W_curr = get_rowspace_projection(topic_W_matrix)
-        all_proj_matrix_list.append(P_W_curr)
-        #Getting the aggregate projection matrix
-        P_W = get_projection_to_intersection_of_nullspaces(
-                                        rowspace_projection_matrices=all_proj_matrix_list,
-                                        input_dim=classifier_main.hlayer_dim
-        )
-
-
-        #Step 3: Now we need to retrain the main task head, 
-        #to again get optimal classifier in this projected space
-        #This seems like not a tright thing to do, as mechanisam change could happen and 
-        #we could get equaivalent performance from other feature, though the spurious was being used.
-        # cbar = tqdm(range(model_args["topic_epochs"]))
-        # for eidx in cbar:
-        #     for data_batch in cat_dataset:
-        #         classifier_main.train_step_stage2(
-        #                             dataset_batch=data_batch,
-        #                             task="inlp_main",
-        #                             P_matrix=P_W,
-        #         )
-
-        #     #Updating the description of the tqdm
-        #     cbar.set_postfix_str("mceloss:{:0.4f},  mvacc:{:0.3f}".format(
-        #                                 classifier_main.main_pred_xentropy.result(),
-        #                                 classifier_main.main_valid_accuracy.result()
-        #     ))
-
-
-        #Now we need to get the validation accuracy on this projected matrix
-        classifier_main.reset_all_metrics()
-        for data_batch in cat_dataset:
-            for tidx in range(data_args["num_topics"]):
-                classifier_main.valid_step_stage2_inlp(
-                                            dataset_batch=data_batch,
-                                            P_matrix=P_W,
-                                            cidx=data_args["debug_cidx"],
-                                            tidx=tidx,
-                )
-        
-        print("pidx:{:}\tmain_init:{:0.3f}\tmain_after:{:0.3f}\ttopic_before:{:0.3f}\ttopic_after:{:0.3f}".format(
-                                            pidx,
-                                            optimal_vacc_main,
-                                            classifier_main.sent_valid_acc_list[data_args["debug_cidx"]].result(),
-                                            topic_vacc_before,
-                                            classifier_main.topic_valid_acc_list[data_args["debug_tidx"]].result()
-        ))
-    
-        #Saving the probe metrics in a json file 
-        probe_metric_path = "nlp_logs/{}/".format(data_args["expt_name"])
-        pathlib.Path(probe_metric_path).mkdir(parents=True, exist_ok=True)
-        print("Dumping the probe metrics in: {}".format(probe_metric_path))
-        with open(probe_metric_path+"probe_metric_list.json","w") as whandle:
-            json.dump(probe_metric_list,whandle,indent="\t")
+            #Saving the probe metrics in a json file 
+            probe_metric_path = "nlp_logs/{}/".format(data_args["expt_name"])
+            pathlib.Path(probe_metric_path).mkdir(parents=True, exist_ok=True)
+            print("Dumping the probe metrics in: {}".format(probe_metric_path))
+            probe_metric_fname = probe_metric_path+"probe_metric_list_topic_{}.json".format(data_args["debug_tidx"])
+            with open(probe_metric_fname,"w") as whandle:
+                json.dump(probe_metric_list,whandle,indent="\t")
 
 
 
