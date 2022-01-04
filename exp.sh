@@ -497,15 +497,18 @@ mkdir nlp_logs
 #Why not just use the convergence angle to show if the topic is being used or not? Why remove stuffs?
 
 #num topic epoch is also critical cuz if we are trining it wrong then could remove wrong stuff
-python transformer_debugger.py -expt_num "ct22.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
-python transformer_debugger.py -expt_num "ct22.inlp.1" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 1 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
-python transformer_debugger.py -expt_num "ct22.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 2 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
+# python transformer_debugger.py -expt_num "ct22.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 1 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
+# python transformer_debugger.py -expt_num "ct22.inlp.1" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 1 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
+# python transformer_debugger.py -expt_num "ct22.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 2 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
 
 
-#Changing the number of dimension of the latent space (maybe smallar latent space are more sensitive to removal)
-python transformer_debugger.py -expt_num "ct23.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
-python transformer_debugger.py -expt_num "ct23.inlp.1" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 1 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
-python transformer_debugger.py -expt_num "ct23.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 2 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
+# #Changing the number of dimension of the latent space (maybe smallar latent space are more sensitive to removal)
+# python transformer_debugger.py -expt_num "ct23.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
+# python transformer_debugger.py -expt_num "ct23.inlp.1" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 1 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
+# python transformer_debugger.py -expt_num "ct23.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 2 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
+
+# script -c "/path/prog" /path/log.txt
+python transformer_debugger.py -expt_num "ct22.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 5 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
 
 
 
