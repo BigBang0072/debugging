@@ -39,6 +39,7 @@ class TransformerClassifier(keras.Model):
         super(TransformerClassifier,self).__init__()
         self.data_args = data_args
         self.model_args = model_args
+        self.cached_bert_embedding_dict = {}
 
         #Stage 2: ONly used in  Stage 2
         #Now initializing the layers to be used
@@ -161,30 +162,38 @@ class TransformerClassifier(keras.Model):
         super(TransformerClassifier, self).compile()
         self.optimizer = optimizer 
     
-    def get_sentiment_pred_prob(self,idx_train,mask_train,gate_tensor,cidx):     
-        #Getting the bert activation
-        bert_outputs=self.bert_model(
-                    input_ids=idx_train,
-                    attention_mask=mask_train
-        )
-        bert_seq_output = bert_outputs.last_hidden_state
+    def get_sentiment_pred_prob(self,bidx,idx_train,mask_train,gate_tensor,cidx):
+        if self.model_args["cached_bemb"]==False or (bidx not in self.cached_bert_embedding_dict):    
+            #Getting the bert activation
+            bert_outputs=self.bert_model(
+                        input_ids=idx_train,
+                        attention_mask=mask_train
+            )
+            bert_seq_output = bert_outputs.last_hidden_state
 
-        #Multiplying this embedding with corresponding weights
-        cat_imp_weights = tf.sigmoid(self.cat_importance_weight_list[cidx])
-        weighted_bert_seq_output = bert_seq_output * cat_imp_weights
+            #Multiplying this embedding with corresponding weights
+            cat_imp_weights = tf.sigmoid(self.cat_importance_weight_list[cidx])
+            weighted_bert_seq_output = bert_seq_output * cat_imp_weights
 
-        #Now we need to take average of the last hidden state:
-        #Dont use function, the output shape is not defined
-        m = tf.cast(mask_train,dtype=tf.float32)
+            #Now we need to take average of the last hidden state:
+            #Dont use function, the output shape is not defined
+            m = tf.cast(mask_train,dtype=tf.float32)
 
-        masked_sum =tf.reduce_sum(
-                        weighted_bert_seq_output * tf.expand_dims(m,-1),
-                        axis=1
-        )
+            masked_sum =tf.reduce_sum(
+                            weighted_bert_seq_output * tf.expand_dims(m,-1),
+                            axis=1
+            )
 
-        num_tokens = tf.reduce_sum(m,axis=1,keepdims=True)
+            num_tokens = tf.reduce_sum(m,axis=1,keepdims=True)
 
-        avg_embedding = masked_sum / (num_tokens+1e-10)
+            avg_embedding = masked_sum / (num_tokens+1e-10)
+
+            #Caching the bert embedding for this bidx
+            if self.model_args["cached_bemb"]==True:
+                self.cached_bert_embedding_dict[bidx] = avg_embedding
+        else:
+            assert self.model_args["train_bert"]==False,"Caching the trainable bert embedding"
+            avg_embedding = self.cached_bert_embedding_dict[bidx]
 
         #Now we will gate the dimension which are spurious
         # gated_avg_embedding = self.cat_emb_layer_list[cidx](avg_embedding)#*gate_tensor
@@ -716,10 +725,13 @@ class TransformerClassifier(keras.Model):
         acc = tf.keras.metrics.sparse_categorical_accuracy(label_valid,valid_prob)
         acc_op.update_state(acc)
     
-    def train_step_stage2_inlp(self,dataset_batch,task,P_matrix,cidx,tidx):
+    def train_step_stage2_inlp(self,bidx,dataset_batch,task,P_matrix,cidx,tidx):
         '''
         This function will run one step of training for the classifier
-
+        bidx: the batch idx of dataset which we will cache for now for
+                faster training. This assumes that the btches are 
+                not randomized and comes in different order every time.
+                
         cidx: choose which category dataset to train the main classifier
         tidx: the topic index
         '''
@@ -762,7 +774,7 @@ class TransformerClassifier(keras.Model):
             with tf.GradientTape() as tape:
                 #Forward propagating the model
                 # train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
-                _,train_enc = self.get_sentiment_pred_prob(idx_train,mask_train,None,cidx)
+                _,train_enc = self.get_sentiment_pred_prob(bidx,idx_train,mask_train,None,cidx)
                 #Passing this through the projection layer
                 train_proj = self._get_proj_X_enc(train_enc,P_matrix)
                 #Now getting the predction probability
@@ -791,7 +803,7 @@ class TransformerClassifier(keras.Model):
 
             #Getting the validation accuracy for this category
             # valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
-            _,valid_enc = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+            _,valid_enc = self.get_sentiment_pred_prob(bidx,idx_valid,mask_valid,None,cidx)
             valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
             valid_prob = self.get_main_pred_prob_final(valid_proj,cidx)
             self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
@@ -804,7 +816,7 @@ class TransformerClassifier(keras.Model):
             with tf.GradientTape() as tape:
                 #Forward propagating the model
                #We need to use the same encoder pipeline as the main task hence the sentiment pred_prob func
-                _,train_enc = self.get_sentiment_pred_prob(idx_train,mask_train,None,cidx)
+                _,train_enc = self.get_sentiment_pred_prob(bidx,idx_train,mask_train,None,cidx)
                 train_proj = self._get_proj_X_enc(train_enc,P_matrix)
                 topic_train_prob = self.get_topic_pred_prob_final(train_proj,tidx)
                 
@@ -829,7 +841,7 @@ class TransformerClassifier(keras.Model):
                 raise NotImplementedError()
 
             #Getting the validation accuracy for this category
-            _,valid_enc = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+            _,valid_enc = self.get_sentiment_pred_prob(bidx,idx_valid,mask_valid,None,cidx)
             valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
             topic_valid_prob = self.get_topic_pred_prob_final(valid_proj,tidx)
 
@@ -841,7 +853,7 @@ class TransformerClassifier(keras.Model):
         else:
             raise NotImplementedError()
     
-    def valid_step_stage2_inlp(self,dataset_batch,P_matrix,cidx,tidx):
+    def valid_step_stage2_inlp(self,bidx,dataset_batch,P_matrix,cidx,tidx):
         '''
         This validation step will be used by the stage 2 of our debugger
         '''
@@ -860,7 +872,7 @@ class TransformerClassifier(keras.Model):
         topic_label_valid = topic_label[valid_idx:,tidx]
 
         #Passing the input through the encoder
-        _,valid_enc = self.get_sentiment_pred_prob(idx_valid,mask_valid,None,cidx)
+        _,valid_enc = self.get_sentiment_pred_prob(bidx,idx_valid,mask_valid,None,cidx)
         valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
 
         #Now we will make the forward pass and get the validation accuracy
@@ -1674,8 +1686,9 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
         print("============================================")
         classifier_main.reset_all_metrics()
         #Training the main classifier
-        for dataset_batch in cat_dataset:
+        for bidx,dataset_batch in enumerate(cat_dataset):
             classifier_main.train_step_stage2_inlp(
+                                bidx=bidx,
                                 dataset_batch=dataset_batch,
                                 task="main",
                                 P_matrix=P_identity,
@@ -1685,8 +1698,9 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
         
         #Training the topic classifier
         for tidx in range(data_args["num_topics"]):
-            for dataset_batch in cat_dataset:
+            for bidx,dataset_batch in enumerate(cat_dataset):
                 classifier_main.train_step_stage2_inlp(
+                    bidx=bidx,
                     dataset_batch=dataset_batch,
                     task="topic",
                     P_matrix=P_identity,
@@ -1772,8 +1786,9 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
                 #Resetting the topic classifier
                 # classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
                 for eidx in tbar:
-                    for data_batch in cat_dataset:
+                    for bidx,data_batch in enumerate(cat_dataset):
                         classifier_main.train_step_stage2_inlp(
+                                            bidx=bidx,
                                             dataset_batch=data_batch,
                                             task="topic_inlp",
                                             P_matrix=P_W,
@@ -1791,9 +1806,10 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
 
             #Getting the classifiers angle (after this step of training)
             classifier_main.reset_all_metrics()
-            for data_batch in cat_dataset:
+            for bidx,data_batch in enumerate(cat_dataset):
                 for tidx in range(data_args["num_topics"]):
                     classifier_main.valid_step_stage2_inlp(
+                                                bidx=bidx,
                                                 dataset_batch=data_batch,
                                                 P_matrix=P_W,
                                                 cidx=data_args["debug_cidx"],
@@ -1842,9 +1858,10 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
 
             #Now we need to get the validation accuracy on this projected matrix
             classifier_main.reset_all_metrics()
-            for data_batch in cat_dataset:
+            for bidx,data_batch in enumerate(cat_dataset):
                 for tidx in range(data_args["num_topics"]):
                     classifier_main.valid_step_stage2_inlp(
+                                                bidx=bidx,
                                                 dataset_batch=data_batch,
                                                 P_matrix=P_W,
                                                 cidx=data_args["debug_cidx"],
@@ -2779,6 +2796,7 @@ if __name__=="__main__":
     parser.add_argument("-gate_var_cutoff",dest="gate_var_cutoff",type=str)
 
     parser.add_argument('--train_bert',default=False,action="store_true")
+    parser.add_argument('--cached_bemb',default=False,action="store_true")
 
     args=parser.parse_args()
     print(args)
@@ -2831,6 +2849,7 @@ if __name__=="__main__":
     model_args["l1_lambda"]=args.l1_lambda
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
+    model_args["cached_bemb"]=args.cached_bemb
     model_args["bemb_dim"] = 768 if args.stage==2 else len(data_args["topic_list"]) #The dimension of bert produced last layer
     model_args["hlayer_dim"]=args.hlayer_dim
     model_args["temb_dim"] = args.temb_dim
