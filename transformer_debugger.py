@@ -1661,7 +1661,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
     print("Getting the dataset for: cat:{}".format(
                                                 data_args["cat_list"][data_args["debug_cidx"]],
     ))
-    cat_dataset = data_handler._convert_df_to_dataset_stage2_transformer(
+    cat_dataset = data_handler._convert_df_to_dataset_stage2_transformer_syn(
                             df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
                             doc_col_name="doc",
                             label_col_name="label",

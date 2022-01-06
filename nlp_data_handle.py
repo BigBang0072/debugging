@@ -1004,7 +1004,7 @@ class DataHandleTransformer():
             topic_labels=[] 
 
             #Adding the first topic [numbered vs no numbered word]
-            self.data_args["num_topic"]+=1
+            self.data_args["num_topics"]+=1
             topic0_pval = self.data_args["topic_corr_list"][0]
             topic0_cpd = np.array(
                 [ 
@@ -1125,10 +1125,10 @@ class DataHandleTransformer():
             ]
 
             #Sampling the topic category
-            tcat = np.random.choice([0,1],size=1,p=cpd[label,:])
+            tcat = np.random.choice([0,1],size=1,p=cpd[label,:])[0]
             #Add the topic if we got the signal
             if tcat==1:
-                rword = np.random.choice(number_words,size=1)
+                rword = np.random.choice(number_words,size=1)[0]
                 new_doc = rword + " " + doc
             else:
                 new_doc=doc
