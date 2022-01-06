@@ -162,8 +162,12 @@ class TransformerClassifier(keras.Model):
         super(TransformerClassifier, self).compile()
         self.optimizer = optimizer 
     
-    def get_sentiment_pred_prob(self,bidx,idx_train,mask_train,gate_tensor,cidx):
-        if self.model_args["cached_bemb"]==False or (bidx not in self.cached_bert_embedding_dict):    
+    def get_sentiment_pred_prob(self,bidx,purpose,idx_train,mask_train,gate_tensor,cidx):
+        '''
+        bidx    : the batch idx for the dataset
+        purpose : train or for validation
+        '''
+        if self.model_args["cached_bemb"]==False or ((bidx,purpose) not in self.cached_bert_embedding_dict):    
             #Getting the bert activation
             bert_outputs=self.bert_model(
                         input_ids=idx_train,
@@ -190,10 +194,10 @@ class TransformerClassifier(keras.Model):
 
             #Caching the bert embedding for this bidx
             if self.model_args["cached_bemb"]==True:
-                self.cached_bert_embedding_dict[bidx] = avg_embedding
+                self.cached_bert_embedding_dict[(bidx,purpose)] = avg_embedding
         else:
             assert self.model_args["train_bert"]==False,"Caching the trainable bert embedding"
-            avg_embedding = self.cached_bert_embedding_dict[bidx]
+            avg_embedding = self.cached_bert_embedding_dict[(bidx,purpose)]
 
         #Now we will gate the dimension which are spurious
         # gated_avg_embedding = self.cat_emb_layer_list[cidx](avg_embedding)#*gate_tensor
@@ -774,7 +778,7 @@ class TransformerClassifier(keras.Model):
             with tf.GradientTape() as tape:
                 #Forward propagating the model
                 # train_prob = self.get_sentiment_pred_prob_topic_basis(idx_train,mask_train,gate_tensor,sidx)
-                _,train_enc = self.get_sentiment_pred_prob(bidx,idx_train,mask_train,None,cidx)
+                _,train_enc = self.get_sentiment_pred_prob(bidx,"train",idx_train,mask_train,None,cidx)
                 #Passing this through the projection layer
                 train_proj = self._get_proj_X_enc(train_enc,P_matrix)
                 #Now getting the predction probability
@@ -803,7 +807,7 @@ class TransformerClassifier(keras.Model):
 
             #Getting the validation accuracy for this category
             # valid_prob = self.get_sentiment_pred_prob_topic_basis(idx_valid,mask_valid,gate_tensor,sidx)
-            _,valid_enc = self.get_sentiment_pred_prob(bidx,idx_valid,mask_valid,None,cidx)
+            _,valid_enc = self.get_sentiment_pred_prob(bidx,"valid",idx_valid,mask_valid,None,cidx)
             valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
             valid_prob = self.get_main_pred_prob_final(valid_proj,cidx)
             self.sent_valid_acc_list[cidx].update_state(label_valid,valid_prob)
@@ -816,7 +820,7 @@ class TransformerClassifier(keras.Model):
             with tf.GradientTape() as tape:
                 #Forward propagating the model
                #We need to use the same encoder pipeline as the main task hence the sentiment pred_prob func
-                _,train_enc = self.get_sentiment_pred_prob(bidx,idx_train,mask_train,None,cidx)
+                _,train_enc = self.get_sentiment_pred_prob(bidx,"train",idx_train,mask_train,None,cidx)
                 train_proj = self._get_proj_X_enc(train_enc,P_matrix)
                 topic_train_prob = self.get_topic_pred_prob_final(train_proj,tidx)
                 
@@ -841,7 +845,7 @@ class TransformerClassifier(keras.Model):
                 raise NotImplementedError()
 
             #Getting the validation accuracy for this category
-            _,valid_enc = self.get_sentiment_pred_prob(bidx,idx_valid,mask_valid,None,cidx)
+            _,valid_enc = self.get_sentiment_pred_prob(bidx,"valid",idx_valid,mask_valid,None,cidx)
             valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
             topic_valid_prob = self.get_topic_pred_prob_final(valid_proj,tidx)
 
@@ -872,7 +876,7 @@ class TransformerClassifier(keras.Model):
         topic_label_valid = topic_label[valid_idx:,tidx]
 
         #Passing the input through the encoder
-        _,valid_enc = self.get_sentiment_pred_prob(bidx,idx_valid,mask_valid,None,cidx)
+        _,valid_enc = self.get_sentiment_pred_prob(bidx,"valid",idx_valid,mask_valid,None,cidx)
         valid_proj = self._get_proj_X_enc(valid_enc,P_matrix)
 
         #Now we will make the forward pass and get the validation accuracy
