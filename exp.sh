@@ -508,7 +508,13 @@ mkdir nlp_logs
 # python transformer_debugger.py -expt_num "ct23.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 2 -lr 0.01  -num_epochs 3 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 200
 
 # script -c "/path/prog" /path/log.txt
-python transformer_debugger.py -expt_num "ct22.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 5 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 20
+# python transformer_debugger.py -expt_num "ct22.inlp.0" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 3 -debug_tidx 0 -lr 0.01  -num_epochs 5 -topic_epoch 3 -num_proj_iter 5 -hlayer_dim 768
+#Training the movie domain [pos_adj,pos_gender,pos_movie] are active
+# python transformer_debugger.py -expt_num "ct22.inlp.1" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 5 -debug_tidx 0 -lr 0.01  -num_epochs 10 -topic_epoch 4 -num_proj_iter 20 -hlayer_dim 768
+
+# python transformer_debugger.py -expt_num "ct22.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 5 -debug_tidx 0 -lr 0.01  -num_epochs 10 -topic_epoch 4 -num_proj_iter 20 -hlayer_dim 768
+
+python transformer_debugger.py -expt_num "ct22.inlp.2.test" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 5 -debug_tidx 0 -lr 0.01  -num_epochs 10 -topic_epoch 4 -num_proj_iter 20 -hlayer_dim 768 --cached_bert
 
 
 
