@@ -2823,6 +2823,7 @@ if __name__=="__main__":
     data_args["shuffle_size"]=data_args["batch_size"]*3
     if "amazon" in data_args["path"]:
         data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
+        data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
     elif "nlp_toy2" in data_args["path"]:
         data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
         data_args["main_topic"]=args.main_topic

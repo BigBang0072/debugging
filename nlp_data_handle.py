@@ -964,7 +964,7 @@ class DataHandleTransformer():
 
         return cat_dataset
     
-    def _convert_df_to_dataset_stage2_transformer(self,df,doc_col_name,label_col_name,
+    def _convert_df_to_dataset_stage2_transformer_syn(self,df,doc_col_name,label_col_name,
                                         topic_feature_col_name,debug_topic_idx):
         '''
         This function will conver the dataframe to a tensorflow dataset
@@ -982,6 +982,179 @@ class DataHandleTransformer():
         topic_label_list = []
         # topic_weight_list = []
         for ridx in range(df.shape[0]):
+            #Removing the topic from the input and checking if removal is TP or FP
+            doc = df.iloc[ridx][doc_col_name]
+            # topic_words = self.topic_list[-1]
+            # for word in topic_words:
+            #     doc = doc.replace(word,"")
+
+
+            #Getting the topic labels
+            # topic_feature = df.iloc[ridx][topic_feature_col_name]
+            # topic_labels=[]
+            # for fval in topic_feature:
+            #     if fval>0:
+            #         topic_labels.append(1)
+            #     else:
+            #         topic_labels.append(0)
+            # topic_label_list.append(topic_labels)
+
+            #Adding the topic manually
+            self.data_args["num_topics"]=0
+            topic_labels=[] 
+
+            #Adding the first topic [numbered vs no numbered word]
+            self.data_args["num_topic"]+=1
+            topic0_pval = self.data_args["topic_corr_list"][0]
+            topic0_cpd = np.array(
+                [ 
+                    [topic0_pval,1-topic0_pval],
+                    [1-topic0_pval,topic0_pval],
+                ]
+            )
+            topic0_cat,doc = self._add_synthetic_topics(
+                                    tidx=0,
+                                    doc=doc,
+                                    label=df.iloc[ridx][label_col_name],
+                                    cpd=topic0_cpd
+            )
+            topic_labels.append(topic0_cat)
+
+
+
+
+            #Adding everything to the final list
+            doc_list.append(doc)
+            label_list.append(df.iloc[ridx][label_col_name])
+            topic_label_list.append(topic_labels)
+            # topic_weight_list.append(df.iloc[ridx][topic_weight_col_name])
+        
+        #Now we will parse the documents
+        encoded_doc = self.tokenizer(
+                                    doc_list,
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+        input_idx = encoded_doc["input_ids"]
+        attn_mask = encoded_doc["attention_mask"]
+
+
+        #Creating the dataset for this category
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    label=np.array(label_list,dtype=np.int32),
+                                    # topic=np.array(topic_list),
+                                    # topic_weight=np.array(topic_weight_list),
+                                    input_idx = input_idx,
+                                    attn_mask = attn_mask,
+                                    # topic_feature=topic_feature,
+                                    topic_label = np.array(topic_label_list,dtype=np.int32)
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        #Calculating the predictive performance
+        label=np.array(label_list,dtype=np.int32)
+        topic_label = np.array(topic_label_list,dtype=np.int32)
+        print("\n\nIndividual Distribution:")
+        print("main:\tclass0:{}\tclass1:{}".format(
+                            np.sum(label==0),
+                            np.sum(label==1)
+        ))
+        for tidx in range(self.data_args["num_topics"]):
+            print("topic-{}:\tclass0:{}\tclass1:{}".format(
+                                        tidx,
+                                        np.sum(topic_label[:,tidx]==0),
+                                        np.sum(topic_label[:,tidx]==1)
+            ))
+
+
+        
+        #Next we will print the conditional distribution:
+        print("\n\nConditional Distribution")
+        #Getting the main task class mask
+        main_class0_mask = (label==0)
+        main_class1_mask = (label==1)
+        def get_topic_segmentation(class_mask,topic_label,name,tidx):
+            topic_label_class = topic_label[class_mask]
+            print("class:{}\ttidx:{}\tnum_topic_0:{}\tnum_topic_1:{}".format(
+                                        name,
+                                        tidx,
+                                        topic_label_class.shape[0]-np.sum(topic_label_class),
+                                        np.sum(topic_label_class)
+            ))
+        
+        print("\n\nGetting the topic segmentation")
+        for tidx in range(topic_label.shape[-1]):
+            print("####################################################")
+            get_topic_segmentation(main_class0_mask,topic_label[:,tidx],"0",tidx)
+            get_topic_segmentation(main_class1_mask,topic_label[:,tidx],"1",tidx)
+
+
+        return cat_dataset
+    
+    def _add_synthetic_topics(self,tidx,doc,label,cpd):
+        '''
+        This function will take a document and a label and based 
+        on the conditional distribution arr, it will assign the 
+        given topic (tidx)'s category to the current doc.
+
+        input:
+        tidx:   the topic we want to insert
+        doc:    input doc where we want to insert the topic
+        label:  current label of the doc
+        cpd:    the conditional distribution of the label with topic
+                    this is full conditional prob matrix
+                    row is for the given label the dist of topic category
+
+        returns:
+        topic_label : the cateogry of the given topic assigned
+        new_doc     : the topic added doc
+        '''
+        if tidx==0:
+            #This is the number word topic
+            number_words = [
+                "one","two","three","four","five","six","seven","eight","nine","ten",
+                "eleven","twelve","thirteen","fourteen","fifteeen","sixteen","seventeen",
+                "eighteen","twenty","thirty","fourty","fifty","sixty","seventy","eighty",
+                "ninety","hundred","thousand"
+            ]
+
+            #Sampling the topic category
+            tcat = np.random.choice([0,1],size=1,p=cpd[label,:])
+            #Add the topic if we got the signal
+            if tcat==1:
+                rword = np.random.choice(number_words,size=1)
+                new_doc = rword + " " + doc
+            else:
+                new_doc=doc
+            
+            return tcat,new_doc
+        else:
+            raise NotImplementedError()
+  
+    def _convert_df_to_dataset_stage2_transformer(self,df,doc_col_name,label_col_name,
+                                        topic_feature_col_name,debug_topic_idx):
+        '''
+        This function will conver the dataframe to a tensorflow dataset
+        to be used as input for Transformer.
+
+        This will be specifically be used for stage to when we are training 
+        normal model, which will be BERT for our use case.
+
+        Current we will only allow one topic to be debugged at a time for the debugger
+        TODO: add multi-topic debugging support.
+        '''
+        #First of all parsing the review documents into tensors
+        doc_list = []
+        label_list = []
+        topic_label_list = []
+        # topic_weight_list = []
+        for ridx in range(df.shape[0]): 
             doc_list.append(df.iloc[ridx][doc_col_name])
             label_list.append(df.iloc[ridx][label_col_name])
 
