@@ -1026,14 +1026,14 @@ class DataHandleTransformer():
                 [(1-pval)/2,(pval/2),(pval/2),(1-pval)/2],
                 [(pval/2),(1-pval)/2,(1-pval)/2,(pval/2)],
             ])
-            topic_label_list,doc = self._add_synthetic_topics(
+            two_topic_label_list,doc = self._add_synthetic_topics(
                                     tidx="two_topic",
                                     doc=doc,
                                     label=df.iloc[ridx][label_col_name],
                                     cpd=cpd
             )
             #Adding the main topic also as separete topic
-            topic_labels=[df.iloc[ridx][label_col_name]]+topic_label_list
+            topic_labels=[df.iloc[ridx][label_col_name]]+two_topic_label_list
 
 
 
