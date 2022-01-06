@@ -1004,21 +1004,36 @@ class DataHandleTransformer():
             topic_labels=[] 
 
             #Adding the first topic [numbered vs no numbered word]
-            self.data_args["num_topics"]+=1
-            topic0_pval = self.data_args["topic_corr_list"][0]
-            topic0_cpd = np.array(
-                [ 
-                    [topic0_pval,1-topic0_pval],
-                    [1-topic0_pval,topic0_pval],
-                ]
-            )
-            topic0_cat,doc = self._add_synthetic_topics(
-                                    tidx=0,
+            # self.data_args["num_topics"]+=1
+            # topic0_pval = self.data_args["topic_corr_list"][0]
+            # topic0_cpd = np.array(
+            #     [ 
+            #         [topic0_pval,1-topic0_pval],
+            #         [1-topic0_pval,topic0_pval],
+            #     ]
+            # )
+            # topic0_cat,doc = self._add_synthetic_topics(
+            #                         tidx=0,
+            #                         doc=doc,
+            #                         label=df.iloc[ridx][label_col_name],
+            #                         cpd=topic0_cpd
+            # )
+            # topic_labels.append(topic0_cat)
+
+            self.data_args["num_topics"]=3
+            pval = self.data_args["topic_corr_list"][0]
+            cpd = np.array([ 
+                [(1-pval)/2,(pval/2),(pval/2),(1-pval)/2],
+                [(pval/2),(1-pval)/2,(1-pval)/2,(pval/2)],
+            ])
+            topic_label_list,doc = self._add_synthetic_topics(
+                                    tidx="two_topic",
                                     doc=doc,
                                     label=df.iloc[ridx][label_col_name],
-                                    cpd=topic0_cpd
+                                    cpd=cpd
             )
-            topic_labels.append(topic0_cat)
+            #Adding the main topic also as separete topic
+            topic_labels=[df.iloc[ridx][label_col_name]]+topic_label_list
 
 
 
@@ -1134,6 +1149,43 @@ class DataHandleTransformer():
                 new_doc=doc
             
             return tcat,new_doc
+        
+        elif tidx=="two_topic":
+            #Here we will add two topic at a time. 
+            #TODO: Think of a better way
+            number_words = [
+                "one","two","three","four","five","six","seven","eight","nine","ten",
+                "eleven","twelve","thirteen","fourteen","fifteeen","sixteen","seventeen",
+                "eighteen","twenty","thirty","fourty","fifty","sixty","seventy","eighty",
+                "ninety","hundred","thousand"
+            ]
+            food_words = [ 
+                "ice","bread","icecream","rice","potato","tomato",
+                "chocolate","wine","wheat","maize","barley","carrot",
+                "palnt","vegan"
+            ]
+
+            #Sampling both the topic at once
+            tcat = np.random.choice([0,1,2,3],size=1,p=cpd[label,:])[0]
+            topic_labels = None
+            if tcat==1:
+                num_rword = np.random.choice(number_words,size=1)[0]
+                new_doc = num_rword + " " + doc
+                topic_labels = [1,0]
+            elif tcat==2:
+                food_rword = np.random.choice(food_words,size=1)[0]
+                new_doc = food_rword + " " + doc
+                topic_labels = [0,1]
+            elif tcat==3:
+                num_rword = np.random.choice(number_words,size=1)[0]
+                food_rword = np.random.choice(food_words,size=1)[0]
+                new_doc = food_rword +" "+ num_rword + " " + doc
+                topic_labels = [1,1]
+            else:
+                topic_labels=[0,0]
+                new_doc= doc
+            return topic_labels,new_doc
+
         else:
             raise NotImplementedError()
   
