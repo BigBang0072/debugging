@@ -1661,7 +1661,7 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
     print("Getting the dataset for: cat:{}".format(
                                                 data_args["cat_list"][data_args["debug_cidx"]],
     ))
-    cat_dataset = data_handler._convert_df_to_dataset_stage2_transformer_syn(
+    cat_dataset = data_handler._convert_df_to_dataset_stage2_transformer(
                             df=new_all_cat_df[data_args["cat_list"][data_args["debug_cidx"]]],
                             doc_col_name="doc",
                             label_col_name="label",
@@ -1701,8 +1701,8 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
             )
         
         #Training the topic classifier
-        for tidx in range(data_args["num_topics"]):
-            for bidx,dataset_batch in enumerate(cat_dataset):
+        for bidx,dataset_batch in enumerate(cat_dataset):
+            for tidx in range(data_args["num_topics"]):
                 classifier_main.train_step_stage2_inlp(
                     bidx=bidx,
                     dataset_batch=dataset_batch,
@@ -1712,12 +1712,12 @@ def transformer_trainer_stage2_inlp(data_args,model_args):
                     tidx=tidx,
                 )
         
-        #Since the weights are initialized when needed hence we need to caputre this here
-        if(len(topic_classifier_init_weight_list)==0):
-            topic_classifier_init_weight_list = [
-                classifier_main.topic_classifier_list[tidx].get_weights()
-                    for tidx in range(data_args["num_topics"])
-            ]
+            #Since the weights are initialized when needed hence we need to caputre this here
+            if(len(topic_classifier_init_weight_list)==0):
+                topic_classifier_init_weight_list = [
+                    classifier_main.topic_classifier_list[tidx].get_weights()
+                        for tidx in range(data_args["num_topics"])
+                ]
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"

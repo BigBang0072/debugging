@@ -1232,18 +1232,44 @@ class DataHandleTransformer():
             )
         input_idx = encoded_doc["input_ids"]
         attn_mask = encoded_doc["attention_mask"]
+        label=np.array(label_list,dtype=np.int32)
+        topic_label = np.array(topic_label_list,dtype=np.int32)
+
+        #Balancing the dataset based in the last topic now
+        total_ltopic_pos = np.sum((topic_label[:,-1]==1))
+        total_mneg_take = total_ltopic_pos - np.sum((topic_label_list[:,-1]==1) * (label==0))
+        total_mpos_take = total_ltopic_pos - np.sum((topic_label_list[:,-1]==1) * (label==1))
+        
+        mneg_tneg_mask = np.logical_and((label==0),(topic_label_list[:,-1]==0))
+        mpos_tneg_mask = np.logical_and((label==1),(topic_label_list[:,-1]==0))
+
+        mneg_tpos_mask = np.logical_and((label==0),(topic_label_list[:,-1]==1))
+        mpos_tpos_mask = np.logical_and((label==1),(topic_label_list[:,-1]==1))
+
+        #Now taking out only relavant portion of data
+        input_idx = input_idx[mneg_tpos_mask] + input_idx[mneg_tneg_mask][0:total_mneg_take] \
+                    + input_idx[mpos_tpos_mask] + input_idx[mpos_tneg_mask][0:total_mpos_take]
+        
+        attn_mask = attn_mask[mneg_tpos_mask] + attn_mask[mneg_tneg_mask][0:total_mneg_take] \
+                    + attn_mask[mpos_tpos_mask] + attn_mask[mpos_tneg_mask][0:total_mpos_take]
+        
+        label = label[mneg_tpos_mask] + label[mneg_tneg_mask][0:total_mneg_take] \
+                    + label[mpos_tpos_mask] + label[mpos_tneg_mask][0:total_mpos_take]
+
+        topic_label = topic_label[mneg_tpos_mask] + topic_label[mneg_tneg_mask][0:total_mneg_take] \
+                    + topic_label[mpos_tpos_mask] + topic_label[mpos_tneg_mask][0:total_mpos_take]
 
 
         #Creating the dataset for this category
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
-                                    label=np.array(label_list,dtype=np.int32),
+                                    label=label,
                                     # topic=np.array(topic_list),
                                     # topic_weight=np.array(topic_weight_list),
                                     input_idx = input_idx,
                                     attn_mask = attn_mask,
                                     # topic_feature=topic_feature,
-                                    topic_label = np.array(topic_label_list,dtype=np.int32)
+                                    topic_label = topic_label,
                                 )
         )
 
@@ -1251,8 +1277,6 @@ class DataHandleTransformer():
         cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
         #Calculating the predictive performance
-        label=np.array(label_list,dtype=np.int32)
-        topic_label = np.array(topic_label_list,dtype=np.int32)
         print("\n\nIndividual Distribution:")
         print("main:\tclass0:{}\tclass1:{}".format(
                             np.sum(label==0),
