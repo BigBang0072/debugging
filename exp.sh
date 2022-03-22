@@ -521,19 +521,53 @@ mkdir nlp_logs
 #22nd March: Starting the convergence experiment
 #Setup: nlp syn, crossentropy, relateive angle method to get convergence angle
 #Expectation: As the correlation increases the converge angle between the classifier should decreased
-for a in 1 2 3 4 5 6 7 8 9
-do 
-    python transformer_debugger.py -expt_num "pt.rel.$a.0" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.5 -stage 2 --normalize_emb -lr 0.005
-    python transformer_debugger.py -expt_num "pt.rel.$a.1" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.6 -stage 2 --normalize_emb -lr 0.005
-    python transformer_debugger.py -expt_num "pt.rel.$a.2" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.7 -stage 2 --normalize_emb -lr 0.005
-    python transformer_debugger.py -expt_num "pt.rel.$a.3" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.8 -stage 2 --normalize_emb -lr 0.005
-    python transformer_debugger.py -expt_num "pt.rel.$a.4" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9 -stage 2 --normalize_emb -lr 0.005
-    python transformer_debugger.py -expt_num "pt.rel.$a.5" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.99 -stage 2 --normalize_emb -lr 0.005
-    python transformer_debugger.py -expt_num "pt.rel.$a.6" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.999 -stage 2 --normalize_emb -lr 0.005
-    python transformer_debugger.py -expt_num "pt.rel.$a.7" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9999 -stage 2 --normalize_emb -lr 0.005
-done
+# for a in 1 2 3 4 5 6 7 8 9
+# do 
+#     python transformer_debugger.py -expt_num "pt.rel.$a.0" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.5 -stage 2 --normalize_emb -lr 0.005
+#     python transformer_debugger.py -expt_num "pt.rel.$a.1" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.6 -stage 2 --normalize_emb -lr 0.005
+#     python transformer_debugger.py -expt_num "pt.rel.$a.2" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.7 -stage 2 --normalize_emb -lr 0.005
+#     python transformer_debugger.py -expt_num "pt.rel.$a.3" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.8 -stage 2 --normalize_emb -lr 0.005
+#     python transformer_debugger.py -expt_num "pt.rel.$a.4" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9 -stage 2 --normalize_emb -lr 0.005
+#     python transformer_debugger.py -expt_num "pt.rel.$a.5" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.99 -stage 2 --normalize_emb -lr 0.005
+#     python transformer_debugger.py -expt_num "pt.rel.$a.6" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.999 -stage 2 --normalize_emb -lr 0.005
+#     python transformer_debugger.py -expt_num "pt.rel.$a.7" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9999 -stage 2 --normalize_emb -lr 0.005
+# done
 
 
+#Testing the effect of number of sample
+for r in 0 1 2 3 4
+do
+    for p in 0.5 0.6 0.7 0.8 0.9 0.99
+    do
+        for e in 5 10 15
+        do
+            for s in 50 100 500 1000 10000
+            do
+                for h in 0 1 5 10
+                do
+                    python transformer_debugger.py -expt_num "pt.rel.h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005
+                done
+            done       
+        done
+    done
+do
+
+
+#Testing the effect of number of epoch on convergence angle
+# for l in 5 15
+# do
+#     for a in 0 1 3
+#     do 
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.0" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.5 -stage 2 --normalize_emb -lr 0.005
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.1" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.6 -stage 2 --normalize_emb -lr 0.005
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.2" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.7 -stage 2 --normalize_emb -lr 0.005
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.3" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.8 -stage 2 --normalize_emb -lr 0.005
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.4" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9 -stage 2 --normalize_emb -lr 0.005
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.5" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.99 -stage 2 --normalize_emb -lr 0.005
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.6" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.999 -stage 2 --normalize_emb -lr 0.005
+#         python transformer_debugger.py -expt_num "pt.rel.$l.$a.7" -num_sample 1000 -num_topics 2 -num_epochs $l -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9999 -stage 2 --normalize_emb -lr 0.005
+#     done
+# done
 
 
 
