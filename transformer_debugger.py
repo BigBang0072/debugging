@@ -1908,6 +1908,7 @@ def nbow_trainer_stage2(data_args,model_args):
         raise NotImplementedError()
     
     if "nlp_toy2" not in data_args["path"]:
+        #NLP TOY2 has its data processing already bulit in its generation function
         #Getting the dataset for the required category and topic
         print("Getting the dataset for: cat:{}\ttopic:{}".format(
                                                     data_args["cat_list"][data_args["debug_cidx"]],
@@ -1989,6 +1990,9 @@ def nbow_trainer_stage2(data_args,model_args):
                 conv_angle_dict = init_conv_angle,
                 classifier_acc_dict = init_classifier_acc
     ))
+    #Wont be using the removal part right now.
+    sys.exit(0)
+    
     
     #Getting the MMD metrics to see usage
     # check_topic_usage_mmd(cat_dataset,classifier_main)
@@ -2096,6 +2100,7 @@ def nbow_trainer_stage2(data_args,model_args):
         print("Dumping the probe metrics in: {}".format(probe_metric_path))
         with open(probe_metric_path,"w") as whandle:
             json.dump(probe_metric_list,whandle,indent="\t")
+    return 
 
 
 def get_cat_temb_importance_weight_variance(classifier):
@@ -2876,9 +2881,12 @@ if __name__=="__main__":
     os.makedirs(meta_folder,exist_ok=True)
     data_args["expt_meta_path"]=meta_folder
 
+    #################################################
+    #        SELECT ONE OF THE JOBS FROM BELOW      #
+    #################################################
     # transformer_trainer_stage2(data_args,model_args)
-    transformer_trainer_stage2_inlp(data_args,model_args)
-    # nbow_trainer_stage2(data_args,model_args)
+    # transformer_trainer_stage2_inlp(data_args,model_args)
+    nbow_trainer_stage2(data_args,model_args)
     # run_parallel_jobs_subset_exp(data_args,model_args)
     # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)

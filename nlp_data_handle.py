@@ -1639,7 +1639,9 @@ class DataHandleTransformer():
         ]
         non_number_word = [
             "nice","device","try","picture","signature","trailer","harry","potter",
-            "malfoy","john","switch","taste","glove","baloon"
+            "malfoy","john","switch","taste","glove","baloon", "dog", "horse",
+            "switch", "watch", "sun", "cloud", "river", "town", "cow", "shadow",
+            "pencil", "eraser"
         ]
 
         #Creating the examples
@@ -1660,8 +1662,8 @@ class DataHandleTransformer():
             tpos_word = np.random.choice(number_words,10,replace=True).tolist()
             tneg_word = np.random.choice(non_number_word,10,replace=True).tolist()
             if point_sample<=self.data_args["topic_corr_list"][tidx0]:
-                pos_example += " ".join(tpos_word)+ " "
-                neg_example += " ".join(tneg_word)+ " "
+                pos_example += " " +  " ".join(tpos_word)+ " "
+                neg_example += " " + " ".join(tneg_word)+ " "
 
                 pos_label_list.append(1)
                 neg_label_list.append(0)
