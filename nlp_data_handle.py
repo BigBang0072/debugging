@@ -543,6 +543,7 @@ class DataHandleTransformer():
 
         
         # return all_cat_df
+        return
     
     def _get_topic_df(self,tidx,topic_df):
         '''
@@ -1237,14 +1238,14 @@ class DataHandleTransformer():
 
         #Balancing the dataset based in the last topic now
         total_ltopic_pos = np.sum((topic_label[:,-1]==1))
-        total_mneg_take = total_ltopic_pos - np.sum((topic_label_list[:,-1]==1) * (label==0))
-        total_mpos_take = total_ltopic_pos - np.sum((topic_label_list[:,-1]==1) * (label==1))
+        total_mneg_take = total_ltopic_pos - np.sum((topic_label[:,-1]==1) * (label==0))
+        total_mpos_take = total_ltopic_pos - np.sum((topic_label[:,-1]==1) * (label==1))
         
-        mneg_tneg_mask = np.logical_and((label==0),(topic_label_list[:,-1]==0))
-        mpos_tneg_mask = np.logical_and((label==1),(topic_label_list[:,-1]==0))
+        mneg_tneg_mask = np.logical_and((label==0),(topic_label[:,-1]==0))
+        mpos_tneg_mask = np.logical_and((label==1),(topic_label[:,-1]==0))
 
-        mneg_tpos_mask = np.logical_and((label==0),(topic_label_list[:,-1]==1))
-        mpos_tpos_mask = np.logical_and((label==1),(topic_label_list[:,-1]==1))
+        mneg_tpos_mask = np.logical_and((label==0),(topic_label[:,-1]==1))
+        mpos_tpos_mask = np.logical_and((label==1),(topic_label[:,-1]==1))
 
         #Now taking out only relavant portion of data
         input_idx = input_idx[mneg_tpos_mask] + input_idx[mneg_tneg_mask][0:total_mneg_take] \
@@ -1583,6 +1584,7 @@ class DataHandleTransformer():
         # dataset = dataset.shuffle(self.data_args["shuffle_size"])
         # dataset = dataset.batch(self.data_args["batch_size"])
         # return dataset
+        return 
 
     def toy_nlp_dataset_handler(self,):
         '''

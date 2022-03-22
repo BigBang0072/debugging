@@ -2616,6 +2616,7 @@ def load_and_analyze_transformer(data_args,model_args):
     # upto_index = num_spurious
     # spuriousness_percentage = len(set(spurious_dims2).intersection(set(topic_imp_dims[-1*upto_index:])))/upto_index
     # pdb.set_trace()
+    return 
 
 def dump_arguments(arg_dict,expt_name,fname):
     #This function will dump the arguments in a file for tracking purpose
