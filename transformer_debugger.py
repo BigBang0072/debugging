@@ -965,7 +965,10 @@ class SimpleNBOW(keras.Model):
         #Now initilaizing some of the layers for encoder
         self.nbow_avg_layer = self.get_nbow_avg_layer()
         self.hidden_layer_list = []
-        self.hlayer_dim = 50
+        if self.model_args["num_hidden_layer"]!=0:
+            self.hlayer_dim = 50
+        else:
+            self.hlayer_dim = self.emb_dim
         for _ in range(self.model_args["num_hidden_layer"]):
             hlayer = layers.Dense(self.hlayer_dim,activation="relu")
             self.hidden_layer_list.append(hlayer)
@@ -1070,6 +1073,7 @@ class SimpleNBOW(keras.Model):
         #Creating the embedding layer
         emb_matrix = self.data_handler.emb_model.vectors
         vocab_len , emb_dim = emb_matrix.shape
+        self.emb_dim = emb_dim
         embedding_layer = layers.Embedding(
                                     vocab_len,
                                     emb_dim,
