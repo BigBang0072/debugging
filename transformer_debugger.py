@@ -1990,6 +1990,11 @@ def nbow_trainer_stage2(data_args,model_args):
                 conv_angle_dict = init_conv_angle,
                 classifier_acc_dict = init_classifier_acc
     ))
+    #Dumping the first set of metrics we have
+    probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
+    print("Dumping the probe metrics in: {}".format(probe_metric_path))
+    with open(probe_metric_path,"w") as whandle:
+        json.dump(probe_metric_list,whandle,indent="\t")
     #Wont be using the removal part right now.
     sys.exit(0)
     
