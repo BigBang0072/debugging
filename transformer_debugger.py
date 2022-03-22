@@ -1977,8 +1977,8 @@ def nbow_trainer_stage2(data_args,model_args):
         optimal_vacc_main = classifier_main.main_valid_accuracy.result()
 
         #Saving the paramenters
-#         checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
-#         classifier_main.save_weights(checkpoint_path)
+        # checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+        # classifier_main.save_weights(checkpoint_path)
 
     #Metrics to probe the classifiers
     probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
@@ -2775,6 +2775,7 @@ if __name__=="__main__":
     parser.add_argument('-topic0_corr',dest="topic0_corr",type=float,default=None)
     parser.add_argument('-topic1_corr',dest="topic1_corr",type=float,default=None)
     parser.add_argument('-main_topic',dest="main_topic",type=int,default=None)
+    parser.add_argument('-num_hidden_layer',dest="num_hidden_layer",type=int,default=None)
 
     parser.add_argument('-stage',dest="stage",type=int)
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
@@ -2877,7 +2878,7 @@ if __name__=="__main__":
     model_args["reverse_grad"]=args.reverse_grad
     model_args["train_emb"]=args.train_emb
     model_args["normalize_emb"]=args.normalize_emb
-    model_args["num_hidden_layer"] = 1
+    model_args["num_hidden_layer"] = args.num_hidden_layer
     model_args["num_proj_iter"]=args.num_proj_iter
     model_args["topic_epochs"]=args.topic_epochs
 
