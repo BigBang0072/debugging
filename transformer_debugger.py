@@ -1977,8 +1977,8 @@ def nbow_trainer_stage2(data_args,model_args):
         optimal_vacc_main = classifier_main.main_valid_accuracy.result()
 
         #Saving the paramenters
-        checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
-        classifier_main.save_weights(checkpoint_path)
+#         checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+#         classifier_main.save_weights(checkpoint_path)
 
     #Metrics to probe the classifiers
     probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)

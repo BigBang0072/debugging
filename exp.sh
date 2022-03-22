@@ -514,9 +514,24 @@ mkdir nlp_logs
 
 # python transformer_debugger.py -expt_num "ct22.inlp.2" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 5 -debug_tidx 0 -lr 0.01  -num_epochs 10 -topic_epoch 4 -num_proj_iter 20 -hlayer_dim 768
 
-python transformer_debugger.py -expt_num "ct22.inlp.2.test" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 5 -debug_tidx 0 -lr 0.01  -num_epochs 10 -topic_epoch 4 -num_proj_iter 20 -hlayer_dim 768 --cached_bert
+# python transformer_debugger.py -expt_num "ct22.inlp.2.test" -num_sample 1000 -num_topics -1  -path "dataset/amazon/" -transformer "bert-base-uncased" -emb_path "glove-wiki-gigaword-100"  -stage 2  -debug_cidx 5 -debug_tidx 0 -lr 0.01  -num_epochs 10 -topic_epoch 4 -num_proj_iter 20 -hlayer_dim 768 --cached_bert
 
 
+
+#22nd March: Starting the convergence experiment
+#Setup: nlp syn, crossentropy, relateive angle method to get convergence angle
+#Expectation: As the correlation increases the converge angle between the classifier should decreased
+for a in 1 2 3 4 5 6 7 8 9
+do 
+    python transformer_debugger.py -expt_num "pt.rel.$a.0" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.5 -stage 2 --normalize_emb -lr 0.005
+    python transformer_debugger.py -expt_num "pt.rel.$a.1" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.6 -stage 2 --normalize_emb -lr 0.005
+    python transformer_debugger.py -expt_num "pt.rel.$a.2" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.7 -stage 2 --normalize_emb -lr 0.005
+    python transformer_debugger.py -expt_num "pt.rel.$a.3" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.8 -stage 2 --normalize_emb -lr 0.005
+    python transformer_debugger.py -expt_num "pt.rel.$a.4" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9 -stage 2 --normalize_emb -lr 0.005
+    python transformer_debugger.py -expt_num "pt.rel.$a.5" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.99 -stage 2 --normalize_emb -lr 0.005
+    python transformer_debugger.py -expt_num "pt.rel.$a.6" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.999 -stage 2 --normalize_emb -lr 0.005
+    python transformer_debugger.py -expt_num "pt.rel.$a.7" -num_sample 1000 -num_topics 2 -num_epochs 10 -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr 0.9999 -stage 2 --normalize_emb -lr 0.005
+done
 
 
 
