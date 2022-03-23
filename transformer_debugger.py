@@ -1270,6 +1270,16 @@ class SimpleNBOW(keras.Model):
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
+
+            #Updating the loss for the topic
+            self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
+
+            #Now updating the validation accuracy
+            enc_valid = self._encoder(idx_valid)
+            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,cidx)
+            self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+
         elif "topic" in task:
             with tf.GradientTape() as tape:
                 #Encoding the input
@@ -2104,14 +2114,14 @@ def nbow_trainer_stage2(data_args,model_args):
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
         print(log_format.format(
-                            eidx,
+                            ridx,
                             "main",
                             classifier_main.main_pred_xentropy.result(),
                             classifier_main.main_valid_accuracy.result(),
         ))
         for tidx in range(data_args["num_topics"]):
             print(log_format.format(
-                            eidx,
+                            ridx,
                             "topic-{}".format(tidx),
                             classifier_main.topic_pred_xentropy_list[tidx].result(),
                             classifier_main.topic_valid_accuracy_list[tidx].result()
