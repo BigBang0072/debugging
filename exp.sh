@@ -535,22 +535,39 @@ mkdir nlp_logs
 
 
 #Testing the effect of number of sample
-for r in 0 1 2 3 4
+# for r in 0 1 2 3 4
+# do
+#     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#     do
+#         for e in 5 10 15
+#         do
+#             for s in 50 100 500 1000 10000
+#             do
+#                 for h in 0 1 5 10
+#                 do
+#                     python transformer_debugger.py -expt_num "pt.rel.h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005
+#                 done
+#             done       
+#         done
+#     done
+# done
+
+for r in 0
 do
     for p in 0.5 0.6 0.7 0.8 0.9 0.99
     do
-        for e in 5 10 15
+        for e in 5 10 15 20
         do
-            for s in 50 100 500 1000 10000
+            for s in 500 1000
             do
-                for h in 0 1 5 10
+                for h in 0
                 do
                     python transformer_debugger.py -expt_num "pt.rel.h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005
                 done
             done       
         done
     done
-do
+done
 
 
 #Testing the effect of number of epoch on convergence angle
