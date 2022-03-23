@@ -1132,9 +1132,12 @@ class SimpleNBOW(keras.Model):
 
         return Xpred
     
-    def train_step_stage2(self,dataset_batch,task,P_matrix,cidx):
+    def train_step_stage2(self,dataset_batch,task,P_matrix,cidx,adv_rm_tidx=None):
         '''
-        cidx    : the classifier index we want to evaluate on (mainly for topic)
+        cidx        : the classifier index we want to evaluate on (mainly for topic)
+        adv_rm_tidx : the topic index which we want to remove simultaneously training the main head
+                        (or should we do it in alreanating faishon?)
+
         '''
         #Getting the dataset splits for train and valid       
         label = dataset_batch["label"]
@@ -1148,16 +1151,65 @@ class SimpleNBOW(keras.Model):
         label_train = label[0:valid_idx]
         idx_train = idx[0:valid_idx]
         topic_label_train = topic_label[0:valid_idx,cidx]
+        if adv_rm_tidx!=None:
+            rm_topic_label_train = topic_label[0:valid_idx,adv_rm_tidx]
 
         #Getting the validation data
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
         topic_label_valid = topic_label[valid_idx:,cidx]
+        if adv_rm_tidx!=None:
+            rm_topic_label_valid = topic_label[valid_idx:,adv_rm_tidx]
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 
-        if "main" in task:
+        if task=="adv_rm_with_main":
+            #Here we will train the main head along with the removing the topic information
+            #from the latent space by the adversarial method
+            with tf.GradientTape() as tape:
+                #Encoding the input
+                enc_train = self._encoder(idx_train)
+                #Getting the projection (I for main full traning)
+                enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+
+                #Get the prediction probability for the main task
+                main_train_prob = self.get_main_task_pred_prob(enc_proj_train)
+                #Getting the x-entropy lossss
+                main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
+                total_loss = main_xentropy_loss
+
+                #Adding the gradient-reversal layer on enc_proj_train
+                enc_proj_train_rev = grad_reverse(enc_proj_train,self.model_args["rev_grad_strength"])
+                #Getting the adversarial loss from the latent space
+                rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,adv_rm_tidx)
+                #Getting the cross entropy loss for this topic classifier
+                rm_topic_loss = scxentropy_loss(rm_topic_label_train,rm_topic_train_prob)
+
+                #Adding to the total loss
+                total_loss += rm_topic_loss
+            
+            #Updating the total loss for main 
+            self.main_pred_xentropy.update_state(main_xentropy_loss)
+            #Updating the x-entropy loss for topic
+            self.topic_pred_xentropy_list[adv_rm_tidx].update_state(rm_topic_loss)
+
+            #Getting the gradient and updating the parameter
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+
+            #Getting the validation accuracy for the removal topic
+            enc_valid = self._encoder(idx_valid)
+            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            #Getting the accuracy for the main head
+            main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
+            self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+            #Getting the accuracy for the topic which we want to remove
+            rm_topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,adv_rm_tidx)
+            self.topic_valid_accuracy_list[adv_rm_tidx].update_state(rm_topic_label_valid,rm_topic_valid_prob)
+        elif "main" in task:
             #Training the main task
             with tf.GradientTape() as tape:
                 #Encoding the input
@@ -1191,12 +1243,33 @@ class SimpleNBOW(keras.Model):
             self.main_pred_xentropy.update_state(main_xentropy_loss)
 
 
-            #Getting the validation loss
+            #Getting the validation loss/accuracy
             enc_valid = self._encoder(idx_valid)
             enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            #Getting the accuracy for the main head
             main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
             self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+        elif task=="adv_rm_only_topic":
+            #This could be used if we want to remove the topic adversarilly in an alternate
+            #training faishon with the main task objective. So we dont need extra adv_rm_cidx
+            with tf.GradientTape() as tape:
+                #Encoding the input
+                enc_train = self._encoder(idx_train)
+                #Getting the projection first
+                enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+                #Adding the gradient-reversal layer on enc_proj_train
+                enc_proj_train_rev = grad_reverse(enc_proj_train,self.model_args["rev_grad_strength"])
+                #Getting prediction probability
+                rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,cidx)
+                #Getting the x-entropy losssss for the topic
+                topic_xentropy_loss = scxentropy_loss(topic_label_train,rm_topic_train_prob)
+                topic_total_loss = topic_xentropy_loss
 
+            #Here will will train encoder also (to stop pulling out info in latent space)
+            grads = tape.gradient(topic_total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
         elif "topic" in task:
             with tf.GradientTape() as tape:
                 #Encoding the input
@@ -1343,10 +1416,10 @@ class SimpleNBOW(keras.Model):
         return classifier_accuracy
 
 @tf.custom_gradient
-def grad_reverse(x):
+def grad_reverse(x,reverse_strength):
     y = tf.identity(x)
     def custom_grad(dy):
-        return -10000*dy
+        return -1*reverse_strength*dy
     return y, custom_grad
 
 def transformer_trainer_stage1(data_args,model_args):
@@ -1931,7 +2004,6 @@ def nbow_trainer_stage2(data_args,model_args):
 
 
 
-    print("Stage 1: Training the main classifier! (to be debugged later)")
     #Creating the forst classifier
     classifier_main = SimpleNBOW(data_args,model_args,data_handler)
     #Now we will compile the model
@@ -1939,6 +2011,9 @@ def nbow_trainer_stage2(data_args,model_args):
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
     optimal_vacc_main = None
+
+
+    print("Stage 1: Training the main classifier! (to be debugged later)")
     P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
     for eidx in range(model_args["epochs"]):
         print("==========================================")
@@ -2000,12 +2075,57 @@ def nbow_trainer_stage2(data_args,model_args):
     with open(probe_metric_path,"w") as whandle:
         json.dump(probe_metric_list,whandle,indent="\t")
     #Wont be using the removal part right now.
+
+
+
+    ##################################################################
+    # ADVERSARIAL REMOVAL
+    ##################################################################
+    print("Stage 2: Removing the topic information adversarially!")
+    for ridx in range(model_args["adv_rm_epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        for data_batch in cat_dataset:
+            #Training the main task classifier
+            classifier_main.train_step_stage2(
+                                    dataset_batch=data_batch,
+                                    task="main",
+                                    P_matrix=P_identity,
+                                    cidx=None,
+            )
+            #Remove the debug_idx topic from the latent space adversarially
+            classifier_main.train_step_stage2(
+                                            dataset_batch=data_batch,
+                                            task="adv_rm_only_topic",
+                                            P_matrix=P_identity,
+                                            cidx=data_args["debug_tidx"],
+            )
+        
+        #Printing the classifier loss and accuracy
+        log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
+        print(log_format.format(
+                            eidx,
+                            "main",
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+        ))
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            eidx,
+                            "topic-{}".format(tidx),
+                            classifier_main.topic_pred_xentropy_list[tidx].result(),
+                            classifier_main.topic_valid_accuracy_list[tidx].result()
+            ))
     sys.exit(0)
     
     
     #Getting the MMD metrics to see usage
     # check_topic_usage_mmd(cat_dataset,classifier_main)
-    
+
+
+    ##################################################################
+    # NULL SPACE REMOVAL
+    ##################################################################
     print("Stage 2: Removing the topic information!")
     #Next we will be going to use this trained classifier to do the null space projection
     all_proj_matrix_list = []
@@ -2776,10 +2896,15 @@ if __name__=="__main__":
     parser.add_argument('-spurious_ratio',dest="spurious_ratio",type=float,default=None)
     parser.add_argument('-causal_ratio',dest="causal_ratio",type=float,default=None)
 
+    #Arguments related to the main convergence experiemtn and subsequent INLP or AdvRem
     parser.add_argument('-topic0_corr',dest="topic0_corr",type=float,default=None)
     parser.add_argument('-topic1_corr',dest="topic1_corr",type=float,default=None)
     parser.add_argument('-main_topic',dest="main_topic",type=int,default=None)
     parser.add_argument('-num_hidden_layer',dest="num_hidden_layer",type=int,default=None)
+
+    #Arguments related to the adversarial removal
+    parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
+    parser.add_argument('-rev_grad_strength',dest="rev_grad_strength",type=float,default=None)
 
     parser.add_argument('-stage',dest="stage",type=int)
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
@@ -2880,11 +3005,13 @@ if __name__=="__main__":
     model_args["gate_weight_epoch"]=args.gate_weight_epoch
     model_args["gate_var_cutoff"]=args.gate_var_cutoff
     model_args["reverse_grad"]=args.reverse_grad
+    model_args["rev_grad_strength"]=args.rev_grad_strength
     model_args["train_emb"]=args.train_emb
     model_args["normalize_emb"]=args.normalize_emb
     model_args["num_hidden_layer"] = args.num_hidden_layer
     model_args["num_proj_iter"]=args.num_proj_iter
     model_args["topic_epochs"]=args.topic_epochs
+    model_args["adv_rm_epochs"]=args.adv_rm_epochs
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
