@@ -1180,7 +1180,7 @@ class SimpleNBOW(keras.Model):
                 total_loss = main_xentropy_loss
 
                 #Adding the gradient-reversal layer on enc_proj_train
-                enc_proj_train_rev = grad_reverse(enc_proj_train,self.model_args["rev_grad_strength"])
+                enc_proj_train_rev = grad_reverse(enc_proj_train)
                 #Getting the adversarial loss from the latent space
                 rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,adv_rm_tidx)
                 #Getting the cross entropy loss for this topic classifier
@@ -1258,7 +1258,7 @@ class SimpleNBOW(keras.Model):
                 #Getting the projection first
                 enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                 #Adding the gradient-reversal layer on enc_proj_train
-                enc_proj_train_rev = grad_reverse(enc_proj_train,self.model_args["rev_grad_strength"])
+                enc_proj_train_rev = grad_reverse(enc_proj_train)
                 #Getting prediction probability
                 rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,cidx)
                 #Getting the x-entropy losssss for the topic
@@ -1416,10 +1416,10 @@ class SimpleNBOW(keras.Model):
         return classifier_accuracy
 
 @tf.custom_gradient
-def grad_reverse(x,reverse_strength):
+def grad_reverse(x):
     y = tf.identity(x)
     def custom_grad(dy):
-        return -1*reverse_strength*dy
+        return -1*dy
     return y, custom_grad
 
 def transformer_trainer_stage1(data_args,model_args):
