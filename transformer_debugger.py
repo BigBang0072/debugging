@@ -2110,6 +2110,17 @@ def nbow_trainer_stage2(data_args,model_args):
                                             P_matrix=P_identity,
                                             cidx=data_args["debug_tidx"],
             )
+
+            #Validate the other topic so that we know the accuracy etc
+            for tidx in range(data_args["num_topics"]):
+                if(tidx==data_args["debug_idx"]):
+                    continue
+                #Getting the validation accuracy
+                classifier_main.valid_step_stage2(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_identity,
+                                    cidx=tidx
+                )
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
