@@ -1646,6 +1646,8 @@ class DataHandleTransformer():
 
         #Creating the examples
         all_example_list = []
+        all_example_list_t0_flip = []
+        all_example_list_t1_flip = []   #These have the flipped corresponding topic
         all_label_list= []
         for sidx in range(self.data_args["num_sample"]):
             pos_label_list = [1,]
@@ -1662,14 +1664,14 @@ class DataHandleTransformer():
             tpos_word = np.random.choice(number_words,10,replace=True).tolist()
             tneg_word = np.random.choice(non_number_word,10,replace=True).tolist()
             if point_sample<=self.data_args["topic_corr_list"][tidx0]:
-                pos_example += " " +  " ".join(tpos_word)+ " "
-                neg_example += " " + " ".join(tneg_word)+ " "
+                pos_add_topic0 = " " +  " ".join(tpos_word)+ " "
+                neg_add_topic0 = " " + " ".join(tneg_word)+ " "
 
                 pos_label_list.append(1)
                 neg_label_list.append(0)
             else:
-                neg_example += " ".join(tpos_word)
-                pos_example += " ".join(tneg_word)
+                neg_add_topic0 = " " + " ".join(tpos_word)+ " "
+                pos_add_topic0 = " " + " ".join(tneg_word)+ " "
 
                 pos_label_list.append(0)
                 neg_label_list.append(1)
@@ -1680,26 +1682,75 @@ class DataHandleTransformer():
             #Taking a differnet sample for this topic
             point_sample = np.random.uniform(0.0,1.0,1)
             if point_sample<=self.data_args["topic_corr_list"][tidx1]:
-                pos_example += " ".join(["fill"]*10)
+                pos_add_topic1 = " ".join(["fill"]*10)
+                neg_add_topic1 = " "
 
                 pos_label_list.append(1)
                 neg_label_list.append(0)
             else:
-                neg_example += " ".join(["fill"]*10)
+                neg_add_topic1 = " ".join(["fill"]*10)
+                pos_add_topic1 = " "
 
                 pos_label_list.append(0)
                 neg_label_list.append(1)
 
-            #Converting the examples to the token
+            
+            #Constructing the examples
+            pos_example_main = pos_example + pos_add_topic0 + pos_add_topic1 
+            neg_example_main = neg_example + neg_add_topic0 + neg_add_topic1 
+            all_example_list+=[pos_example_main,neg_example_main]
+
+            #Constructing the examples by flipping topic0
+            pos_example_t0 = pos_example + neg_add_topic0 + pos_add_topic1 
+            neg_example_t0 = neg_example + pos_add_topic0 + neg_add_topic1 
+            all_example_list_t0_flip+=[pos_example_t0,neg_example_t0]
+
+            #Constructing the examples by flipping topic1
+            pos_example_t1 = pos_example + pos_add_topic0 + neg_add_topic1 
+            neg_example_t1 = neg_example + neg_add_topic0 + pos_add_topic1 
+            all_example_list_t1_flip+=[pos_example_t1,neg_example_t1]
+
 
             #Adding the example and lable
-            all_example_list+=[pos_example,neg_example]
             all_label_list+=[pos_label_list,neg_label_list]
 
 
+        #Converting the text example to input_idx 
+        all_index_arr = self._convert_text_to_widx(all_example_list)
+        #Getting the input idx where feature0 is flipped (on-->off or off-->on)
+        all_index_arr_t0_flip = self._convert_text_to_widx(all_example_list_t0_flip)
+        #Getting the input idx where feature1 is flipped (on-->off or off-->on)
+        all_index_arr_t1_flip = self._convert_text_to_widx(all_example_list_t1_flip)
+
+        
+        #Creating the dataset object
+        all_label_arr = np.array(all_label_list,np.int32)
+        #Shuffling the dataser (no need right now they are balanced)
+        
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    #label=all_label_arr[:,self.data_args["main_topic"]+1],
+                                    label=all_label_arr[:,0],
+                                    input_idx = all_index_arr,
+                                    input_idx_t0_flip = all_index_arr_t0_flip,
+                                    input_idx_t1_flip = all_index_arr_t1_flip,
+                                    topic_label = all_label_arr[:,1:]
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset
+    
+    def _convert_text_to_widx(self,text_example_list):
+        '''
+        This function converts the input example in the text form to the word index
+        based on the gensim key to index for use in the NBOW model.
+        '''
         all_index_list = []
         #Converting the example to token idx
-        for eidx,example in enumerate(all_example_list):
+        for eidx,example in enumerate(text_example_list):
             #Splitting and tokenizing
             token_list = example.split()
             #Tokenizing the example
@@ -1714,24 +1765,9 @@ class DataHandleTransformer():
             index_list = index_list + padding
             all_index_list.append(index_list)
         
-        #Creating the dataset object
         all_index_arr = np.array(all_index_list,np.int32)
-        all_label_arr = np.array(all_label_list,np.int32)
-        #Shuffling the dataser (no need right now they are balanced)
         
-        cat_dataset = tf.data.Dataset.from_tensor_slices(
-                                dict(
-                                    #label=all_label_arr[:,self.data_args["main_topic"]+1],
-                                    label=all_label_arr[:,0],
-                                    input_idx = all_index_arr,
-                                    topic_label = all_label_arr[:,1:]
-                                )
-        )
-
-        #Batching the dataset
-        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
-
-        return cat_dataset
+        return all_index_arr
 
     def _tnlp_load_template_dataset(self,task_name):
         #Loading all the dataset for the given task

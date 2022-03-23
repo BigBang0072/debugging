@@ -983,14 +983,17 @@ class SimpleNBOW(keras.Model):
         self.topic_task_classifier_list = []
         self.topic_pred_xentropy_list = []
         self.topic_valid_accuracy_list = []
+        self.topic_flip_main_valid_accuracy_list = [] #Main Accuracy we get on flipping the feature/topic
         for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
             self.topic_task_classifier_list.append(layers.Dense(2,activation="softmax"))
 
             #Initializing the metrics for the topic task
             self.topic_pred_xentropy_list.append(keras.metrics.Mean(name="topic_{}_spred_x".format(tidx)))
+            #TODO: Is this updating by taking mean or overwriting with completely new value? Looks like mean wrapper in source-code
             self.topic_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_vacc".format(tidx)))
-    
+            self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
+
     def compile(self, optimizer):
         super(SimpleNBOW, self).compile()
         self.optimizer = optimizer 
@@ -1004,6 +1007,7 @@ class SimpleNBOW(keras.Model):
         for tidx in range(self.data_args["num_topics"]):
             self.topic_pred_xentropy_list[tidx].reset_states()
             self.topic_valid_accuracy_list[tidx].reset_states()
+            self.topic_flip_main_valid_accuracy_list[tidx].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1361,6 +1365,34 @@ class SimpleNBOW(keras.Model):
         )
         return mmd_var_dict
     
+    def valid_step_stage2_flip_topic(self,dataset_batch,P_matrix,cidx):
+        '''
+        This function will calculate the main classifier accuracy given we flip the topic cidx
+        in the input space.
+
+        This will be proxy for feature weight coefficient of the main classifier since the
+        direction of feature is not known.
+        '''
+        #Getting the dataset splits for train and valid       
+        label = dataset_batch["label"]
+        flip_idx = dataset_batch["input_idx_t{}_flip".format(cidx)]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        flip_idx_valid = flip_idx[valid_idx:]
+
+
+        #Getting the latent representaiton for the input
+        X_latent = self._encoder(flip_idx_valid)
+        X_proj = self._get_proj_X_enc(X_latent,P_matrix)
+
+        #Getting the validation accuracy of the main task
+        #TODO: This assumes that this is the last layer of the both branches
+        main_valid_prob = self.main_task_classifier(X_proj)
+        self.topic_flip_main_valid_accuracy_list[cidx].update_state(label_valid,main_valid_prob)
+ 
     def _get_proj_X_enc(self,X_enc,P_matrix):
         '''
         This will give the projected encoded latent representaion which will be furthur
@@ -1422,7 +1454,8 @@ class SimpleNBOW(keras.Model):
         classifier_accuracy["main"]=float(self.main_valid_accuracy.result().numpy())
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
-        
+            classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
+
         return classifier_accuracy
 
 @tf.custom_gradient
@@ -2046,6 +2079,13 @@ def nbow_trainer_stage2(data_args,model_args):
                                         cidx=tidx
                 )
         
+                #Updating the flip topic main accuracy also
+                classifier_main.valid_step_stage2_flip_topic(
+                                        dataset_batch=data_batch,
+                                        P_matrix=P_identity,
+                                        cidx=tidx,
+                )
+        
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
         print(log_format.format(
@@ -2054,6 +2094,7 @@ def nbow_trainer_stage2(data_args,model_args):
                             classifier_main.main_pred_xentropy.result(),
                             classifier_main.main_valid_accuracy.result(),
         ))
+        #Printing the topic accuracy
         for tidx in range(data_args["num_topics"]):
             print(log_format.format(
                             eidx,
@@ -2061,7 +2102,16 @@ def nbow_trainer_stage2(data_args,model_args):
                             classifier_main.topic_pred_xentropy_list[tidx].result(),
                             classifier_main.topic_valid_accuracy_list[tidx].result()
             ))
-
+        
+        #Printing the flip-topic main accuracy (proxy for feature use coefficient)
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            eidx,
+                            "topic-{}_flip_main".format(tidx),
+                            0.00,
+                            classifier_main.topic_flip_main_valid_accuracy_list[tidx].result()
+            ))
+        
         #Keeping track of the optimal vaccuracy of the main classifier
         optimal_vacc_main = classifier_main.main_valid_accuracy.result()
 
@@ -2085,7 +2135,7 @@ def nbow_trainer_stage2(data_args,model_args):
     with open(probe_metric_path,"w") as whandle:
         json.dump(probe_metric_list,whandle,indent="\t")
     #Wont be using the removal part right now.
-
+    sys.exit(0)
 
 
     ##################################################################
@@ -2113,7 +2163,7 @@ def nbow_trainer_stage2(data_args,model_args):
 
             #Validate the other topic so that we know the accuracy etc
             for tidx in range(data_args["num_topics"]):
-                if(tidx==data_args["debug_idx"]):
+                if(tidx==data_args["debug_tidx"]):
                     continue
                 #Getting the validation accuracy
                 classifier_main.valid_step_stage2(
@@ -2137,7 +2187,7 @@ def nbow_trainer_stage2(data_args,model_args):
                             classifier_main.topic_pred_xentropy_list[tidx].result(),
                             classifier_main.topic_valid_accuracy_list[tidx].result()
             ))
-    sys.exit(0)
+    # sys.exit(0)
     
     
     #Getting the MMD metrics to see usage
