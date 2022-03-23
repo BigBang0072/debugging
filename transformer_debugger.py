@@ -1012,6 +1012,7 @@ class SimpleNBOW(keras.Model):
             self.topic_pred_xentropy_list[tidx].reset_states()
             self.topic_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_valid_accuracy_list[tidx].reset_states()
+            self.topic_flip_main_prob_delta_list[tidx].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1347,6 +1348,9 @@ class SimpleNBOW(keras.Model):
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
         topic_label_valid = topic_label[valid_idx:,cidx]
+        #Skipping if we dont have enough samples
+        if(idx_valid.shape[0]==0):
+            return
 
 
         #Getting the latent representaiton for the input
@@ -1388,6 +1392,10 @@ class SimpleNBOW(keras.Model):
         idx_valid = idx[valid_idx:]
         label_valid = label[valid_idx:]
         flip_idx_valid = flip_idx[valid_idx:]
+        
+        #Skipping if we dont have enough samples
+        if(idx_valid.shape[0]==0):
+            return
 
 
         #Getting the probability of main label form the actual input
