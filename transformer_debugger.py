@@ -984,6 +984,7 @@ class SimpleNBOW(keras.Model):
         self.topic_pred_xentropy_list = []
         self.topic_valid_accuracy_list = []
         self.topic_flip_main_valid_accuracy_list = [] #Main Accuracy we get on flipping the feature/topic
+        self.topic_flip_main_prob_delta_list = [] #Keep the mean probabilty change happened to the examples
         for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
             self.topic_task_classifier_list.append(layers.Dense(2,activation="softmax"))
@@ -992,7 +993,10 @@ class SimpleNBOW(keras.Model):
             self.topic_pred_xentropy_list.append(keras.metrics.Mean(name="topic_{}_spred_x".format(tidx)))
             #TODO: Is this updating by taking mean or overwriting with completely new value? Looks like mean wrapper in source-code
             self.topic_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_vacc".format(tidx)))
+            
+            #To keep the main accuracy when we flip the features in the input
             self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
+            self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
 
     def compile(self, optimizer):
         super(SimpleNBOW, self).compile()
@@ -1375,23 +1379,39 @@ class SimpleNBOW(keras.Model):
         '''
         #Getting the dataset splits for train and valid       
         label = dataset_batch["label"]
+        idx = dataset_batch["input_idx"]
         flip_idx = dataset_batch["input_idx_t{}_flip".format(cidx)]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
         #Getting the validation data
+        idx_valid = idx[valid_idx:]
         label_valid = label[valid_idx:]
         flip_idx_valid = flip_idx[valid_idx:]
 
 
-        #Getting the latent representaiton for the input
-        X_latent = self._encoder(flip_idx_valid)
+        #Getting the probability of main label form the actual input
+        #Getting the latent representaiton for the flipped input
+        X_latent = self._encoder(idx_valid)
         X_proj = self._get_proj_X_enc(X_latent,P_matrix)
-
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
-        main_valid_prob = self.main_task_classifier(X_proj)
-        self.topic_flip_main_valid_accuracy_list[cidx].update_state(label_valid,main_valid_prob)
+        main_valid_prob_actual = self.main_task_classifier(X_proj) #This is softmaxed already
+
+
+        #Getting the probability of main label form the actual input
+        #Getting the latent representaiton for the flipped input
+        X_latent = self._encoder(flip_idx_valid)
+        X_proj = self._get_proj_X_enc(X_latent,P_matrix)
+        #Getting the validation accuracy of the main task
+        #TODO: This assumes that this is the last layer of the both branches
+        main_valid_prob_flip = self.main_task_classifier(X_proj)
+        self.topic_flip_main_valid_accuracy_list[cidx].update_state(label_valid,main_valid_prob_flip)
+
+
+        #Now getting the difference in the probability bw actual and perturbed
+        p_delta = tf.math.reduce_mean(tf.math.abs(main_valid_prob_actual-main_valid_prob_flip))
+        self.topic_flip_main_prob_delta_list[cidx].update_state(p_delta)
  
     def _get_proj_X_enc(self,X_enc,P_matrix):
         '''
@@ -1455,6 +1475,7 @@ class SimpleNBOW(keras.Model):
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_flip_main_pdelta".format(tidx)]=float(self.topic_flip_main_prob_delta_list[tidx].result().numpy())
 
         return classifier_accuracy
 
@@ -1587,6 +1608,7 @@ def transformer_trainer_stage1(data_args,model_args):
     
     #Printing the variance of the importance weight
     # get_cat_temb_importance_weight_variance(classifier)
+    return
 
 def transformer_trainer_stage2_adversarial(data_args,model_args):
     '''
@@ -2108,7 +2130,7 @@ def nbow_trainer_stage2(data_args,model_args):
             print(log_format.format(
                             eidx,
                             "topic-{}_flip_main".format(tidx),
-                            0.00,
+                            classifier_main.topic_flip_main_prob_delta_list[tidx].result(),
                             classifier_main.topic_flip_main_valid_accuracy_list[tidx].result()
             ))
         
