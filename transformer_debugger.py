@@ -2165,7 +2165,7 @@ def nbow_trainer_stage2(data_args,model_args):
     with open(probe_metric_path,"w") as whandle:
         json.dump(probe_metric_list,whandle,indent="\t")
     #Wont be using the removal part right now.
-    sys.exit(0)
+    # sys.exit(0)
 
 
     ##################################################################
@@ -2201,6 +2201,14 @@ def nbow_trainer_stage2(data_args,model_args):
                                     P_matrix=P_identity,
                                     cidx=tidx
                 )
+            
+            #Also let us get the effect of pertubation of the feature on main classifier
+            for tidx in range(data_args["num_topics"]):
+                classifier_main.valid_step_stage2_flip_topic(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_identity,
+                                    cidx=tidx,
+                )
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
@@ -2217,7 +2225,29 @@ def nbow_trainer_stage2(data_args,model_args):
                             classifier_main.topic_pred_xentropy_list[tidx].result(),
                             classifier_main.topic_valid_accuracy_list[tidx].result()
             ))
-    # sys.exit(0)
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            ridx,
+                            "topic-{}_flip_main".format(tidx),
+                            classifier_main.topic_flip_main_prob_delta_list[tidx].result(),
+                            classifier_main.topic_flip_main_valid_accuracy_list[tidx].result()
+            ))
+        
+
+        #Dumping the probe metrics at every iteration
+        step_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
+        #Getting the initial classifier accuracy
+        step_classifier_acc = classifier_main.get_all_classifier_accuracy()
+        probe_metric_list.append(dict(
+                    conv_angle_dict = step_conv_angle,
+                    classifier_acc_dict = step_classifier_acc
+        ))
+        #Dumping the first set of metrics we have
+        probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
+        print("Dumping the probe metrics in: {}".format(probe_metric_path))
+        with open(probe_metric_path,"w") as whandle:
+            json.dump(probe_metric_list,whandle,indent="\t")
+    sys.exit(0)
     
     
     #Getting the MMD metrics to see usage
