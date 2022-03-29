@@ -1728,7 +1728,7 @@ class DataHandleTransformer():
         all_label_arr = np.array(all_label_list,np.int32)
         #Shuffling the dataser (no need right now they are balanced)
         #Adding noise to the labels to have non-fully predictive causal features
-        all_label_arr = self._add_noise_to_labels(all_label_arr,data_args["noise_ratio"])
+        all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
         
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(

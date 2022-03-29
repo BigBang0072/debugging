@@ -2165,13 +2165,36 @@ def nbow_trainer_stage2(data_args,model_args):
     with open(probe_metric_path,"w") as whandle:
         json.dump(probe_metric_list,whandle,indent="\t")
     #Wont be using the removal part right now.
-    sys.exit(0)
+    # sys.exit(0)
+    #Getting the MMD metrics to see usage
+    # check_topic_usage_mmd(cat_dataset,classifier_main)
 
 
     ##################################################################
     # ADVERSARIAL REMOVAL
     ##################################################################
-    print("Stage 2: Removing the topic information adversarially!")
+    if(model_args["removal_mode"]=="adversarial"):
+        print("Stage 2: Removing the topic information adversarially!")
+        perform_adversarial_removal_nbow(
+                                        cat_dataset=cat_dataset,
+                                        classifier_main=classifier_main,
+                                        probe_metric_list=probe_metric_list,
+        )
+    elif(model_args["removal_mode"]=="null_space"):
+        print("Stage 2: Removing the topic information!")
+        perform_null_space_removal_nbow(
+                                        cat_dataset=cat_dataset,
+                                        classifier_main=classifier_main,
+                                        probe_metric_list=probe_metric_list,
+                                        optimal_vacc_main=optimal_vacc_main,
+        )
+    
+    return
+
+def perform_adversarial_removal_nbow(cat_dataset,classifier_main,probe_metric_list):
+    '''
+    '''
+    P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
     for ridx in range(model_args["adv_rm_epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
@@ -2247,17 +2270,10 @@ def nbow_trainer_stage2(data_args,model_args):
         print("Dumping the probe metrics in: {}".format(probe_metric_path))
         with open(probe_metric_path,"w") as whandle:
             json.dump(probe_metric_list,whandle,indent="\t")
-    sys.exit(0)
-    
-    
-    #Getting the MMD metrics to see usage
-    # check_topic_usage_mmd(cat_dataset,classifier_main)
 
-
-    ##################################################################
-    # NULL SPACE REMOVAL
-    ##################################################################
-    print("Stage 2: Removing the topic information!")
+def perform_null_space_removal_nbow(cat_dataset,classifier_main,probe_metric_list,optimal_vacc_main):
+    '''
+    '''
     #Next we will be going to use this trained classifier to do the null space projection
     all_proj_matrix_list = []
     P_W = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
@@ -2291,10 +2307,18 @@ def nbow_trainer_stage2(data_args,model_args):
         classifier_main.reset_all_metrics()
         for data_batch in cat_dataset:
             for tidx in range(data_args["num_topics"]):
+                #Getting the topic and  validation accuracy
                 classifier_main.valid_step_stage2(
                                             dataset_batch=data_batch,
                                             P_matrix=P_W,
                                             cidx=tidx,
+                )
+
+                #Getting the validation accuracy when we flip the topic info in input
+                classifier_main.valid_step_stage2_flip_topic(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_W,
+                                    cidx=tidx,
                 )
         
         #Getting the classifier information
@@ -2360,8 +2384,6 @@ def nbow_trainer_stage2(data_args,model_args):
         print("Dumping the probe metrics in: {}".format(probe_metric_path))
         with open(probe_metric_path,"w") as whandle:
             json.dump(probe_metric_list,whandle,indent="\t")
-    return 
-
 
 def get_cat_temb_importance_weight_variance(classifier):
     #Getting the topic importance
@@ -3033,6 +3055,7 @@ if __name__=="__main__":
     parser.add_argument('-noise_ratio',dest="noise_ratio",type=float,default=None)
     parser.add_argument('-main_topic',dest="main_topic",type=int,default=None)
     parser.add_argument('-num_hidden_layer',dest="num_hidden_layer",type=int,default=None)
+    parser.add_argument('-removal_mode',dest="removal_mode",type=str,default=None)
 
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
@@ -3145,6 +3168,7 @@ if __name__=="__main__":
     model_args["num_proj_iter"]=args.num_proj_iter
     model_args["topic_epochs"]=args.topic_epochs
     model_args["adv_rm_epochs"]=args.adv_rm_epochs
+    model_args["removal_mode"]=args.removal_mode
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
