@@ -552,22 +552,22 @@ mkdir nlp_logs
 #     done
 # done
 
-for r in 0 1 2
-do
-    for p in 0.5 0.6 0.7 0.8 0.9 0.99
-    do
-        for e in 5 10 20
-        do
-            for s in 100 500 1000
-            do
-                for h in 0 1 5 20
-                do
-                    python transformer_debugger.py -expt_num "pt.rel.h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005
-                done
-            done       
-        done
-    done
-done
+# for r in 0
+# do
+#     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#     do
+#         for e in 10
+#         do
+#             for s in 500
+#             do
+#                 for h in 10 5 1 0
+#                 do
+#                     python transformer_debugger.py -expt_num "pt.rel.h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005
+#                 done
+#             done       
+#         done
+#     done
+# done
 
 
 #Testing the effect of number of epoch on convergence angle
@@ -591,17 +591,17 @@ done
 #Starting the adversarial training
 # for r in 0
 # do
-#     for p in 0.5
+#     for e in 1 5
 #     do
-#         for e in 5
+#         for g in 1 10
 #         do
-#             for s in 100
+#             for a in 5 10 20
 #             do
-#                 for h in 1
+#                 for h in 0 1 5 20
 #                 do
-#                     for a in 20
+#                     for s in  500 1000 100
 #                     do
-#                         for g in 1
+#                         for p in 0.5 0.6 0.7 0.8 0.9 0.99
 #                         do
 #                             python transformer_debugger.py -expt_num "pt.rel.g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
 #                         done
@@ -611,6 +611,80 @@ done
 #         done
 #     done
 # done
+
+
+for r in 0 1 2
+do
+    for e in 1
+    do
+        for g in 1
+        do
+            for a in 10
+            do
+                for h in 0 1 2 3
+                do
+                    for s in 500
+                    do
+                        for p in 0.6 0.7 0.8 0.9 0.99
+                        do
+                            python transformer_debugger.py -expt_num "pt.rel.g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
+                        done
+                    done
+                done
+            done       
+        done
+    done
+done
+
+
+#Testing the epoch variance
+for r in 0 1 2
+do
+    for e in 1
+    do
+        for g in 1
+        do
+            for a in 10
+            do
+                for h in 0
+                do
+                    for s in  100 500 1000
+                    do
+                        for p in 0.6 0.7 0.8 0.9 0.99
+                        do
+                            python transformer_debugger.py -expt_num "pt.rel.g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
+                        done
+                    done
+                done
+            done       
+        done
+    done
+done
+
+#Testing the epoch variance
+for r in 0 1 2
+do
+    for e in 1
+    do
+        for g in 1
+        do
+            for a in 5 10 15 20
+            do
+                for h in 0
+                do
+                    for s in  500
+                    do
+                        for p in 0.6 0.7 0.8 0.9 0.99
+                        do
+                            python transformer_debugger.py -expt_num "pt.rel.g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
+                        done
+                    done
+                done
+            done       
+        done
+    done
+done
+
 
 
 
