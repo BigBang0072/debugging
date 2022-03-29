@@ -1648,6 +1648,7 @@ class DataHandleTransformer():
         all_example_list = []
         all_example_list_t0_flip = []
         all_example_list_t1_flip = []   #These have the flipped corresponding topic
+        all_example_list_only_t0 = []   #These example have spurious feature absent
         all_label_list= []
         for sidx in range(self.data_args["num_sample"]):
             pos_label_list = [1,]
@@ -1711,6 +1712,14 @@ class DataHandleTransformer():
             neg_example_t1 = neg_example + neg_add_topic0 + pos_add_topic1 
             all_example_list_t1_flip+=[pos_example_t1,neg_example_t1]
 
+            #Creating the example which just have a topic0
+            pos_example_only_t0 = pos_example + pos_add_topic0
+            neg_example_only_t0 = neg_example + neg_add_topic0
+            all_example_list_only_t0+=[pos_example_only_t0,neg_example_only_t0]
+
+            #Creating example with only t1
+            # pos_example_only_t1 = pos_example + pos_add_topic1
+            # neg_example_only_t1 = neg_example + neg_add_topic1
 
             #Adding the example and lable
             all_label_list+=[pos_label_list,neg_label_list]
@@ -1722,6 +1731,8 @@ class DataHandleTransformer():
         all_index_arr_t0_flip = self._convert_text_to_widx(all_example_list_t0_flip)
         #Getting the input idx where feature1 is flipped (on-->off or off-->on)
         all_index_arr_t1_flip = self._convert_text_to_widx(all_example_list_t1_flip)
+        #Getting the input idx where only feature0 is present
+        all_index_arr_only_t0 = self._convert_text_to_widx()
 
         
         #Creating the dataset object
@@ -1737,6 +1748,7 @@ class DataHandleTransformer():
                                     input_idx = all_index_arr,
                                     input_idx_t0_flip = all_index_arr_t0_flip,
                                     input_idx_t1_flip = all_index_arr_t1_flip,
+                                    input_idx_only_t0 = all_index_arr_only_t0,
                                     topic_label = all_label_arr[:,1:]
                                 )
         )
