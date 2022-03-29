@@ -2165,7 +2165,7 @@ def nbow_trainer_stage2(data_args,model_args):
     with open(probe_metric_path,"w") as whandle:
         json.dump(probe_metric_list,whandle,indent="\t")
     #Wont be using the removal part right now.
-    # sys.exit(0)
+    sys.exit(0)
 
 
     ##################################################################
@@ -3030,6 +3030,7 @@ if __name__=="__main__":
     #Arguments related to the main convergence experiemtn and subsequent INLP or AdvRem
     parser.add_argument('-topic0_corr',dest="topic0_corr",type=float,default=None)
     parser.add_argument('-topic1_corr',dest="topic1_corr",type=float,default=None)
+    parser.add_argument('-noise_ratio',dest="noise_ratio",type=float,default=None)
     parser.add_argument('-main_topic',dest="main_topic",type=int,default=None)
     parser.add_argument('-num_hidden_layer',dest="num_hidden_layer",type=int,default=None)
 
@@ -3098,6 +3099,7 @@ if __name__=="__main__":
         data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
     elif "nlp_toy2" in data_args["path"]:
         data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
+        data_args["noise_ratio"]=args.noise_ratio
         data_args["main_topic"]=args.main_topic
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]

@@ -1654,8 +1654,9 @@ class DataHandleTransformer():
             neg_label_list = [0,]
 
             #Creating the positive example
-            pos_example = "this is a positive template "
-            neg_example = "this is a negative example "
+            #we wont have any causal fearture now which is fully predictive
+            pos_example = ""#"this is a positive template "
+            neg_example = ""#"this is a negative example "
 
 
             #Creating the topics 1
@@ -1726,6 +1727,8 @@ class DataHandleTransformer():
         #Creating the dataset object
         all_label_arr = np.array(all_label_list,np.int32)
         #Shuffling the dataser (no need right now they are balanced)
+        #Adding noise to the labels to have non-fully predictive causal features
+        all_label_arr = self._add_noise_to_labels(all_label_arr,data_args["noise_ratio"])
         
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
@@ -1742,6 +1745,31 @@ class DataHandleTransformer():
         cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
         return cat_dataset
+    
+    def _add_noise_to_labels(self,all_label_arr,noise_ratio):
+        '''
+        Here we will add noise to each of the labels (main and or topic)
+        '''
+        for tidx in range(all_label_arr.shape[-1]):
+            #Generating the flip mask
+            num_flip = int(all_label_arr.shape[0]*noise_ratio)
+            flip_idx = np.random.randint(all_label_arr.shape[0],size=num_flip).tolist()
+
+            #Flipping the label
+            all_label_arr[flip_idx,tidx] = np.logical_not(all_label_arr[flip_idx,tidx]==1)
+        
+        #Calculating the topic correlation
+        print("\n\n#############################################")
+        print("Printing the label correlation")
+        print("#############################################")
+        for iidx in range(all_label_arr.shape[-1]):
+            #Getting the correlation with next topics
+            for jidx in range(iidx+1,all_label_arr.shape[-1]):
+                #Calcuating the correlation bw iidx and jidx
+                corr = np.sum(all_label_arr[:,iidx]==all_label_arr[:,jidx])/(1.0*all_label_arr.shape[0])
+                print("iidx:{}\tjidx:{}\tcorr:{:0.2f}".format(iidx,jidx,corr))
+        
+        return all_label_arr
     
     def _convert_text_to_widx(self,text_example_list):
         '''
