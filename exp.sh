@@ -719,21 +719,21 @@ mkdir nlp_logs
 
 
 #Starting the null space experiment
-for r in 1
+for r in 0
 do
     for e in 20
     do
         for g in 1
         do
-            for t in 15
+            for t in 10
             do
-                for a in 30
+                for a in 20
                 do
-                    for h in 0
+                    for h in 0 1 5
                     do
-                        for s in  500
+                        for s in 100 500 1000
                         do
-                            for n in 0.0
+                            for n in 0.0 0.025 0.1
                             do
                                 for p in 0.5 0.6 0.7 0.8 0.9 0.99
                                 do
