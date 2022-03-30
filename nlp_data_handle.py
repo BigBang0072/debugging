@@ -1732,7 +1732,7 @@ class DataHandleTransformer():
         #Getting the input idx where feature1 is flipped (on-->off or off-->on)
         all_index_arr_t1_flip = self._convert_text_to_widx(all_example_list_t1_flip)
         #Getting the input idx where only feature0 is present
-        all_index_arr_only_t0 = self._convert_text_to_widx()
+        all_index_arr_only_t0 = self._convert_text_to_widx(all_example_list_only_t0)
 
         
         #Creating the dataset object

@@ -2096,6 +2096,78 @@ def nbow_trainer_stage2(data_args,model_args):
 
 
     print("Stage 1: Training the main classifier! (to be debugged later)")
+    if(model_args["main_model_mode"]=="causal" and "nlp_toy2" in data_args["path"]):
+        #Here we will train on the main classifier to be purely causal
+
+        #building the dataset where the spurious feature has p=0.5
+        init_t1_pval = data_handler.data_args["topic_corr_list"][-1]
+        data_handler.data_args["topic_corr_list"][-1]=0.5
+        causal_cat_dataset = data_handler.toy_nlp_dataset_handler2()
+        data_handler.data_args["topic_corr_list"][-1]=init_t1_pval
+
+        #Now training the main classifier on this causal dataset
+        classifier_main = perform_main_classifier_training(
+                                        data_args,
+                                        model_args,
+                                        causal_cat_dataset,
+                                        classifier_main
+        )
+
+    else:
+        #Run the training normally
+        classifier_main = perform_main_classifier_training(
+                                        data_args,
+                                        model_args,
+                                        cat_dataset,
+                                        classifier_main
+        )
+    
+
+    #Metrics to probe the classifiers
+    probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
+    #Getting the classifier information
+    init_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
+    #Getting the initial classifier accuracy
+    init_classifier_acc = classifier_main.get_all_classifier_accuracy()
+    probe_metric_list.append(dict(
+                conv_angle_dict = init_conv_angle,
+                classifier_acc_dict = init_classifier_acc
+    ))
+    #Dumping the first set of metrics we have
+    probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
+    print("Dumping the probe metrics in: {}".format(probe_metric_path))
+    with open(probe_metric_path,"w") as whandle:
+        json.dump(probe_metric_list,whandle,indent="\t")
+    #Wont be using the removal part right now.
+    # sys.exit(0)
+    #Getting the MMD metrics to see usage
+    # check_topic_usage_mmd(cat_dataset,classifier_main)
+
+
+    ##################################################################
+    # ADVERSARIAL REMOVAL
+    ##################################################################
+    if(model_args["removal_mode"]=="adversarial"):
+        print("Stage 2: Removing the topic information adversarially!")
+        perform_adversarial_removal_nbow(
+                                        cat_dataset=cat_dataset,
+                                        classifier_main=classifier_main,
+                                        probe_metric_list=probe_metric_list,
+        )
+    elif(model_args["removal_mode"]=="null_space"):
+        print("Stage 2: Removing the topic information!")
+        perform_null_space_removal_nbow(
+                                        cat_dataset=cat_dataset,
+                                        classifier_main=classifier_main,
+                                        probe_metric_list=probe_metric_list,
+                                        optimal_vacc_main=optimal_vacc_main,
+        )
+    
+    return
+
+def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier_main):
+    '''
+    '''
     P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
     for eidx in range(model_args["epochs"]):
         print("==========================================")
@@ -2157,48 +2229,8 @@ def nbow_trainer_stage2(data_args,model_args):
         #Saving the paramenters
         # checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         # classifier_main.save_weights(checkpoint_path)
-
-    #Metrics to probe the classifiers
-    probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
-    #Getting the classifier information
-    init_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
-    #Getting the initial classifier accuracy
-    init_classifier_acc = classifier_main.get_all_classifier_accuracy()
-    probe_metric_list.append(dict(
-                conv_angle_dict = init_conv_angle,
-                classifier_acc_dict = init_classifier_acc
-    ))
-    #Dumping the first set of metrics we have
-    probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
-    print("Dumping the probe metrics in: {}".format(probe_metric_path))
-    with open(probe_metric_path,"w") as whandle:
-        json.dump(probe_metric_list,whandle,indent="\t")
-    #Wont be using the removal part right now.
-    # sys.exit(0)
-    #Getting the MMD metrics to see usage
-    # check_topic_usage_mmd(cat_dataset,classifier_main)
-
-
-    ##################################################################
-    # ADVERSARIAL REMOVAL
-    ##################################################################
-    if(model_args["removal_mode"]=="adversarial"):
-        print("Stage 2: Removing the topic information adversarially!")
-        perform_adversarial_removal_nbow(
-                                        cat_dataset=cat_dataset,
-                                        classifier_main=classifier_main,
-                                        probe_metric_list=probe_metric_list,
-        )
-    elif(model_args["removal_mode"]=="null_space"):
-        print("Stage 2: Removing the topic information!")
-        perform_null_space_removal_nbow(
-                                        cat_dataset=cat_dataset,
-                                        classifier_main=classifier_main,
-                                        probe_metric_list=probe_metric_list,
-                                        optimal_vacc_main=optimal_vacc_main,
-        )
     
-    return
+    return classifier_main
 
 def perform_adversarial_removal_nbow(cat_dataset,classifier_main,probe_metric_list):
     '''
@@ -3065,6 +3097,7 @@ if __name__=="__main__":
     parser.add_argument('-main_topic',dest="main_topic",type=int,default=None)
     parser.add_argument('-num_hidden_layer',dest="num_hidden_layer",type=int,default=None)
     parser.add_argument('-removal_mode',dest="removal_mode",type=str,default=None)
+    parser.add_argument('-main_model_mode',dest="main_model_mode",type=str,default=None)
 
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
@@ -3178,6 +3211,7 @@ if __name__=="__main__":
     model_args["topic_epochs"]=args.topic_epochs
     model_args["adv_rm_epochs"]=args.adv_rm_epochs
     model_args["removal_mode"]=args.removal_mode
+    model_args["main_model_mode"]=args.main_model_mode
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
