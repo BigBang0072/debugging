@@ -689,23 +689,59 @@ mkdir nlp_logs
 # done
 
 #Testing the noise variance
-for r in 0
+# for r in 0
+# do
+#     for e in 1
+#     do
+#         for g in 1
+#         do
+#             for a in 20
+#             do
+#                 for h in 0
+#                 do
+#                     for s in  500
+#                     do
+#                         for n in 0.025 0.05 0.1 0.0
+#                         do
+#                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                             do
+#                                 python transformer_debugger.py -expt_num "pt.rel.n($n).g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
+#                             done
+#                         done
+#                     done
+#                 done
+#             done       
+#         done
+#     done
+# done
+
+
+
+
+#Starting the null space experiment
+for r in 1
 do
-    for e in 1
+    for e in 20
     do
         for g in 1
         do
-            for a in 20
+            for t in 15
             do
-                for h in 0
+                for a in 30
                 do
-                    for s in  500
+                    for h in 0
                     do
-                        for n in 0.025 0.05 0.1 0.0
+                        for s in  500
                         do
-                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                            for n in 0.0
                             do
-                                python transformer_debugger.py -expt_num "pt.rel.n($n).g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
+                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                do
+                                    for m in "null_space"
+                                    do
+                                        python transformer_debugger.py -expt_num "pt.rel.m($m).t($t).n($n).g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -removal_mode $m --normalize_emb -lr 0.005 -num_proj_iter $a -topic_epochs $t  -rev_grad_strength $g -debug_tidx 1
+                                    done
+                                done
                             done
                         done
                     done
