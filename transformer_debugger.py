@@ -985,6 +985,7 @@ class SimpleNBOW(keras.Model):
         self.topic_valid_accuracy_list = []
         self.topic_flip_main_valid_accuracy_list = [] #Main Accuracy we get on flipping the feature/topic
         self.topic_flip_main_prob_delta_list = [] #Keep the mean probabilty change happened to the examples
+        self.topic_flip_emb_diff_list = []   #Keep track of absolute change in the embedding 
         for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
             self.topic_task_classifier_list.append(layers.Dense(2,activation="softmax"))
@@ -997,6 +998,7 @@ class SimpleNBOW(keras.Model):
             #To keep the main accuracy when we flip the features in the input
             self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
+            self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
 
     def compile(self, optimizer):
         super(SimpleNBOW, self).compile()
@@ -1401,25 +1403,31 @@ class SimpleNBOW(keras.Model):
         #Getting the probability of main label form the actual input
         #Getting the latent representaiton for the flipped input
         X_latent = self._encoder(idx_valid)
-        X_proj = self._get_proj_X_enc(X_latent,P_matrix)
+        X_proj_actual = self._get_proj_X_enc(X_latent,P_matrix)
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
-        main_valid_prob_actual = self.main_task_classifier(X_proj) #This is softmaxed already
+        main_valid_prob_actual = self.main_task_classifier(X_proj_actual) #This is softmaxed already
 
 
         #Getting the probability of main label form the actual input
         #Getting the latent representaiton for the flipped input
         X_latent = self._encoder(flip_idx_valid)
-        X_proj = self._get_proj_X_enc(X_latent,P_matrix)
+        X_proj_flip = self._get_proj_X_enc(X_latent,P_matrix)
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
-        main_valid_prob_flip = self.main_task_classifier(X_proj)
+        main_valid_prob_flip = self.main_task_classifier(X_proj_flip)
+
+        #Getting the global probability after pertubation
         self.topic_flip_main_valid_accuracy_list[cidx].update_state(label_valid,main_valid_prob_flip)
 
 
         #Now getting the difference in the probability bw actual and perturbed
         p_delta = tf.math.reduce_mean(tf.math.abs(main_valid_prob_actual-main_valid_prob_flip))
         self.topic_flip_main_prob_delta_list[cidx].update_state(p_delta)
+
+        #Getting the chnage in the embedding after pertubation
+        avg_emb_diff = tf.math.reduce_mean(tf.norm((X_proj_actual-X_proj_flip),axis=-1))
+        self.topic_flip_emb_diff_list[cidx].update_state(avg_emb_diff)
  
     def _get_proj_X_enc(self,X_enc,P_matrix):
         '''
@@ -1484,6 +1492,7 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_pdelta".format(tidx)]=float(self.topic_flip_main_prob_delta_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_flip_emb_diff".format(tidx)]=float(self.topic_flip_emb_diff_list[tidx].result().numpy())
 
         return classifier_accuracy
 
