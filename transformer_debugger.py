@@ -2098,6 +2098,7 @@ def nbow_trainer_stage2(data_args,model_args):
     print("Stage 1: Training the main classifier! (to be debugged later)")
     if(model_args["main_model_mode"]=="causal" and "nlp_toy2" in data_args["path"]):
         #Here we will train on the main classifier to be purely causal
+        print("Training a pure causal classifier where there is no spurious correlation")
 
         #building the dataset where the spurious feature has p=0.5
         init_t1_pval = data_handler.data_args["topic_corr_list"][-1]
@@ -2121,7 +2122,8 @@ def nbow_trainer_stage2(data_args,model_args):
                                         cat_dataset,
                                         classifier_main
         )
-    
+    #Getting the optimal validation accuracy of main classifier
+    optimal_vacc_main = classifier_main.main_valid_accuracy.result()
 
     #Metrics to probe the classifiers
     probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
