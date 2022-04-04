@@ -1526,6 +1526,57 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}_flip_emb_diff".format(tidx)]=float(self.topic_flip_emb_diff_list[tidx].result().numpy())
 
         return classifier_accuracy
+    
+    def save_data_for_embedding_proj(self,cat_dataset,P_matrix,fname):
+        '''
+        Convert all the validation dataset into embedding for viz
+        '''
+        all_input_emb = []
+        all_latent_emb = []
+        all_tidx_val = []
+        for data_batch in cat_dataset:
+            label = data_batch["label"]
+            idx = data_batch["input_idx"]
+            topic_label = data_batch["topic_label"]
+
+            #Taking aside a chunk of data for validation
+            valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+            #Getting the validation data
+            label_valid = label[valid_idx:]
+            idx_valid = idx[valid_idx:]
+            if(idx_valid.shape[0]==0):
+                continue
+
+            #Getting the topic index
+            topic_label_valid = topic_label[valid_idx:,:].numpy()
+            all_tidx_val.append(topic_label_valid)
+
+            #Now getting the input embedding
+            input_emb = self.nbow_avg_layer(idx_valid).numpy()
+            all_input_emb.append(input_emb)
+
+            #Now getting the last latent embedding
+            X_latent = self._encoder(idx_valid)
+            X_proj = self._get_proj_X_enc(X_latent,P_matrix).numpy()
+            all_latent_emb.append(X_proj)
+        
+        #Consolidating all the data
+        all_input_emb = np.concatenate(all_input_emb,axis=0)
+        all_latent_emb = np.concatenate(all_latent_emb,axis=0)
+        all_tidx_val = np.concatenate(all_tidx_val,axis=0)
+
+        #Saving the embeddings into a text file
+        np.savetxt(fname=fname+"input_emb.txt",X=all_input_emb,delimiter="\t")
+        np.savetxt(fname=fname+"latent_emb.txt",X=all_latent_emb,delimiter="\t")
+        np.savetxt(
+                    fname=fname+"tidx_val.txt",
+                    X=all_tidx_val,delimiter="\t",
+                    header="\t".join(
+                        ["topic_{}".format(tidx) 
+                                for tidx in range(self.data_args["num_topics"])
+                        ]
+                    )
+        )
 
 @tf.custom_gradient
 def grad_reverse(x):
@@ -2156,12 +2207,19 @@ def nbow_trainer_stage2(data_args,model_args):
 
         #Retraining the head of the classifier only given encoder is warm
         if(model_args["head_retrain_mode"]=="warm_encoder"):
+            print("\n\n\nRetraining all the heads with the warmed up encoder!")
             classifier_main = perform_head_classifier_training(
                                         data_args,
                                         model_args,
                                         cat_dataset,
                                         classifier_main,
             )
+        
+        #Saving the embedding for visaulization
+        classifier_main.save_data_for_embedding_proj(
+                cat_dataset=cat_dataset,
+                P_matrix=np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+        )
 
     #Getting the optimal validation accuracy of main classifier
     optimal_vacc_main = classifier_main.main_valid_accuracy.result()
