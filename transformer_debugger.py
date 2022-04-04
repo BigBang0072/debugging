@@ -961,6 +961,7 @@ class SimpleNBOW(keras.Model):
         self.data_args = data_args 
         self.model_args = model_args
         self.data_handler = data_handler
+        self.init_weights = defaultdict()
 
         #Now initilaizing some of the layers for encoder
         self.nbow_avg_layer = self.get_nbow_avg_layer()
@@ -999,6 +1000,36 @@ class SimpleNBOW(keras.Model):
             self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
             self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
+
+    def get_all_head_init_weights(self,):
+        '''
+        This will get the initialized weights which can be used later for
+        reinitialization of the classifier.
+
+        Make sure the weights are initialized i.e atleast one iter is made
+        '''
+        #Dont update the init weights if we already have them
+        if(len(self.init_weights)!=0):
+            return
+        
+        #Getting the main classifier weights
+        self.init_weights["main"]=self.main_task_classifier.get_weights()
+        #Getting the topic classifier weights
+        for tidx in range(self.data_args["num_topics"]):
+            self.init_weights["topic{}".format(tidx)]=self.topic_task_classifier_list[tidx].get_weights()
+        
+    def set_all_head_init_weights(self,):
+        '''
+        Here we will reinitialize all the weights in the task classifier with the one
+        we had in the begining of the training.
+        '''
+        #Reinitializing the main task classifier
+        self.main_task_classifier.set_weights(self.init_weights["main"])
+        #Reinitializing the topic classifier weights
+        for tidx in range(self.data_args["num_topics"]):
+            self.topic_task_classifier_list[tidx].set_weights(
+                        self.init_weights["topic{}".format(tidx)]
+            )
 
     def compile(self, optimizer):
         super(SimpleNBOW, self).compile()
@@ -2122,6 +2153,16 @@ def nbow_trainer_stage2(data_args,model_args):
                                         cat_dataset,
                                         classifier_main
         )
+
+        #Retraining the head of the classifier only given encoder is warm
+        if(model_args["head_retrain_mode"]=="warm_encoder"):
+            classifier_main = perform_head_classifier_training(
+                                        data_args,
+                                        model_args,
+                                        cat_dataset,
+                                        classifier_main,
+            )
+
     #Getting the optimal validation accuracy of main classifier
     optimal_vacc_main = classifier_main.main_valid_accuracy.result()
 
@@ -2167,6 +2208,86 @@ def nbow_trainer_stage2(data_args,model_args):
     
     return
 
+def perform_head_classifier_training(data_args,model_args,cat_dataset,classifier_main):
+    '''
+    This function will be used to retrain the main head again after we have primed
+    the encoder with the reavant topic information presence.
+
+    In this training the main head's parameter will be randomized and retrained
+    keeping the encoder fixed.
+
+
+    Lets retrain the other topic heads also when we are sure that topic info has
+    come to the top layer atleast.
+    '''
+    #First of all we have to randomize all the heads again
+    classifier_main.set_all_head_init_weights()
+
+    #Now restarting our training again
+    P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+    for eidx in range(model_args["epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        for data_batch in cat_dataset:
+            #Training the main task classifier
+            classifier_main.train_step_stage2(
+                                    dataset_batch=data_batch,
+                                    task="inlp_main",
+                                    P_matrix=P_identity,
+                                    cidx=None,
+            )
+            #Training the topics too to ensure that topic information is there
+            #TODO: Here dont give task as inlp topic as they dont train the encoder. Create new task
+            for tidx in range(data_args["num_topics"]):
+                classifier_main.train_step_stage2(
+                                        dataset_batch=data_batch,
+                                        task="inlp_topic",
+                                        P_matrix=P_identity,
+                                        cidx=tidx
+                )
+        
+                #Updating the flip topic main accuracy also
+                classifier_main.valid_step_stage2_flip_topic(
+                                        dataset_batch=data_batch,
+                                        P_matrix=P_identity,
+                                        cidx=tidx,
+                )
+        
+        #Printing the classifier loss and accuracy
+        log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
+        print(log_format.format(
+                            eidx,
+                            "main",
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+        ))
+        #Printing the topic accuracy
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            eidx,
+                            "topic-{}".format(tidx),
+                            classifier_main.topic_pred_xentropy_list[tidx].result(),
+                            classifier_main.topic_valid_accuracy_list[tidx].result()
+            ))
+        
+        #Printing the flip-topic main accuracy (proxy for feature use coefficient)
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            eidx,
+                            "topic-{}_flip_main".format(tidx),
+                            classifier_main.topic_flip_main_prob_delta_list[tidx].result(),
+                            classifier_main.topic_flip_main_valid_accuracy_list[tidx].result()
+            ))
+        
+        #Keeping track of the optimal vaccuracy of the main classifier
+        optimal_vacc_main = classifier_main.main_valid_accuracy.result()
+
+        #Saving the paramenters
+        # checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
+        # classifier_main.save_weights(checkpoint_path)
+    
+    return classifier_main
+
 def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier_main):
     '''
     '''
@@ -2198,6 +2319,9 @@ def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier
                                         P_matrix=P_identity,
                                         cidx=tidx,
                 )
+            
+            #Here we will capture the model weights for re-init later
+            classifier_main.get_all_head_init_weights()
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
@@ -3100,6 +3224,7 @@ if __name__=="__main__":
     parser.add_argument('-num_hidden_layer',dest="num_hidden_layer",type=int,default=None)
     parser.add_argument('-removal_mode',dest="removal_mode",type=str,default=None)
     parser.add_argument('-main_model_mode',dest="main_model_mode",type=str,default=None)
+    parser.add_argument('-head_retrain_mode',dest="head_retrain_mode",type=str,default=None)
 
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
@@ -3214,6 +3339,7 @@ if __name__=="__main__":
     model_args["adv_rm_epochs"]=args.adv_rm_epochs
     model_args["removal_mode"]=args.removal_mode
     model_args["main_model_mode"]=args.main_model_mode
+    model_args["head_retrain_mode"] = args.head_retrain_mode
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
