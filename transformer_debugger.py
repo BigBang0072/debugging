@@ -962,6 +962,7 @@ class SimpleNBOW(keras.Model):
         self.model_args = model_args
         self.data_handler = data_handler
         self.init_weights = defaultdict()
+        self.small_epsilon = 1e-10
 
         #Now initilaizing some of the layers for encoder
         self.nbow_avg_layer = self.get_nbow_avg_layer()
@@ -980,12 +981,17 @@ class SimpleNBOW(keras.Model):
         self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
         self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
 
+        ###############################################################
+        #CAUTION : ADD a reset metric Function for every metric added
+        ###############################################################
         #Creating the topic classifiers
         self.topic_task_classifier_list = []
         self.topic_pred_xentropy_list = []
         self.topic_valid_accuracy_list = []
         self.topic_flip_main_valid_accuracy_list = [] #Main Accuracy we get on flipping the feature/topic
         self.topic_flip_main_prob_delta_list = [] #Keep the mean probabilty change happened to the examples
+        #since the delta_p will have smallar changes if the activation are very high which is made by the x-entorpy obj.
+        self.topic_flip_main_logprob_delta_list = [] #Keeps the difference between the logprob of the output
         self.topic_flip_emb_diff_list = []   #Keep track of absolute change in the embedding 
         for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
@@ -999,6 +1005,7 @@ class SimpleNBOW(keras.Model):
             #To keep the main accuracy when we flip the features in the input
             self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
+            self.topic_flip_main_logprob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_logprob_delta".format(tidx)))
             self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
 
     def get_all_head_init_weights(self,):
@@ -1046,6 +1053,8 @@ class SimpleNBOW(keras.Model):
             self.topic_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_prob_delta_list[tidx].reset_states()
+            self.topic_flip_main_logprob_delta_list[tidx].reset_states()
+            self.topic_flip_emb_diff_list[tidx].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1456,6 +1465,12 @@ class SimpleNBOW(keras.Model):
         p_delta = tf.math.reduce_mean(tf.math.abs(main_valid_prob_actual-main_valid_prob_flip))
         self.topic_flip_main_prob_delta_list[cidx].update_state(p_delta)
 
+        #Getting the difference in the log prob bw the actual and pertured
+        main_valid_logprob_actual = tf.math.log(main_valid_prob_actual+self.small_epsilon)
+        main_valid_logprob_flip   = tf.math.log(main_valid_prob_flip+self.small_epsilon)
+        logprob_delta = tf.math.reduce_mean(tf.math.abs(main_valid_logprob_actual-main_valid_logprob_flip))
+        self.topic_flip_main_logprob_delta_list[cidx].update_state(logprob_delta)
+
         #Getting the chnage in the embedding after pertubation
         avg_emb_diff = tf.math.reduce_mean(tf.norm((X_proj_actual-X_proj_flip),axis=-1))
         self.topic_flip_emb_diff_list[cidx].update_state(avg_emb_diff)
@@ -1523,6 +1538,7 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_pdelta".format(tidx)]=float(self.topic_flip_main_prob_delta_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_flip_main_logpdelta".format(tidx)]=float(self.topic_flip_main_logprob_delta_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_emb_diff".format(tidx)]=float(self.topic_flip_emb_diff_list[tidx].result().numpy())
 
         return classifier_accuracy

@@ -1737,6 +1737,7 @@ class DataHandleTransformer():
         
         #Creating the dataset object
         all_label_arr = np.array(all_label_list,np.int32)
+        self._print_label_distribution(all_label_arr)
         #Shuffling the dataser (no need right now they are balanced)
         #Adding noise to the labels to have non-fully predictive causal features
         all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
