@@ -1566,6 +1566,7 @@ class SimpleNBOW(keras.Model):
         all_tidx_val = np.concatenate(all_tidx_val,axis=0)
 
         #Saving the embeddings into a text file
+        print("Dumping the emb_projector data at: "+fname)
         np.savetxt(fname=fname+"input_emb.txt",X=all_input_emb,delimiter="\t")
         np.savetxt(fname=fname+"latent_emb.txt",X=all_latent_emb,delimiter="\t")
         np.savetxt(
@@ -2216,9 +2217,11 @@ def nbow_trainer_stage2(data_args,model_args):
             )
         
         #Saving the embedding for visaulization
+        emb_savepath = "nlp_logs/{}/".format(data_args["expt_name"])
         classifier_main.save_data_for_embedding_proj(
                 cat_dataset=cat_dataset,
-                P_matrix=np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+                P_matrix=np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim),
+                fname=emb_savepath,
         )
 
     #Getting the optimal validation accuracy of main classifier

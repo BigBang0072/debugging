@@ -1667,7 +1667,7 @@ class DataHandleTransformer():
             tneg_word = np.random.choice(non_number_word,10,replace=True).tolist()
             if point_sample<=self.data_args["topic_corr_list"][tidx0]:
                 pos_add_topic0 = " " +  " ".join(tpos_word)+ " "
-                neg_add_topic0 = " " + " ".join(tneg_word)+ " "
+                neg_add_topic0 = " " +  " ".join(tneg_word)+ " "
 
                 pos_label_list.append(1)
                 neg_label_list.append(0)
@@ -1757,6 +1757,17 @@ class DataHandleTransformer():
         cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
         return cat_dataset
+    
+    def _print_label_distribution(self,all_label_arr):
+        '''
+        To be sure that individual topics are even distributed in both the labels
+        '''
+        for tidx in range(self.data_args["num_topics"]):
+            num_pos = np.sum(all_label_arr[:,tidx]==1)
+            num_neg = np.sum(all_label_arr[:,tidx]==0)
+            print("topic:{}\tnum_pos:{}\tnum_neg:{}".format(tidx,num_pos,num_neg))
+        
+        return
     
     def _add_noise_to_labels(self,all_label_arr,noise_ratio):
         '''
