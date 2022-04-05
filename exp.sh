@@ -518,6 +518,16 @@ mkdir nlp_logs
 
 
 
+
+
+
+
+
+
+
+######################################################################################################
+############################### ADVERSARIAL TRAINING ##########################################
+######################################################################################################
 #22nd March: Starting the convergence experiment
 #Setup: nlp syn, crossentropy, relateive angle method to get convergence angle
 #Expectation: As the correlation increases the converge angle between the classifier should decreased
@@ -590,6 +600,37 @@ mkdir nlp_logs
 # done
 
 
+for hretrain in "no_warm_encoder"
+do
+    for r in 0
+    do
+        for e in 10
+        do
+            for d in "non_causal"
+            do
+                for h in 0 1 5 10
+                do
+                    for s in 500
+                    do
+                        for n in 0.025
+                        do
+                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                            do
+                                python transformer_debugger.py -expt_num "pt.rel.hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 0.005 -head_retrain_mode $hretrain
+                            done
+                        done
+                    done
+                done       
+            done
+        done
+    done
+done
+
+
+######################################################################################################
+############################### ADVERSARIAL TRAINING ##########################################
+######################################################################################################
+
 
 #Starting the adversarial training
 # for r in 0
@@ -614,6 +655,8 @@ mkdir nlp_logs
 #         done
 #     done
 # done
+
+
 
 
 # for r in 0 1 2
@@ -689,34 +732,41 @@ mkdir nlp_logs
 # done
 
 #Testing the noise variance
-for r in 0
-do
-    for e in 20
-    do
-        for g in 1
-        do
-            for a in 20
-            do
-                for h in 1 5 0
-                do
-                    for s in  500
-                    do
-                        for n in 0.025 0.05 0.1 0.0
-                        do
-                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                            do
-                                python transformer_debugger.py -expt_num "pt.rel.n($n).g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
-                            done
-                        done
-                    done
-                done
-            done       
-        done
-    done
-done
+# for r in 0
+# do
+#     for e in 20
+#     do
+#         for g in 1
+#         do
+#             for a in 20
+#             do
+#                 for h in 1 5 0
+#                 do
+#                     for s in  500
+#                     do
+#                         for n in 0.025 0.05 0.1 0.0
+#                         do
+#                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                             do
+#                                 python transformer_debugger.py -expt_num "pt.rel.n($n).g($g).a($a).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 --normalize_emb -lr 0.005 -adv_rm_epochs $a -rev_grad_strength $g -debug_tidx 1
+#                             done
+#                         done
+#                     done
+#                 done
+#             done       
+#         done
+#     done
+# done
 
 
 
+
+
+
+
+#####################################################################################################
+################################         NULL SPACE REMOVAL        ##################################
+#####################################################################################################
 #Training a pure causal classifier
 # for r in 0
 # do
