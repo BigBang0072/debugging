@@ -604,23 +604,26 @@ for hretrain in "no_warm_encoder"
 do
     for r in 0
     do
-        for e in 10
+        for l2_lambd in 0.0001 0.001 0.01 0.1 1.0 10.0
         do
-            for d in "non_causal"
+            for e in 5 10 20
             do
-                for h in 0 1 5 10
+                for d in "non_causal"
                 do
-                    for s in 500
+                    for h in 0
                     do
-                        for n in 0.05 0.1
+                        for s in 500
                         do
-                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                            for n in 0.0
                             do
-                                python transformer_debugger.py -expt_num "pt.rel.hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 0.005 -head_retrain_mode $hretrain
+                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                do
+                                    python transformer_debugger.py -expt_num "pt.rel.l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 0.005 -head_retrain_mode $hretrain -l2_lambd $l2_lambd
+                                done
                             done
                         done
-                    done
-                done       
+                    done       
+                done
             done
         done
     done
