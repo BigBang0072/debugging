@@ -612,7 +612,7 @@ do
                 do
                     for s in 500
                     do
-                        for n in 0.025
+                        for n in 0.05 0.1
                         do
                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
                             do
