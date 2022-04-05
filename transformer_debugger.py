@@ -979,10 +979,21 @@ class SimpleNBOW(keras.Model):
             )
             self.hidden_layer_list.append(hlayer)
         
+        self.last_layer_activation=None
+        self.last_layer_dim = None
+        if self.model_args["loss_type"]=="linear_svm":
+            self.last_layer_activation=None
+            self.last_layer_dim=1
+        elif self.model_args["loss_type"]=="x_entropy":
+            self.last_layer_activation="softmax"
+            self.last_layer_dim=2
+        else:
+            raise NotImplementedError()
+
         #Initializing the classifier for the main task
         self.main_task_classifier = layers.Dense(
-                            2,
-                            activation="softmax",
+                            self.last_layer_dim,
+                            activation=self.last_layer_activation,
                             kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
         )
         #Initializing some of the metrics for main task
@@ -1005,8 +1016,8 @@ class SimpleNBOW(keras.Model):
             #Initializing the classifier for the topic task
             self.topic_task_classifier_list.append(
                 layers.Dense(
-                            2,
-                            activation="softmax",
+                            self.last_layer_dim,
+                            activation=self.last_layer_activation,
                             kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
                 )
             )
@@ -1185,8 +1196,27 @@ class SimpleNBOW(keras.Model):
         #Getting the prediction
         Xpred = self.main_task_classifier(X_enc)
 
-        return Xpred 
+        return Xpred
+
+    def get_max_margin_loss(self,Xmargin,label):
+        '''
+        This function will calculate the hinge loss from the final embeddeding 
+        '''
+        hinge_loss_op = tf.keras.losses.Hinge()
+        hinge_loss = hinge_loss_op(Xmargin,label)
+        return hinge_loss
     
+    def get_max_margin_prob_vector(self,Xmargin):
+        '''
+        Here we will:
+        1. Conver the margin in prob. naturally by sigmoid
+        '''
+        label1_prob = tf.math.sigmoid(Xmargin)
+        label0_prob = 1-label1_prob
+
+        prob_vec = tf.stack([label0_prob,label1_prob],axis=-1)
+        return prob_vec
+
     def get_topic_pred_prob(self,X_enc,tidx):
         '''
         Forward propagate the input for the main tasssk
@@ -1281,21 +1311,47 @@ class SimpleNBOW(keras.Model):
             self.topic_valid_accuracy_list[adv_rm_tidx].update_state(rm_topic_label_valid,rm_topic_valid_prob)
         elif "main" in task:
             #Training the main task
-            with tf.GradientTape() as tape:
-                #Encoding the input
-                enc_train = self._encoder(idx_train)
-                #Getting the projection (I for main full traning)
-                enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
-                #Get the prediction probability
-                main_train_prob = self.get_main_task_pred_prob(enc_proj_train)
+            if self.model_args["loss_type"]=="x_entropy":
+                with tf.GradientTape() as tape:
+                    #Encoding the input
+                    enc_train = self._encoder(idx_train)
+                    #Getting the projection (I for main full traning)
+                    enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+                    #Get the prediction probability
+                    main_train_prob = self.get_main_task_pred_prob(enc_proj_train)
 
-                #Getting the x-entropy lossss
-                main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
+                    #Getting the x-entropy lossss
+                    main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
 
-                #Getting the regularization loss
-                regularization_loss = tf.math.add_n(self.losses)
+                    #Getting the regularization loss
+                    regularization_loss = tf.math.add_n(self.losses)
 
-                total_loss = main_xentropy_loss + regularization_loss
+                    total_loss = main_xentropy_loss + regularization_loss
+
+                    #Updating the total loss
+                    self.main_pred_xentropy.update_state(main_xentropy_loss)
+            elif self.model_args["loss_type"]=="linear_svm":
+                '''
+                Here we will train the model using the hinge loss used in the svm setting.
+                '''
+                with tf.GradientTape() as tape:
+                    #Encoding the input will be same
+                    enc_train = self._encoder(idx_train)
+                    enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+                    #Getting non-softmaxed final projection
+                    main_train_margin = self.get_main_task_pred_prob(enc_proj_train)
+
+                    #Getting the svm_loss for this projection
+                    main_svm_loss = self.get_max_margin_loss(Xmargin=main_train_margin,label=label_train)
+                    #Getting the regularization loss
+                    regularization_loss = tf.math.add_n(self.losses)
+
+                    total_loss = main_svm_loss + regularization_loss
+                    #Updating the total loss
+                    self.main_pred_xentropy.update_state(main_svm_loss)
+
+            else:
+                raise NotImplementedError()
 
             #Backpropagating
             if task=="main":
@@ -1312,16 +1368,14 @@ class SimpleNBOW(keras.Model):
                 )
             else:
                 raise NotImplementedError()
-            #Updating the total loss
-            self.main_pred_xentropy.update_state(main_xentropy_loss)
 
-
+            #We wont measure validation accuracy here now on
             #Getting the validation loss/accuracy
-            enc_valid = self._encoder(idx_valid)
-            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
-            #Getting the accuracy for the main head
-            main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
-            self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+            # enc_valid = self._encoder(idx_valid)
+            # enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            # #Getting the accuracy for the main head
+            # main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
+            # self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
         elif task=="adv_rm_only_topic":
             #This could be used if we want to remove the topic adversarilly in an alternate
             #training faishon with the main task objective. So we dont need extra adv_rm_cidx
@@ -1358,21 +1412,48 @@ class SimpleNBOW(keras.Model):
             self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
 
         elif "topic" in task:
-            with tf.GradientTape() as tape:
-                #Encoding the input
-                enc_train = self._encoder(idx_train)
-                #Getting the projection first
-                enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
-                #Here we will train the topic classifier
-                topic_train_prob = self.get_topic_pred_prob(enc_proj_train,cidx)
+            if self.model_args["loss_type"]=="x_entropy":
+                with tf.GradientTape() as tape:
+                    #Encoding the input
+                    enc_train = self._encoder(idx_train)
+                    #Getting the projection first
+                    enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+                    #Here we will train the topic classifier
+                    topic_train_prob = self.get_topic_pred_prob(enc_proj_train,cidx)
 
-                #Getting the x-entropy losssss for the topic
-                topic_xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
-                topic_total_loss = topic_xentropy_loss
+                    #Getting the x-entropy losssss for the topic
+                    topic_xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
+                    topic_total_loss = topic_xentropy_loss
 
-                #Getting the regularization loss
-                regularization_loss = tf.math.add_n(self.losses)
-                topic_total_loss += regularization_loss
+                    #Getting the regularization loss
+                    regularization_loss = tf.math.add_n(self.losses)
+                    topic_total_loss += regularization_loss
+                    #Updating the xentropy loss for the topic
+                    self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
+            elif self.model_args["loss_type"]=="linear_svm":
+                '''
+                Here we will train the model using the hinge loss used in the svm setting.
+                '''
+                with tf.GradientTape() as tape:
+                    #Encoding the input will be same
+                    enc_train = self._encoder(idx_train)
+                    enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+                    #Getting non-softmaxed final projection
+                    topic_train_margin = self.get_topic_pred_prob(enc_proj_train,cidx)
+
+                    #Getting the svm_loss for this projection
+                    topic_svm_loss = self.get_max_margin_loss(
+                                                Xmargin=topic_train_margin,
+                                                label=topic_label_train
+                    )
+                    #Getting the regularization loss
+                    regularization_loss = tf.math.add_n(self.losses)
+
+                    topic_total_loss = topic_svm_loss + regularization_loss
+                    #Updating the xentropy loss for the topic
+                    self.topic_pred_xentropy_list[cidx].update_state(topic_svm_loss)
+            else:
+                raise NotImplementedError()
             
             #Get the topic classifier parameters
             if(task=="inlp_topic"):
@@ -1391,14 +1472,12 @@ class SimpleNBOW(keras.Model):
             else:
                 raise NotImplementedError()
 
-            #Updating the xentropy loss for the topic
-            self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
-
+            #We wont measure the validation loss here from now on
             #Getting the validation loss for the topic
-            enc_valid = self._encoder(idx_valid)
-            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
-            topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,cidx)
-            self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+            # enc_valid = self._encoder(idx_valid)
+            # enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            # topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,cidx)
+            # self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
         else:
             raise NotImplementedError()
 
@@ -1428,21 +1507,35 @@ class SimpleNBOW(keras.Model):
         X_latent = self._encoder(idx_valid)
         X_proj = self._get_proj_X_enc(X_latent,P_matrix)
 
-        #Getting the validation accuracy of the main task
-        #TODO: This assumes that this is the last layer of the both branches
-        main_valid_prob = self.main_task_classifier(X_proj)
-        self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+        if self.model_args["loss_type"]=="x_entropy":
+            #Getting the validation accuracy of the main task
+            #TODO: This assumes that this is the last layer of the both branches
+            main_valid_prob = self.main_task_classifier(X_proj)
+            self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
 
-        #Getting the topic validation accuracy
-        topic_valid_prob = self.topic_task_classifier_list[cidx](X_proj)
-        self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+            #Getting the topic validation accuracy
+            topic_valid_prob = self.topic_task_classifier_list[cidx](X_proj)
+            self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+        elif self.model_args["loss_type"]=="linear_svm":
+            #Getting the main task accuracy
+            main_valid_margin = self.main_task_classifier(X_proj)
+            #Getting the probability from the margin
+            main_valid_prob = self.get_max_margin_prob_vector(main_valid_margin)
+            self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
 
-        mmd_var_dict=dict(
-                        main_valid_prob = main_valid_prob,
-                        main_label = label_valid,
-                        topic_label = topic_label_valid
-        )
-        return mmd_var_dict
+            #Getting the topic accuracy
+            topic_valid_margin = self.topic_task_classifier_list[cidx](X_proj)
+            topic_valid_prob = self.get_max_margin_prob_vector(topic_valid_margin)
+            self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+        else:
+            raise NotImplementedError()
+
+        # mmd_var_dict=dict(
+        #                 main_valid_prob = main_valid_prob,
+        #                 main_label = label_valid,
+        #                 topic_label = topic_label_valid
+        # )
+        return None
     
     def valid_step_stage2_flip_topic(self,dataset_batch,P_matrix,cidx):
         '''
@@ -1473,18 +1566,37 @@ class SimpleNBOW(keras.Model):
         #Getting the latent representaiton for the flipped input
         X_latent = self._encoder(idx_valid)
         X_proj_actual = self._get_proj_X_enc(X_latent,P_matrix)
-        #Getting the validation accuracy of the main task
-        #TODO: This assumes that this is the last layer of the both branches
-        main_valid_prob_actual = self.main_task_classifier(X_proj_actual) #This is softmaxed already
 
-
-        #Getting the probability of main label form the actual input
         #Getting the latent representaiton for the flipped input
         X_latent = self._encoder(flip_idx_valid)
         X_proj_flip = self._get_proj_X_enc(X_latent,P_matrix)
+
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
-        main_valid_prob_flip = self.main_task_classifier(X_proj_flip)
+        if self.model_args["loss_type"]=="x_entorpy":
+            main_valid_prob_actual = self.main_task_classifier(X_proj_actual) #This is softmaxed already
+            main_valid_prob_flip = self.main_task_classifier(X_proj_flip)
+
+            #Getting the difference in the log prob bw the actual and pertured
+            main_valid_logprob_actual = tf.math.log(main_valid_prob_actual+self.small_epsilon)
+            main_valid_logprob_flip   = tf.math.log(main_valid_prob_flip+self.small_epsilon)
+            logprob_delta = tf.math.reduce_mean(tf.math.abs(main_valid_logprob_actual-main_valid_logprob_flip))
+            self.topic_flip_main_logprob_delta_list[cidx].update_state(logprob_delta)
+        elif self.model_args["loss_type"]=="linear_svm":
+            #Getting the actual prob
+            main_valid_margin_actual = self.main_task_classifier(X_proj_actual)
+            main_valid_prob_actual = self.get_main_task_pred_prob(main_valid_margin_actual)
+
+            #Getting the flip prob
+            main_valid_margin_flip = self.main_task_classifier(X_proj_flip)
+            main_valid_prob_actual = self.get_main_task_pred_prob(main_valid_margin_flip)
+
+            #Saving the margin delta in this logprpb delta instead
+            logprob_delta = tf.math.reduce_mean(tf.math.abs(main_valid_margin_actual-main_valid_margin_flip))
+            self.topic_flip_main_logprob_delta_list[cidx].update_state(logprob_delta)
+        else:
+            raise NotImplementedError()
+        
 
         #Getting the global probability after pertubation
         self.topic_flip_main_valid_accuracy_list[cidx].update_state(label_valid,main_valid_prob_flip)
@@ -1493,13 +1605,7 @@ class SimpleNBOW(keras.Model):
         #Now getting the difference in the probability bw actual and perturbed
         p_delta = tf.math.reduce_mean(tf.math.abs(main_valid_prob_actual-main_valid_prob_flip))
         self.topic_flip_main_prob_delta_list[cidx].update_state(p_delta)
-
-        #Getting the difference in the log prob bw the actual and pertured
-        main_valid_logprob_actual = tf.math.log(main_valid_prob_actual+self.small_epsilon)
-        main_valid_logprob_flip   = tf.math.log(main_valid_prob_flip+self.small_epsilon)
-        logprob_delta = tf.math.reduce_mean(tf.math.abs(main_valid_logprob_actual-main_valid_logprob_flip))
-        self.topic_flip_main_logprob_delta_list[cidx].update_state(logprob_delta)
-
+ 
         #Getting the chnage in the embedding after pertubation
         avg_emb_diff = tf.math.reduce_mean(tf.norm((X_proj_actual-X_proj_flip),axis=-1))
         self.topic_flip_emb_diff_list[cidx].update_state(avg_emb_diff)
@@ -2418,16 +2524,26 @@ def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier
                                         P_matrix=P_identity,
                                         cidx=tidx
                 )
+            
+            #Here we will capture the model weights for re-init later
+            classifier_main.get_all_head_init_weights()
         
+        #Updating the validation acccuracy of the model
+        for data_batch in cat_dataset:
+            for tidx in range(data_args["num_topics"]):
+                #Updating the topic accuracies and the main accuracies
+                classifier_main.valid_step_stage2(
+                                        dataset_batch=data_batch,
+                                        P_matrix=P_identity,
+                                        cidx=tidx,
+                )
+
                 #Updating the flip topic main accuracy also
                 classifier_main.valid_step_stage2_flip_topic(
                                         dataset_batch=data_batch,
                                         P_matrix=P_identity,
                                         cidx=tidx,
                 )
-            
-            #Here we will capture the model weights for re-init later
-            classifier_main.get_all_head_init_weights()
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
@@ -3332,6 +3448,7 @@ if __name__=="__main__":
     parser.add_argument('-main_model_mode',dest="main_model_mode",type=str,default=None)
     parser.add_argument('-head_retrain_mode',dest="head_retrain_mode",type=str,default=None)
     parser.add_argument('-l2_lambd',dest="l2_lambd",type=float,default=None)
+    parser.add_argument('-loss_type',dest="loss_type",type=str,default=None)
     
 
     #Arguments related to the adversarial removal
@@ -3449,6 +3566,7 @@ if __name__=="__main__":
     model_args["main_model_mode"]=args.main_model_mode
     model_args["head_retrain_mode"] = args.head_retrain_mode
     model_args["l2_lambd"]=args.l2_lambd
+    model_args["loss_type"]=args.loss_type
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
