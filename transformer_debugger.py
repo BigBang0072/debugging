@@ -972,11 +972,19 @@ class SimpleNBOW(keras.Model):
         else:
             self.hlayer_dim = self.emb_dim
         for _ in range(self.model_args["num_hidden_layer"]):
-            hlayer = layers.Dense(self.hlayer_dim,activation="relu")
+            hlayer = layers.Dense(
+                            self.hlayer_dim,
+                            activation="relu",
+                            kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
+            )
             self.hidden_layer_list.append(hlayer)
         
         #Initializing the classifier for the main task
-        self.main_task_classifier = layers.Dense(2,activation="softmax")
+        self.main_task_classifier = layers.Dense(
+                            2,
+                            activation="softmax",
+                            kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
+        )
         #Initializing some of the metrics for main task
         self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
         self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
@@ -995,7 +1003,13 @@ class SimpleNBOW(keras.Model):
         self.topic_flip_emb_diff_list = []   #Keep track of absolute change in the embedding 
         for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
-            self.topic_task_classifier_list.append(layers.Dense(2,activation="softmax"))
+            self.topic_task_classifier_list.append(
+                layers.Dense(
+                            2,
+                            activation="softmax",
+                            kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
+                )
+            )
 
             #Initializing the metrics for the topic task
             self.topic_pred_xentropy_list.append(keras.metrics.Mean(name="topic_{}_spred_x".format(tidx)))
@@ -1237,6 +1251,11 @@ class SimpleNBOW(keras.Model):
                 #Getting the cross entropy loss for this topic classifier
                 rm_topic_loss = scxentropy_loss(rm_topic_label_train,rm_topic_train_prob)
 
+                #Getting the regularization loss
+                regularization_loss = tf.math.add_n(self.losses)
+                total_loss += regularization_loss
+
+
                 #Adding to the total loss
                 total_loss += rm_topic_loss
             
@@ -1273,7 +1292,10 @@ class SimpleNBOW(keras.Model):
                 #Getting the x-entropy lossss
                 main_xentropy_loss = scxentropy_loss(label_train,main_train_prob)
 
-                total_loss = main_xentropy_loss
+                #Getting the regularization loss
+                regularization_loss = tf.math.add_n(self.losses)
+
+                total_loss = main_xentropy_loss + regularization_loss
 
             #Backpropagating
             if task=="main":
@@ -1316,6 +1338,10 @@ class SimpleNBOW(keras.Model):
                 topic_xentropy_loss = scxentropy_loss(topic_label_train,rm_topic_train_prob)
                 topic_total_loss = topic_xentropy_loss
 
+                #Getting the regularization loss
+                regularization_loss = tf.math.add_n(self.losses)
+                topic_total_loss += regularization_loss
+
             #Here will will train encoder also (to stop pulling out info in latent space)
             grads = tape.gradient(topic_total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
@@ -1342,8 +1368,11 @@ class SimpleNBOW(keras.Model):
 
                 #Getting the x-entropy losssss for the topic
                 topic_xentropy_loss = scxentropy_loss(topic_label_train,topic_train_prob)
-
                 topic_total_loss = topic_xentropy_loss
+
+                #Getting the regularization loss
+                regularization_loss = tf.math.add_n(self.losses)
+                topic_total_loss += regularization_loss
             
             #Get the topic classifier parameters
             if(task=="inlp_topic"):
@@ -3302,6 +3331,8 @@ if __name__=="__main__":
     parser.add_argument('-removal_mode',dest="removal_mode",type=str,default=None)
     parser.add_argument('-main_model_mode',dest="main_model_mode",type=str,default=None)
     parser.add_argument('-head_retrain_mode',dest="head_retrain_mode",type=str,default=None)
+    parser.add_argument('-l2_lambd',dest="l2_lambd",type=float,default=None)
+    
 
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
@@ -3417,6 +3448,7 @@ if __name__=="__main__":
     model_args["removal_mode"]=args.removal_mode
     model_args["main_model_mode"]=args.main_model_mode
     model_args["head_retrain_mode"] = args.head_retrain_mode
+    model_args["l2_lambd"]=args.l2_lambd
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
