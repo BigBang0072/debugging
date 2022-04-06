@@ -1380,37 +1380,67 @@ class SimpleNBOW(keras.Model):
         elif task=="adv_rm_only_topic":
             #This could be used if we want to remove the topic adversarilly in an alternate
             #training faishon with the main task objective. So we dont need extra adv_rm_cidx
-            with tf.GradientTape() as tape:
-                #Encoding the input
-                enc_train = self._encoder(idx_train)
-                #Getting the projection first
-                enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
-                #Adding the gradient-reversal layer on enc_proj_train
-                enc_proj_train_rev = grad_reverse(enc_proj_train)
-                #Getting prediction probability
-                rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,cidx)
-                #Getting the x-entropy losssss for the topic
-                topic_xentropy_loss = scxentropy_loss(topic_label_train,rm_topic_train_prob)
-                topic_total_loss = topic_xentropy_loss
+            if self.model_args["loss_type"]=="x_entropy":
+                with tf.GradientTape() as tape:
+                    #Encoding the input
+                    enc_train = self._encoder(idx_train)
+                    #Getting the projection first
+                    enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+                    #Adding the gradient-reversal layer on enc_proj_train
+                    enc_proj_train_rev = grad_reverse(enc_proj_train)
+                    #Getting prediction probability
+                    rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,cidx)
+                    #Getting the x-entropy losssss for the topic
+                    topic_xentropy_loss = scxentropy_loss(topic_label_train,rm_topic_train_prob)
+                    topic_total_loss = topic_xentropy_loss
 
-                #Getting the regularization loss
-                regularization_loss = tf.math.add_n(self.losses)
-                topic_total_loss += regularization_loss
+                    #Getting the regularization loss
+                    regularization_loss = tf.math.add_n(self.losses)
+                    topic_total_loss += regularization_loss
 
-            #Here will will train encoder also (to stop pulling out info in latent space)
-            grads = tape.gradient(topic_total_loss,self.trainable_weights)
-            self.optimizer.apply_gradients(
-                zip(grads,self.trainable_weights)
-            )
+                #Here will will train encoder also (to stop pulling out info in latent space)
+                grads = tape.gradient(topic_total_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
 
-            #Updating the loss for the topic
-            self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
+                #Updating the loss for the topic
+                self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
+            elif self.model_args["loss_type"]=="linear_svm":
+                with tf.GradientTape() as tape:
+                    #Encoding the input
+                    enc_train = self._encoder(idx_train)
+                    #Getting the projection first
+                    enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
+                    #Adding the gradient-reversal layer on enc_proj_train
+                    enc_proj_train_rev = grad_reverse(enc_proj_train)
+                    #Getting prediction probability
+                    rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,cidx)
+                    #Getting the svm loss
+                    topic_svm_loss = self.get_max_margin_loss(
+                                                Xmargin=topic_train_margin,
+                                                label=topic_label_train
+                    )
+                    topic_total_loss = topic_svm_loss
+
+                    #Getting the regularization loss
+                    regularization_loss = tf.math.add_n(self.losses)
+                    topic_total_loss += regularization_loss
+
+                #Here will will train encoder also (to stop pulling out info in latent space)
+                grads = tape.gradient(topic_total_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
+
+                #Updating the loss for the topic
+                self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
 
             #Now updating the validation accuracy
-            enc_valid = self._encoder(idx_valid)
-            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
-            topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,cidx)
-            self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+            # enc_valid = self._encoder(idx_valid)
+            # enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            # topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,cidx)
+            # self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
 
         elif "topic" in task:
             if self.model_args["loss_type"]=="x_entropy":
@@ -2604,10 +2634,10 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main,probe_metric_li
                                             cidx=data_args["debug_tidx"],
             )
 
+        #Getting the validation scores once the train step is complete
+        for data_batch in cat_dataset:
             #Validate the other topic so that we know the accuracy etc
             for tidx in range(data_args["num_topics"]):
-                if(tidx==data_args["debug_tidx"]):
-                    continue
                 #Getting the validation accuracy
                 classifier_main.valid_step_stage2(
                                     dataset_batch=data_batch,
