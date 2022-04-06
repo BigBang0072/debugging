@@ -1203,7 +1203,8 @@ class SimpleNBOW(keras.Model):
         This function will calculate the hinge loss from the final embeddeding 
         '''
         hinge_loss_op = tf.keras.losses.Hinge()
-        hinge_loss = hinge_loss_op(Xmargin,label)
+        label = tf.cast(label,tf.float32)
+        hinge_loss = hinge_loss_op(label,Xmargin)
         return hinge_loss
     
     def get_max_margin_prob_vector(self,Xmargin):
@@ -1214,7 +1215,7 @@ class SimpleNBOW(keras.Model):
         label1_prob = tf.math.sigmoid(Xmargin)
         label0_prob = 1-label1_prob
 
-        prob_vec = tf.stack([label0_prob,label1_prob],axis=-1)
+        prob_vec = tf.concat([label0_prob,label1_prob],axis=-1)
         return prob_vec
 
     def get_topic_pred_prob(self,X_enc,tidx):
@@ -1573,7 +1574,7 @@ class SimpleNBOW(keras.Model):
 
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
-        if self.model_args["loss_type"]=="x_entorpy":
+        if self.model_args["loss_type"]=="x_entropy":
             main_valid_prob_actual = self.main_task_classifier(X_proj_actual) #This is softmaxed already
             main_valid_prob_flip = self.main_task_classifier(X_proj_flip)
 
@@ -1585,11 +1586,11 @@ class SimpleNBOW(keras.Model):
         elif self.model_args["loss_type"]=="linear_svm":
             #Getting the actual prob
             main_valid_margin_actual = self.main_task_classifier(X_proj_actual)
-            main_valid_prob_actual = self.get_main_task_pred_prob(main_valid_margin_actual)
+            main_valid_prob_actual = self.get_max_margin_prob_vector(main_valid_margin_actual)
 
             #Getting the flip prob
             main_valid_margin_flip = self.main_task_classifier(X_proj_flip)
-            main_valid_prob_actual = self.get_main_task_pred_prob(main_valid_margin_flip)
+            main_valid_prob_flip = self.get_max_margin_prob_vector(main_valid_margin_flip)
 
             #Saving the margin delta in this logprpb delta instead
             logprob_delta = tf.math.reduce_mean(tf.math.abs(main_valid_margin_actual-main_valid_margin_flip))
