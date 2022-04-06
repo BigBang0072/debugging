@@ -734,103 +734,103 @@ mkdir nlp_logs
 
 
 #Getting variation with sample size
-for loss_type in "linear_svm"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for r in 0
-        do
-            for l2_lambd in 0.01
-            do
-                for e in 10
-                do
-                    for d in "non_causal"
-                    do
-                        for h in 1
-                        do
-                            for s in 100 500 1000
-                            do
-                                for n in 0.0
-                                do
-                                    for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                    do
-                                        python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
-                                    done
-                                done
-                            done
-                        done       
-                    done
-                done
-            done
-        done
-    done
-done
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for l2_lambd in 0.01
+#             do
+#                 for e in 10
+#                 do
+#                     for d in "non_causal"
+#                     do
+#                         for h in 1
+#                         do
+#                             for s in 100 500 1000
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
-#Getting variation with epochs
-for loss_type in "linear_svm"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for r in 0
-        do
-            for l2_lambd in 0.01
-            do
-                for e in 5 10 20
-                do
-                    for d in "non_causal"
-                    do
-                        for h in 1
-                        do
-                            for s in 500
-                            do
-                                for n in 0.0
-                                do
-                                    for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                    do
-                                        python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
-                                    done
-                                done
-                            done
-                        done       
-                    done
-                done
-            done
-        done
-    done
-done
+# #Getting variation with epochs
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for l2_lambd in 0.01
+#             do
+#                 for e in 5 10 20
+#                 do
+#                     for d in "non_causal"
+#                     do
+#                         for h in 1
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
-#Getting variation with noise
-for loss_type in "linear_svm"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for r in 0
-        do
-            for l2_lambd in 0.01
-            do
-                for e in 10
-                do
-                    for d in "non_causal"
-                    do
-                        for h in 1
-                        do
-                            for s in 500
-                            do
-                                for n in 0.0 0.025 0.05 0.1
-                                do
-                                    for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                    do
-                                        python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
-                                    done
-                                done
-                            done
-                        done       
-                    done
-                done
-            done
-        done
-    done
-done
+# #Getting variation with noise
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for l2_lambd in 0.01
+#             do
+#                 for e in 10
+#                 do
+#                     for d in "non_causal"
+#                     do
+#                         for h in 1
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0 0.025 0.05 0.1
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
 
 
@@ -964,6 +964,48 @@ done
 #         done
 #     done
 # done
+
+
+for loss_type in "linear_svm"
+do
+    for hretrain in "no_warm_encoder"
+    do
+        for run in 0
+        do
+            for l2_lambd in 0.0
+            do
+                for mainepoch in 10
+                do
+                    for mainmode in "non_causal"
+                    do
+                        for hlayer in 0
+                        do
+                            for advepoch in 10
+                            do
+                                for grstrength in 1
+                                do
+                                    for remmode in "adversarial"
+                                    do
+                                        for sample in 100 500 1000
+                                        do
+                                            for noise in 0.0
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
 
 
 
