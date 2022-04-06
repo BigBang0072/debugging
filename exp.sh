@@ -600,34 +600,238 @@ mkdir nlp_logs
 # done
 
 
-for hretrain in "no_warm_encoder"
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for l2_lambd in 0.0001 0.001 0.01 0.1 1.0 10.0
+#             do
+#                 for e in 5 10 20
+#                 do
+#                     for d in "non_causal"
+#                     do
+#                         for h in 0
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 0.005 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for l2_lambd in 0.0001 0.0002 0.0004 0.0006 0.0008 0.001
+#             do
+#                 for e in 10
+#                 do
+#                     for d in "non_causal"
+#                     do
+#                         for h in 5
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 0.005 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for l2_lambd in 0.00001 0.00002 0.00004 0.00006 0.00008 0.0001
+#             do
+#                 for e in 10
+#                 do
+#                     for d in "non_causal"
+#                     do
+#                         for h in 10
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 0.005 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+#Training the SVM
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for l2_lambd in 0.0 0.0001 0.001 0.01 0.1
+#             do
+#                 for e in 10 15 20
+#                 do
+#                     for d in "non_causal"
+#                     do
+#                         for h in 0
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+#Getting variation with sample size
+for loss_type in "linear_svm"
 do
-    for r in 0
+    for hretrain in "no_warm_encoder"
     do
-        for l2_lambd in 0.0001 0.001 0.01 0.1 1.0 10.0
+        for r in 0
         do
-            for e in 5 10 20
+            for l2_lambd in 0.01
             do
-                for d in "non_causal"
+                for e in 10
                 do
-                    for h in 0
+                    for d in "non_causal"
                     do
-                        for s in 500
+                        for h in 1
                         do
-                            for n in 0.0
+                            for s in 100 500 1000
                             do
-                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                for n in 0.0
                                 do
-                                    python transformer_debugger.py -expt_num "pt.rel.l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 0.005 -head_retrain_mode $hretrain -l2_lambd $l2_lambd
+                                    for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                    do
+                                        python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+                                    done
                                 done
                             done
-                        done
-                    done       
+                        done       
+                    done
                 done
             done
         done
     done
 done
+
+#Getting variation with epochs
+for loss_type in "linear_svm"
+do
+    for hretrain in "no_warm_encoder"
+    do
+        for r in 0
+        do
+            for l2_lambd in 0.01
+            do
+                for e in 5 10 20
+                do
+                    for d in "non_causal"
+                    do
+                        for h in 1
+                        do
+                            for s in 500
+                            do
+                                for n in 0.0
+                                do
+                                    for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                    do
+                                        python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+                                    done
+                                done
+                            done
+                        done       
+                    done
+                done
+            done
+        done
+    done
+done
+
+#Getting variation with noise
+for loss_type in "linear_svm"
+do
+    for hretrain in "no_warm_encoder"
+    do
+        for r in 0
+        do
+            for l2_lambd in 0.01
+            do
+                for e in 10
+                do
+                    for d in "non_causal"
+                    do
+                        for h in 1
+                        do
+                            for s in 500
+                            do
+                                for n in 0.0 0.025 0.05 0.1
+                                do
+                                    for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                    do
+                                        python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type
+                                    done
+                                done
+                            done
+                        done       
+                    done
+                done
+            done
+        done
+    done
+done
+
 
 
 ######################################################################################################
