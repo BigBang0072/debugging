@@ -1415,10 +1415,10 @@ class SimpleNBOW(keras.Model):
                     #Adding the gradient-reversal layer on enc_proj_train
                     enc_proj_train_rev = grad_reverse(enc_proj_train)
                     #Getting prediction probability
-                    rm_topic_train_prob = self.get_topic_pred_prob(enc_proj_train_rev,cidx)
+                    rm_topic_train_margin = self.get_topic_pred_prob(enc_proj_train_rev,cidx)
                     #Getting the svm loss
                     topic_svm_loss = self.get_max_margin_loss(
-                                                Xmargin=topic_train_margin,
+                                                Xmargin=rm_topic_train_margin,
                                                 label=topic_label_train
                     )
                     topic_total_loss = topic_svm_loss
@@ -1434,7 +1434,7 @@ class SimpleNBOW(keras.Model):
                 )
 
                 #Updating the loss for the topic
-                self.topic_pred_xentropy_list[cidx].update_state(topic_xentropy_loss)
+                self.topic_pred_xentropy_list[cidx].update_state(topic_svm_loss)
 
             #Now updating the validation accuracy
             # enc_valid = self._encoder(idx_valid)
