@@ -1777,7 +1777,7 @@ class DataHandleTransformer():
         '''
         mean_scale = 10.0
         sigma_lbound = 0.0
-        sigma_ubound = 3.0
+        sigma_ubound = self.data_args["tab_sigma_ubound"]
 
         #Creating the mean vectors for the spurious and inv dist
         mu_0 = np.random.randn(self.data_args["inv_dims"])*mean_scale

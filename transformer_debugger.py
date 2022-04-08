@@ -974,9 +974,15 @@ class SimpleNBOW(keras.Model):
         #Initialiing the hidden layer after encoding
         self.hidden_layer_list = []
         if self.model_args["num_hidden_layer"]!=0:
-            self.hlayer_dim = 50
+            if self.data_args["dtype"]=="nlp":
+                self.hlayer_dim = 50
+            elif self.data_args["dtype"]=="tabular":
+                self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
         else:
-            self.hlayer_dim = self.emb_dim
+            if self.data_args["dtype"]=="nlp":
+                self.hlayer_dim = self.emb_dim
+            elif self.data_args["dtype"]=="tabular":
+                self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
         for _ in range(self.model_args["num_hidden_layer"]):
             hlayer = layers.Dense(
                             self.hlayer_dim,
@@ -1722,7 +1728,7 @@ class SimpleNBOW(keras.Model):
             w_inv = classifier_dict["main"][0:self.data_args["inv_dims"]]
             w_sp  = classifier_dict["main"][self.data_args["inv_dims"]:]
 
-            convergence_angle["w_sp"]["w_inv"]=np.linalg.norm(w_sp)/np.linalg.norm(w_inv)
+            convergence_angle["w_sp"]["w_inv"]=float(np.linalg.norm(w_sp)/np.linalg.norm(w_inv))
 
 
         print("Convergence Angle: (in multiple of pi)")
@@ -3524,7 +3530,8 @@ if __name__=="__main__":
     parser.add_argument('-l2_lambd',dest="l2_lambd",type=float,default=None)
     parser.add_argument('-loss_type',dest="loss_type",type=str,default=None)
     parser.add_argument('-dtype',dest="dtype",type=str,default=None)
-    parser.add_argument('-inv_dims',dest="inv_dims",type=str,default=None)
+    parser.add_argument('-inv_dims',dest="inv_dims",type=int,default=None)
+    parser.add_argument('-tab_sigma_ubound',dest="tab_sigma_ubound",type=float,default=None)
 
     
 
@@ -3598,6 +3605,7 @@ if __name__=="__main__":
         data_args["dtype"]=args.dtype
         data_args["inv_dims"]=args.inv_dims
         data_args["sp_dims"]=args.inv_dims
+        data_args["tab_sigma_ubound"]=args.tab_sigma_ubound
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]
 
