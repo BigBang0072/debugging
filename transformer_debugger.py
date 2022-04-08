@@ -2720,8 +2720,6 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,probe_metric_lis
                                             classifier_main.topic_pred_xentropy_list[tidx].result(),
                                             classifier_main.topic_valid_accuracy_list[tidx].result()
                 ))
-        #Get the topic metrics aftertraining the classifier
-        topic_vacc_before = classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
 
         #Getting the classifiers angle (after this step of training)
         classifier_main.reset_all_metrics()
@@ -2740,6 +2738,8 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,probe_metric_lis
                                     P_matrix=P_W,
                                     cidx=tidx,
                 )
+        #Get the topic metrics aftertraining the classifier
+        topic_vacc_before = classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         
         #Getting the classifier information
         conv_angle_dict = classifier_main.get_angle_between_classifiers(class_idx=0)
