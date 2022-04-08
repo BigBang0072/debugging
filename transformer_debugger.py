@@ -965,7 +965,13 @@ class SimpleNBOW(keras.Model):
         self.small_epsilon = 1e-10
 
         #Now initilaizing some of the layers for encoder
-        self.nbow_avg_layer = self.get_nbow_avg_layer()
+        if self.data_args["dtype"]=="nlp":
+            self.pre_encoder_layer = self.get_nbow_avg_layer()
+        elif self.data_args["dtype"]=="tabular":
+            self.pre_encoder_layer = self.get_dummy_linear_layer()
+        else:
+            raise NotImplementedError()
+        #Initialiing the hidden layer after encoding
         self.hidden_layer_list = []
         if self.model_args["num_hidden_layer"]!=0:
             self.hlayer_dim = 50
@@ -1138,6 +1144,23 @@ class SimpleNBOW(keras.Model):
         )
 
         return nbow_avg_layer
+    
+    def get_dummy_linear_layer(self,):
+        '''
+        '''
+        class DummyLinearLayer(tf.keras.layers.Layer):
+
+            def __init__(self,):
+                super(DummyLinearLayer,self).__init__()
+            
+            def build(self,input_shape):
+                return 
+            
+            def call(self,inputs):
+                return inputs
+        
+        dummy_linear_layer = DummyLinearLayer()
+        return dummy_linear_layer
 
     def _initialize_embedding_layer(self,):
         '''
@@ -1181,7 +1204,7 @@ class SimpleNBOW(keras.Model):
         latent space for all the paths.
         '''
         #Get average embedding
-        Xproj = self.nbow_avg_layer(X_input)
+        Xproj = self.pre_encoder_layer(X_input)
         #Passing through the hidden layer
         for hlayer in self.hidden_layer_list:
             Xproj = hlayer(Xproj)
@@ -1689,7 +1712,19 @@ class SimpleNBOW(keras.Model):
                 norm2 = np.linalg.norm(w2)
 
                 angle = np.arccos(np.sum(w1*w2)/(norm1*norm2))/np.pi
-                convergence_angle[cname1][cname2]=float(angle) 
+                convergence_angle[cname1][cname2]=float(angle)
+        
+        #Getting the spurous reatio in case we have the dimensions known
+        if self.data_args["dtype"]=="tabular" and self.model_args["num_hidden_layer"]==0:
+            assert classifier_dict["main"].shape[0]==(self.data_args["inv_dims"]+self.data_args["sp_dims"])
+            assert len(classifier_dict["main"].shape)==1
+            #The first few inv dims are invariant feature
+            w_inv = classifier_dict["main"][0:self.data_args["inv_dims"]]
+            w_sp  = classifier_dict["main"][self.data_args["inv_dims"]:]
+
+            convergence_angle["w_sp"]["w_inv"]=np.linalg.norm(w_sp)/np.linalg.norm(w_inv)
+
+
         print("Convergence Angle: (in multiple of pi)")
         mypp(convergence_angle)
 
@@ -1734,7 +1769,7 @@ class SimpleNBOW(keras.Model):
             all_tidx_val.append(topic_label_valid)
 
             #Now getting the input embedding
-            input_emb = self.nbow_avg_layer(idx_valid).numpy()
+            input_emb = self.pre_encoder_layer(idx_valid).numpy()
             all_input_emb.append(input_emb)
 
             #Now getting the last latent embedding
@@ -2379,7 +2414,7 @@ def nbow_trainer_stage2(data_args,model_args):
                                         classifier_main
         )
 
-    else:
+    elif(model_args["main_model_mode"]=="non_causal"):
         #Run the training normally
         classifier_main = perform_main_classifier_training(
                                         data_args,
@@ -2405,6 +2440,8 @@ def nbow_trainer_stage2(data_args,model_args):
                 P_matrix=np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim),
                 fname=emb_savepath,
         )
+    else:
+        raise NotImplementedError()
 
     #Getting the optimal validation accuracy of main classifier
     optimal_vacc_main = classifier_main.main_valid_accuracy.result()
@@ -3480,6 +3517,9 @@ if __name__=="__main__":
     parser.add_argument('-head_retrain_mode',dest="head_retrain_mode",type=str,default=None)
     parser.add_argument('-l2_lambd',dest="l2_lambd",type=float,default=None)
     parser.add_argument('-loss_type',dest="loss_type",type=str,default=None)
+    parser.add_argument('-dtype',dest="dtype",type=str,default=None)
+    parser.add_argument('-inv_dims',dest="inv_dims",type=str,default=None)
+
     
 
     #Arguments related to the adversarial removal
@@ -3549,6 +3589,9 @@ if __name__=="__main__":
         data_args["topic_corr_list"]=[args.topic0_corr,args.topic1_corr]
         data_args["noise_ratio"]=args.noise_ratio
         data_args["main_topic"]=args.main_topic
+        data_args["dtype"]=args.dtype
+        data_args["inv_dims"]=args.inv_dims
+        data_args["sp_dims"]=args.inv_dims
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]
 

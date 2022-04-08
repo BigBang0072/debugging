@@ -275,6 +275,8 @@ class DataHandleTransformer():
         self.delimiter=",|\?|\!|-|\*| |  |;|\.|\(|\)|\n|\"|:|'|/|&|`|[|]|\{|\}|\>|\<"
         self.word_count=defaultdict(int)
         self.filter_dict=None
+
+        self.emb_model=None
     
     def _clean_the_document(self,document):
         #Splitting the document by the delimiters
@@ -837,9 +839,10 @@ class DataHandleTransformer():
         matrix size is in few GBs.
         '''
         #Loading the embedding from the gensim repo
-        print("Loading the WordVectors via Gensim! Hold Tight!")
-        emb_model = gensim_api.load(self.data_args["emb_path"])
-        self.emb_model = emb_model
+        if self.emb_model==None:
+            print("Loading the WordVectors via Gensim! Hold Tight!")
+            emb_model = gensim_api.load(self.data_args["emb_path"])
+            self.emb_model = emb_model
 
         '''
         This has everything we need already:
@@ -1733,6 +1736,152 @@ class DataHandleTransformer():
         all_index_arr_t1_flip = self._convert_text_to_widx(all_example_list_t1_flip)
         #Getting the input idx where only feature0 is present
         all_index_arr_only_t0 = self._convert_text_to_widx(all_example_list_only_t0)
+
+        
+        #Creating the dataset object
+        all_label_arr = np.array(all_label_list,np.int32)
+        self._print_label_distribution(all_label_arr)
+        #Shuffling the dataser (no need right now they are balanced)
+        #Adding noise to the labels to have non-fully predictive causal features
+        all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
+        
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    #label=all_label_arr[:,self.data_args["main_topic"]+1],
+                                    label=all_label_arr[:,0],
+                                    input_idx = all_index_arr,
+                                    input_idx_t0_flip = all_index_arr_t0_flip,
+                                    input_idx_t1_flip = all_index_arr_t1_flip,
+                                    input_idx_only_t0 = all_index_arr_only_t0,
+                                    topic_label = all_label_arr[:,1:]
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset
+    
+    def toy_tabular_dataset_handler2(self,):
+        '''
+        This function will generate the tabular data in the same firmat as the
+        toy_nlp_dataset_handler2, where we have:
+
+        y --> X1
+          --> X2
+        And  on eatch edge we have the predictive correlation probability.
+
+        The advantage of this tabular data is that, we know extaly what dimensions 
+        correspond to the the causal/invariant and the spurious feature.
+        So for the linear layer setup we can measure the w_sp/w_inv.
+        '''
+        mean_scale = 10.0
+        sigma_lbound = 0.0
+        sigma_ubound = 3.0
+
+        #Creating the mean vectors for the spurious and inv dist
+        mu_0 = np.random.randn(self.data_args["inv_dims"])*mean_scale
+        mu_1 = mu_0.copy()
+        assert self.data_args["inv_dims"]==self.data_args["sp_dims"],"Diff dims for feature"
+        #Assuming we have digonal covariance matrix
+        sigma_0 = np.random.uniform(low=sigma_lbound,
+                                    high=sigma_ubound,
+                                    size=self.data_args["inv_dims"]
+        )
+        sigma_1 = sigma_0.copy()
+
+
+        #Creating the examples
+        all_example_list = []
+        all_example_list_t0_flip = []
+        all_example_list_t1_flip = []   #These have the flipped corresponding topic
+        all_example_list_only_t0 = []   #These example have spurious feature absent
+        all_label_list= []
+        for sidx in range(self.data_args["num_sample"]):
+            pos_label_list = [1,]
+            neg_label_list = [0,]
+
+            #Creating the positive example
+            #we wont have any causal fearture now which is fully predictive
+            pos_example = []#"this is a positive template " #add feature here
+            neg_example = []#"this is a negative example "
+
+
+            #Creating the topics 1
+            tidx0 = 0
+            point_sample = np.random.uniform(0.0,1.0,1)
+            tpos_word =  mu_0     + np.random.randn(self.data_args["inv_dims"])*sigma_0
+            tneg_word = (-1*mu_0) + np.random.randn(self.data_args["inv_dims"])*sigma_0
+            if point_sample<=self.data_args["topic_corr_list"][tidx0]:
+                pos_add_topic0 = tpos_word.tolist()
+                neg_add_topic0 = tneg_word.tolist()
+
+                pos_label_list.append(1)
+                neg_label_list.append(0)
+            else:
+                neg_add_topic0 = tpos_word.tolist()
+                pos_add_topic0 = tneg_word.tolist()
+
+                pos_label_list.append(0)
+                neg_label_list.append(1)
+            
+
+            #Creating the topic 2
+            tidx1 = 1
+            #Taking a differnet sample for this topic
+            point_sample = np.random.uniform(0.0,1.0,1)
+            tpos_word =  mu_1     + np.random.randn(self.data_args["inv_dims"])*sigma_1
+            tneg_word = (-1*mu_1) + np.random.randn(self.data_args["inv_dims"])*sigma_1
+            if point_sample<=self.data_args["topic_corr_list"][tidx1]:
+                pos_add_topic1 = tpos_word.tolist()
+                neg_add_topic1 = tneg_word.tolist()
+
+                pos_label_list.append(1)
+                neg_label_list.append(0)
+            else:
+                neg_add_topic1 = tpos_word.tolist()
+                pos_add_topic1 = tneg_word.tolist()
+
+                pos_label_list.append(0)
+                neg_label_list.append(1)
+
+            
+            #Constructing the examples
+            pos_example_main = pos_example + pos_add_topic0 + pos_add_topic1 
+            neg_example_main = neg_example + neg_add_topic0 + neg_add_topic1 
+            all_example_list+=[pos_example_main,neg_example_main]
+
+            #Constructing the examples by flipping topic0
+            pos_example_t0 = pos_example + neg_add_topic0 + pos_add_topic1 
+            neg_example_t0 = neg_example + pos_add_topic0 + neg_add_topic1 
+            all_example_list_t0_flip+=[pos_example_t0,neg_example_t0]
+
+            #Constructing the examples by flipping topic1
+            pos_example_t1 = pos_example + pos_add_topic0 + neg_add_topic1 
+            neg_example_t1 = neg_example + neg_add_topic0 + pos_add_topic1 
+            all_example_list_t1_flip+=[pos_example_t1,neg_example_t1]
+
+            #Creating the example which just have a topic0
+            pos_example_only_t0 = pos_example + pos_add_topic0
+            neg_example_only_t0 = neg_example + neg_add_topic0
+            all_example_list_only_t0+=[pos_example_only_t0,neg_example_only_t0]
+
+            #Creating example with only t1
+            # pos_example_only_t1 = pos_example + pos_add_topic1
+            # neg_example_only_t1 = neg_example + neg_add_topic1
+
+            #Adding the example and lable
+            all_label_list+=[pos_label_list,neg_label_list]
+
+
+        #Converting the text example to input_idx 
+        all_index_arr = np.array(all_example_list,np.float32)
+        #Getting the input idx where feature0 is flipped (on-->off or off-->on)
+        all_index_arr_t0_flip = np.array(all_example_list_t0_flip,np.float32)
+        #Getting the input idx where feature1 is flipped (on-->off or off-->on)
+        all_index_arr_t1_flip = np.array(all_example_list_t1_flip,np.float32)
+        #Getting the input idx where only feature0 is present
+        all_index_arr_only_t0 = np.array(all_example_list_only_t0,np.float32)
 
         
         #Creating the dataset object
