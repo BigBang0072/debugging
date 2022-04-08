@@ -2360,7 +2360,10 @@ def nbow_trainer_stage2(data_args,model_args):
     if "amazon" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
     elif "nlp_toy2" in data_args["path"]:
-        cat_dataset = data_handler.toy_nlp_dataset_handler2()
+        if data_args["dtype"]=="nlp":
+            cat_dataset = data_handler.toy_nlp_dataset_handler2()
+        elif data_args["dtype"]=="tabular":
+            cat_dataset = data_handler.toy_tabular_dataset_handler2()
     elif "nlp_toy" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
     else:
@@ -2403,7 +2406,10 @@ def nbow_trainer_stage2(data_args,model_args):
         #building the dataset where the spurious feature has p=0.5
         init_t1_pval = data_handler.data_args["topic_corr_list"][-1]
         data_handler.data_args["topic_corr_list"][-1]=0.5
-        causal_cat_dataset = data_handler.toy_nlp_dataset_handler2()
+        if data_args["dtype"]=="nlp":
+            causal_cat_dataset = data_handler.toy_nlp_dataset_handler2()
+        elif data_args["dtype"]=="tabular":
+            causal_cat_dataset = data_handler.toy_tabular_dataset_handler2()
         data_handler.data_args["topic_corr_list"][-1]=init_t1_pval
 
         #Now training the main classifier on this causal dataset
