@@ -834,35 +834,79 @@ mkdir nlp_logs
 
 
 #Testing on the TABULAR data
+#We will only test in h=0 here since only here the spurious and causal make sense
+# for dtype in "tabular"
+# do
+#     for inv_dims in 1 10 100
+#     do
+#         for loss_type in "linear_svm"
+#         do
+#             for hretrain in "no_warm_encoder"
+#             do
+#                 for r in 0
+#                 do
+#                     for l2_lambd in 0.0 0.00001 0.0001 0.001 0.01 0.1
+#                     do
+#                         for e in 15
+#                         do
+#                             for d in "non_causal"
+#                             do
+#                                 for h in 0
+#                                 do
+#                                     for s in 500 1000
+#                                     do
+#                                         for n in 0.0
+#                                         do
+#                                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                             do
+#                                                 python transformer_debugger.py -expt_num "pt.rel.dtype($dtype).invdims($inv_dims).lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dtype $dtype -inv_dims $inv_dims
+#                                             done
+#                                         done
+#                                     done
+#                                 done       
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+#Varying the number of epoch
 for dtype in "tabular"
 do
-    for inv_dims in 1 10 100
+    for tab_sigma_ubound in 0.1
     do
-        for loss_type in "linear_svm"
+        for inv_dims in 1 10 100
         do
-            for hretrain in "no_warm_encoder"
+            for loss_type in "linear_svm"
             do
-                for r in 0
+                for hretrain in "no_warm_encoder"
                 do
-                    for l2_lambd in 0.0 0.00001 0.0001 0.001 0.01 0.1
+                    for r in 0
                     do
-                        for e in 15
+                        for l2_lambd in 0.1
                         do
-                            for d in "non_causal"
+                            for e in 10 15 20
                             do
-                                for h in 0
+                                for d in "non_causal"
                                 do
-                                    for s in 500 1000
+                                    for h in 0
                                     do
-                                        for n in 0.0
+                                        for s in 500
                                         do
-                                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                            for n in 0.0
                                             do
-                                                python transformer_debugger.py -expt_num "pt.rel.dtype($dtype).invdims($inv_dims).lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dtype $dtype -inv_dims $inv_dims
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.sigma_ubound($tab_sigma_ubound).dtype($dtype).invdims($inv_dims).lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dtype $dtype -inv_dims $inv_dims -tab_sigma_ubound $tab_sigma_ubound
+                                                done
                                             done
                                         done
-                                    done
-                                done       
+                                    done       
+                                done
                             done
                         done
                     done
@@ -871,6 +915,139 @@ do
         done
     done
 done
+
+
+#Varying the lambda to higher value
+for dtype in "tabular"
+do
+    for tab_sigma_ubound in 0.1
+    do
+        for inv_dims in 1 10 100
+        do
+            for loss_type in "linear_svm"
+            do
+                for hretrain in "no_warm_encoder"
+                do
+                    for r in 0
+                    do
+                        for l2_lambd in 0.01 0.1 1.0 10.0 50.0
+                        do
+                            for e in 15
+                            do
+                                for d in "non_causal"
+                                do
+                                    for h in 0
+                                    do
+                                        for s in 500
+                                        do
+                                            for n in 0.0
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.sigma_ubound($tab_sigma_ubound).dtype($dtype).invdims($inv_dims).lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dtype $dtype -inv_dims $inv_dims -tab_sigma_ubound $tab_sigma_ubound
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
+
+#Varying the noise level
+for dtype in "tabular"
+do
+    for tab_sigma_ubound in 0.1
+    do
+        for inv_dims in 1 10 100
+        do
+            for loss_type in "linear_svm"
+            do
+                for hretrain in "no_warm_encoder"
+                do
+                    for r in 0
+                    do
+                        for l2_lambd in 0.1
+                        do
+                            for e in 15
+                            do
+                                for d in "non_causal"
+                                do
+                                    for h in 0
+                                    do
+                                        for s in 500
+                                        do
+                                            for n in 0.0 0.025 0.05 0.1
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.sigma_ubound($tab_sigma_ubound).dtype($dtype).invdims($inv_dims).lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dtype $dtype -inv_dims $inv_dims -tab_sigma_ubound $tab_sigma_ubound
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
+
+
+
+#Getting the sigma ubound
+for dtype in "tabular"
+do
+    for tab_sigma_ubound in 0.01 0.1 1.0 1.5
+    do
+        for inv_dims in 1 10 100
+        do
+            for loss_type in "linear_svm"
+            do
+                for hretrain in "no_warm_encoder"
+                do
+                    for r in 0
+                    do
+                        for l2_lambd in 0.1
+                        do
+                            for e in 15
+                            do
+                                for d in "non_causal"
+                                do
+                                    for h in 0
+                                    do
+                                        for s in 500
+                                        do
+                                            for n in 0.0
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.sigma_ubound($tab_sigma_ubound).dtype($dtype).invdims($inv_dims).lt($loss_type).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dtype $dtype -inv_dims $inv_dims -tab_sigma_ubound $tab_sigma_ubound
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
+
+
+
+
 
 
 ######################################################################################################
