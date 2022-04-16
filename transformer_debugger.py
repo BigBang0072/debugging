@@ -973,6 +973,7 @@ class SimpleNBOW(keras.Model):
             raise NotImplementedError()
         #Initialiing the hidden layer after encoding
         self.hidden_layer_list = []
+        self.dropout_layer_list = []
         if self.model_args["num_hidden_layer"]!=0:
             if self.data_args["dtype"]=="nlp":
                 self.hlayer_dim = 50
@@ -984,12 +985,20 @@ class SimpleNBOW(keras.Model):
             elif self.data_args["dtype"]=="tabular":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
         for _ in range(self.model_args["num_hidden_layer"]):
+            #Getting the dense hidden layer
             hlayer = layers.Dense(
                             self.hlayer_dim,
                             activation="relu",
                             kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
             )
             self.hidden_layer_list.append(hlayer)
+
+            #Getting the dropout layer (to be applied after hidden layer)
+            dlayer = layers.Dropout(
+                            self.model_args["dropout_rate"],
+                            input_shape=(self.hlayer_dim,),
+            )
+            self.dropout_layer_list.append(dlayer)
         
         self.last_layer_activation=None
         self.last_layer_dim = None
@@ -1204,7 +1213,7 @@ class SimpleNBOW(keras.Model):
 
         return embedding_layer,embedding_weight_layer
 
-    def _encoder(self,X_input):
+    def _encoder(self,X_input,training=None):
         '''
         This function will be responsible to encode the input to the 
         latent space for all the paths.
@@ -1212,8 +1221,11 @@ class SimpleNBOW(keras.Model):
         #Get average embedding
         Xproj = self.pre_encoder_layer(X_input)
         #Passing through the hidden layer
-        for hlayer in self.hidden_layer_list:
+        for hlayer,dlayer in zip(self.hidden_layer_list,self.dropout_layer_list):
+            #Passing through the hidden layer
             Xproj = hlayer(Xproj)
+            #Passing through the dropout layer
+            Xproj = dlayer(Xproj,training=training)
         
         return Xproj
 
@@ -1294,7 +1306,7 @@ class SimpleNBOW(keras.Model):
             #from the latent space by the adversarial method
             with tf.GradientTape() as tape:
                 #Encoding the input
-                enc_train = self._encoder(idx_train)
+                enc_train = self._encoder(idx_train,training=True)
                 #Getting the projection (I for main full traning)
                 enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
 
@@ -1331,20 +1343,20 @@ class SimpleNBOW(keras.Model):
             )
 
             #Getting the validation accuracy for the removal topic
-            enc_valid = self._encoder(idx_valid)
-            enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
-            #Getting the accuracy for the main head
-            main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
-            self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
-            #Getting the accuracy for the topic which we want to remove
-            rm_topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,adv_rm_tidx)
-            self.topic_valid_accuracy_list[adv_rm_tidx].update_state(rm_topic_label_valid,rm_topic_valid_prob)
+            # enc_valid = self._encoder(idx_valid,training=False)
+            # enc_proj_valid = self._get_proj_X_enc(enc_valid,P_matrix)
+            # #Getting the accuracy for the main head
+            # main_valid_prob = self.get_main_task_pred_prob(enc_proj_valid)
+            # self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+            # #Getting the accuracy for the topic which we want to remove
+            # rm_topic_valid_prob = self.get_topic_pred_prob(enc_proj_valid,adv_rm_tidx)
+            # self.topic_valid_accuracy_list[adv_rm_tidx].update_state(rm_topic_label_valid,rm_topic_valid_prob)
         elif "main" in task:
             #Training the main task
             if self.model_args["loss_type"]=="x_entropy":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train)
+                    enc_train = self._encoder(idx_train,training=True)
                     #Getting the projection (I for main full traning)
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Get the prediction probability
@@ -1366,7 +1378,7 @@ class SimpleNBOW(keras.Model):
                 '''
                 with tf.GradientTape() as tape:
                     #Encoding the input will be same
-                    enc_train = self._encoder(idx_train)
+                    enc_train = self._encoder(idx_train,training=True)
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Getting non-softmaxed final projection
                     main_train_margin = self.get_main_task_pred_prob(enc_proj_train)
@@ -1412,7 +1424,7 @@ class SimpleNBOW(keras.Model):
             if self.model_args["loss_type"]=="x_entropy":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train)
+                    enc_train = self._encoder(idx_train,training=True)
                     #Getting the projection first
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Adding the gradient-reversal layer on enc_proj_train
@@ -1438,7 +1450,7 @@ class SimpleNBOW(keras.Model):
             elif self.model_args["loss_type"]=="linear_svm":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train)
+                    enc_train = self._encoder(idx_train,training=True)
                     #Getting the projection first
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Adding the gradient-reversal layer on enc_proj_train
@@ -1475,7 +1487,7 @@ class SimpleNBOW(keras.Model):
             if self.model_args["loss_type"]=="x_entropy":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train)
+                    enc_train = self._encoder(idx_train,training=True)
                     #Getting the projection first
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Here we will train the topic classifier
@@ -1496,7 +1508,7 @@ class SimpleNBOW(keras.Model):
                 '''
                 with tf.GradientTape() as tape:
                     #Encoding the input will be same
-                    enc_train = self._encoder(idx_train)
+                    enc_train = self._encoder(idx_train,training=True)
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Getting non-softmaxed final projection
                     topic_train_margin = self.get_topic_pred_prob(enc_proj_train,cidx)
@@ -1564,7 +1576,7 @@ class SimpleNBOW(keras.Model):
 
 
         #Getting the latent representaiton for the input
-        X_latent = self._encoder(idx_valid)
+        X_latent = self._encoder(idx_valid,training=False)
         X_proj = self._get_proj_X_enc(X_latent,P_matrix)
 
         if self.model_args["loss_type"]=="x_entropy":
@@ -1624,11 +1636,11 @@ class SimpleNBOW(keras.Model):
 
         #Getting the probability of main label form the actual input
         #Getting the latent representaiton for the flipped input
-        X_latent = self._encoder(idx_valid)
+        X_latent = self._encoder(idx_valid,training=False)
         X_proj_actual = self._get_proj_X_enc(X_latent,P_matrix)
 
         #Getting the latent representaiton for the flipped input
-        X_latent = self._encoder(flip_idx_valid)
+        X_latent = self._encoder(flip_idx_valid,training=False)
         X_proj_flip = self._get_proj_X_enc(X_latent,P_matrix)
 
         #Getting the validation accuracy of the main task
@@ -1779,7 +1791,7 @@ class SimpleNBOW(keras.Model):
             all_input_emb.append(input_emb)
 
             #Now getting the last latent embedding
-            X_latent = self._encoder(idx_valid)
+            X_latent = self._encoder(idx_valid,training=False)
             X_proj = self._get_proj_X_enc(X_latent,P_matrix).numpy()
             all_latent_emb.append(X_proj)
         
@@ -3532,6 +3544,7 @@ if __name__=="__main__":
     parser.add_argument('-dtype',dest="dtype",type=str,default=None)
     parser.add_argument('-inv_dims',dest="inv_dims",type=int,default=None)
     parser.add_argument('-tab_sigma_ubound',dest="tab_sigma_ubound",type=float,default=None)
+    parser.add_argument('-dropout_rate',dest="dropout_rate",type=float,default=None)
 
     
 
@@ -3655,6 +3668,7 @@ if __name__=="__main__":
     model_args["head_retrain_mode"] = args.head_retrain_mode
     model_args["l2_lambd"]=args.l2_lambd
     model_args["loss_type"]=args.loss_type
+    model_args["dropout_rate"]=args.dropout_rate
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
