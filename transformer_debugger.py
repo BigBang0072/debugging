@@ -964,13 +964,21 @@ class SimpleNBOW(keras.Model):
         self.init_weights = defaultdict()
         self.small_epsilon = 1e-10
 
+
+
         #Now initilaizing some of the layers for encoder
         if self.data_args["dtype"]=="nlp":
             self.pre_encoder_layer = self.get_nbow_avg_layer()
         elif self.data_args["dtype"]=="tabular":
             self.pre_encoder_layer = self.get_dummy_linear_layer()
+        elif self.model_args["bert_as_encoder"]==True:
+            #Getting the "pre-encoder" layer
+            self.pre_encoder_layer = self.get_bert_encoder_layer()
         else:
             raise NotImplementedError()
+        
+
+
         #Initialiing the hidden layer after encoding
         self.hidden_layer_list = []
         self.dropout_layer_list = []
@@ -980,10 +988,13 @@ class SimpleNBOW(keras.Model):
             elif self.data_args["dtype"]=="tabular":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
         else:
-            if self.data_args["dtype"]=="nlp":
+            if self.model_args["bert_as_encoder"]==True:
+                self.hlayer_dim = self.model_args["bemb_dim"]
+            elif self.data_args["dtype"]=="nlp":
                 self.hlayer_dim = self.emb_dim
             elif self.data_args["dtype"]=="tabular":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
+        
         for _ in range(self.model_args["num_hidden_layer"]):
             #Getting the dense hidden layer
             hlayer = layers.Dense(
@@ -1117,10 +1128,11 @@ class SimpleNBOW(keras.Model):
                 self.unk_widx = unk_widx
                 self.normalize_emb = normalize_emb
 
-            def call(self,X_input):
+            def call(self,X_input,input_mask):
                 '''
                 X_inputs: This is the word --> idx 
                 X_emb   : This is the idx --> emb vectors
+                input_mask : not used. Put here for unoformity across pre-encoder
                 '''
                 #Creating our own mask and get number of non zero
                 non_unk_mask=tf.cast(
@@ -1160,23 +1172,6 @@ class SimpleNBOW(keras.Model):
 
         return nbow_avg_layer
     
-    def get_dummy_linear_layer(self,):
-        '''
-        '''
-        class DummyLinearLayer(tf.keras.layers.Layer):
-
-            def __init__(self,):
-                super(DummyLinearLayer,self).__init__()
-            
-            def build(self,input_shape):
-                return 
-            
-            def call(self,inputs):
-                return inputs
-        
-        dummy_linear_layer = DummyLinearLayer()
-        return dummy_linear_layer
-
     def _initialize_embedding_layer(self,):
         '''
         '''
@@ -1212,14 +1207,65 @@ class SimpleNBOW(keras.Model):
         embedding_weight_layer.set_weights([emb_weight_matrix])
 
         return embedding_layer,embedding_weight_layer
+    
+    def get_dummy_linear_layer(self,):
+        '''
+        '''
+        class DummyLinearLayer(tf.keras.layers.Layer):
 
-    def _encoder(self,X_input,training=None):
+            def __init__(self,):
+                super(DummyLinearLayer,self).__init__()
+            
+            def build(self,input_shape):
+                return 
+            
+            def call(self,inputs,input_mask):
+                return inputs
+        
+        dummy_linear_layer = DummyLinearLayer()
+        return dummy_linear_layer
+
+    def get_bert_encoder_layer(self,):
+        '''
+        This will initiale the BERT model as a layer which couild be used to enode the data
+        '''
+        class BERTLayer(tf.keras.layers.Layer):
+            def __init__(self,model_args):
+                super(BERTLayer,self).__init__()
+                #Initializing the BERT model as required
+                if "distil" in data_args["transformer_name"]:
+                        self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
+                else:
+                    self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
+                
+                #Do we want to train the full BERT or not
+                if model_args["train_bert"]==False:
+                    for layer in self.bert_model.layers:
+                        layer.trainable = False
+            
+            def build(self,input_shape):
+                return
+            
+            def call(self,input_idx,attn_mask):
+                #Getting the bert activation
+                bert_outputs=self.bert_model(
+                                        input_ids=input_idx,
+                                        attention_mask=attn_mask
+                )
+                cls_output = bert_outputs.pooler_output
+                return cls_output
+
+        #Creating the BERT Layer and returning it
+        bert_layer = BERTLayer(self.model_args)
+        return bert_layer
+
+    def _encoder(self,X_input,attn_mask=None,training=None):
         '''
         This function will be responsible to encode the input to the 
         latent space for all the paths.
         '''
         #Get average embedding
-        Xproj = self.pre_encoder_layer(X_input)
+        Xproj = self.pre_encoder_layer(X_input,attn_mask)
         #Passing through the hidden layer
         for hlayer,dlayer in zip(self.hidden_layer_list,self.dropout_layer_list):
             #Passing through the hidden layer
@@ -1290,13 +1336,12 @@ class SimpleNBOW(keras.Model):
         topic_label_train = topic_label[0:valid_idx,cidx]
         if adv_rm_tidx!=None:
             rm_topic_label_train = topic_label[0:valid_idx,adv_rm_tidx]
+        
+        #Getting the attention mask if we are training the BERT
+        attn_mask_train=None
+        if self.model_args["bert_as_encoder"]==True:
+            attn_mask_train = dataset_batch["attn_mask"][0:valid_idx]
 
-        #Getting the validation data
-        label_valid = label[valid_idx:]
-        idx_valid = idx[valid_idx:]
-        topic_label_valid = topic_label[valid_idx:,cidx]
-        if adv_rm_tidx!=None:
-            rm_topic_label_valid = topic_label[valid_idx:,adv_rm_tidx]
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
@@ -1306,7 +1351,7 @@ class SimpleNBOW(keras.Model):
             #from the latent space by the adversarial method
             with tf.GradientTape() as tape:
                 #Encoding the input
-                enc_train = self._encoder(idx_train,training=True)
+                enc_train = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                 #Getting the projection (I for main full traning)
                 enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
 
@@ -1356,7 +1401,7 @@ class SimpleNBOW(keras.Model):
             if self.model_args["loss_type"]=="x_entropy":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train,training=True)
+                    enc_train = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                     #Getting the projection (I for main full traning)
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Get the prediction probability
@@ -1378,7 +1423,7 @@ class SimpleNBOW(keras.Model):
                 '''
                 with tf.GradientTape() as tape:
                     #Encoding the input will be same
-                    enc_train = self._encoder(idx_train,training=True)
+                    enc_train = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Getting non-softmaxed final projection
                     main_train_margin = self.get_main_task_pred_prob(enc_proj_train)
@@ -1424,7 +1469,7 @@ class SimpleNBOW(keras.Model):
             if self.model_args["loss_type"]=="x_entropy":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train,training=True)
+                    enc_train = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                     #Getting the projection first
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Adding the gradient-reversal layer on enc_proj_train
@@ -1450,7 +1495,7 @@ class SimpleNBOW(keras.Model):
             elif self.model_args["loss_type"]=="linear_svm":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train,training=True)
+                    enc_train = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                     #Getting the projection first
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Adding the gradient-reversal layer on enc_proj_train
@@ -1487,7 +1532,7 @@ class SimpleNBOW(keras.Model):
             if self.model_args["loss_type"]=="x_entropy":
                 with tf.GradientTape() as tape:
                     #Encoding the input
-                    enc_train = self._encoder(idx_train,training=True)
+                    enc_train = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                     #Getting the projection first
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Here we will train the topic classifier
@@ -1508,7 +1553,7 @@ class SimpleNBOW(keras.Model):
                 '''
                 with tf.GradientTape() as tape:
                     #Encoding the input will be same
-                    enc_train = self._encoder(idx_train,training=True)
+                    enc_train = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                     enc_proj_train = self._get_proj_X_enc(enc_train,P_matrix)
                     #Getting non-softmaxed final projection
                     topic_train_margin = self.get_topic_pred_prob(enc_proj_train,cidx)
@@ -1573,10 +1618,15 @@ class SimpleNBOW(keras.Model):
         #Skipping if we dont have enough samples
         if(idx_valid.shape[0]==0):
             return
+        
+        #Getting the attention mask if we are validating the BERT
+        attn_mask_valid=None
+        if self.model_args["bert_as_encoder"]==True:
+            attn_mask_valid = dataset_batch["attn_mask"][valid_idx:]
 
 
         #Getting the latent representaiton for the input
-        X_latent = self._encoder(idx_valid,training=False)
+        X_latent = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False)
         X_proj = self._get_proj_X_enc(X_latent,P_matrix)
 
         if self.model_args["loss_type"]=="x_entropy":
@@ -1633,14 +1683,19 @@ class SimpleNBOW(keras.Model):
         if(idx_valid.shape[0]==0):
             return
 
+        #Getting the attention mask if we are validating the BERT
+        attn_mask_valid=None
+        if self.model_args["bert_as_encoder"]==True:
+            attn_mask_valid = dataset_batch["attn_mask"][valid_idx:]
+
 
         #Getting the probability of main label form the actual input
         #Getting the latent representaiton for the flipped input
-        X_latent = self._encoder(idx_valid,training=False)
+        X_latent = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False)
         X_proj_actual = self._get_proj_X_enc(X_latent,P_matrix)
 
         #Getting the latent representaiton for the flipped input
-        X_latent = self._encoder(flip_idx_valid,training=False)
+        X_latent = self._encoder(flip_idx_valid,attn_mask=attn_mask_valid,training=False)
         X_proj_flip = self._get_proj_X_enc(X_latent,P_matrix)
 
         #Getting the validation accuracy of the main task
@@ -1781,17 +1836,20 @@ class SimpleNBOW(keras.Model):
             idx_valid = idx[valid_idx:]
             if(idx_valid.shape[0]==0):
                 continue
+            attn_mask_valid=None
+            if self.model_args["bert_as_encoder"]==True:
+                attn_mask_valid = data_batch["attn_mask"][valid_idx:]
 
             #Getting the topic index
             topic_label_valid = topic_label[valid_idx:,:].numpy()
             all_tidx_val.append(topic_label_valid)
 
             #Now getting the input embedding
-            input_emb = self.pre_encoder_layer(idx_valid).numpy()
+            input_emb = self.pre_encoder_layer(idx_valid,attn_mask_valid).numpy()
             all_input_emb.append(input_emb)
 
             #Now getting the last latent embedding
-            X_latent = self._encoder(idx_valid,training=False)
+            X_latent = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False)
             X_proj = self._get_proj_X_enc(X_latent,P_matrix).numpy()
             all_latent_emb.append(X_proj)
         
@@ -2458,12 +2516,13 @@ def nbow_trainer_stage2(data_args,model_args):
             )
         
         #Saving the embedding for visaulization
-        emb_savepath = "nlp_logs/{}/".format(data_args["expt_name"])
-        classifier_main.save_data_for_embedding_proj(
-                cat_dataset=cat_dataset,
-                P_matrix=np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim),
-                fname=emb_savepath,
-        )
+        if data_args["save_emb"]==True:
+            emb_savepath = "nlp_logs/{}/".format(data_args["expt_name"])
+            classifier_main.save_data_for_embedding_proj(
+                    cat_dataset=cat_dataset,
+                    P_matrix=np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim),
+                    fname=emb_savepath,
+            )
     else:
         raise NotImplementedError()
 
@@ -2549,13 +2608,13 @@ def perform_head_classifier_training(data_args,model_args,cat_dataset,classifier
                                         P_matrix=P_identity,
                                         cidx=tidx
                 )
-        
-                #Updating the flip topic main accuracy also
-                classifier_main.valid_step_stage2_flip_topic(
-                                        dataset_batch=data_batch,
-                                        P_matrix=P_identity,
-                                        cidx=tidx,
-                )
+                if model_args["bert_as_encoder"]==False:
+                    #Updating the flip topic main accuracy also
+                    classifier_main.valid_step_stage2_flip_topic(
+                                            dataset_batch=data_batch,
+                                            P_matrix=P_identity,
+                                            cidx=tidx,
+                    )
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
@@ -2630,12 +2689,13 @@ def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier
                                         cidx=tidx,
                 )
 
-                #Updating the flip topic main accuracy also
-                classifier_main.valid_step_stage2_flip_topic(
-                                        dataset_batch=data_batch,
-                                        P_matrix=P_identity,
-                                        cidx=tidx,
-                )
+                if model_args["bert_as_encoder"]==False:
+                    #Updating the flip topic main accuracy also
+                    classifier_main.valid_step_stage2_flip_topic(
+                                            dataset_batch=data_batch,
+                                            P_matrix=P_identity,
+                                            cidx=tidx,
+                    )
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
@@ -3545,6 +3605,7 @@ if __name__=="__main__":
     parser.add_argument('-inv_dims',dest="inv_dims",type=int,default=None)
     parser.add_argument('-tab_sigma_ubound',dest="tab_sigma_ubound",type=float,default=None)
     parser.add_argument('-dropout_rate',dest="dropout_rate",type=float,default=None)
+    parser.add_argument('--save_emb',default=False,action="store_true")
 
     
 
@@ -3586,6 +3647,7 @@ if __name__=="__main__":
     parser.add_argument("-gate_weight_epoch",dest="gate_weight_epoch",type=int,default=None)
     parser.add_argument("-gate_var_cutoff",dest="gate_var_cutoff",type=str)
 
+    parser.add_argument('--bert_as_encoder',default=False,action="store_true")
     parser.add_argument('--train_bert',default=False,action="store_true")
     parser.add_argument('--cached_bemb',default=False,action="store_true")
 
@@ -3634,6 +3696,7 @@ if __name__=="__main__":
     data_args["vocab_path"]=args.vocab_path
     data_args["num_neigh"]=args.num_neigh
     # data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
+    data_args["save_emb"]=args.save_emb
 
     #Defining the Model args
     model_args={}
@@ -3647,7 +3710,10 @@ if __name__=="__main__":
     model_args["valid_split"]=0.2
     model_args["train_bert"]=args.train_bert
     model_args["cached_bemb"]=args.cached_bemb
-    model_args["bemb_dim"] = 768 if args.stage==2 else len(data_args["topic_list"]) #The dimension of bert produced last layer
+    if args.bert_as_encoder==True:
+        model_args["bemb_dim"] = 768
+    else:
+        model_args["bemb_dim"] = 768 if args.stage==2 else len(data_args["topic_list"]) #The dimension of bert produced last layer
     model_args["hlayer_dim"]=args.hlayer_dim
     model_args["temb_dim"] = args.temb_dim
     model_args["normalize_temb"] = args.normalize_temb
@@ -3658,6 +3724,7 @@ if __name__=="__main__":
     model_args["reverse_grad"]=args.reverse_grad
     model_args["rev_grad_strength"]=args.rev_grad_strength
     model_args["train_emb"]=args.train_emb
+    model_args["bert_as_encoder"]=args.bert_as_encoder
     model_args["normalize_emb"]=args.normalize_emb
     model_args["num_hidden_layer"] = args.num_hidden_layer
     model_args["num_proj_iter"]=args.num_proj_iter
