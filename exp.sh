@@ -731,6 +731,291 @@ mkdir nlp_logs
 #     done
 # done
 
+# Training the dropout -regularized x-entropy loss
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for dropout_rate in 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+#             do
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 15
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for h in 0 1 5 10
+#                             do
+#                                 for s in 500
+#                                 do
+#                                     for n in 0.0
+#                                     do
+#                                         for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                         do
+#                                             python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                         done
+#                                     done
+#                                 done
+#                             done       
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+#Variation with sample
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for hANDdr in 1,0.9 5,0.6 10,0.4
+#             do
+#                 IFS=',' read h dropout_rate <<< "${hANDdr}"
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 15
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for s in 100 500 1000
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+# #Variation with epochs
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for hANDdr in 1,0.9 5,0.6 10,0.4
+#             do
+#                 IFS=',' read h dropout_rate <<< "${hANDdr}"
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 10 15 20
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+# #Variaiton with noise
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for hANDdr in 1,0.9 5,0.6 10,0.4
+#             do
+#                 IFS=',' read h dropout_rate <<< "${hANDdr}"
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 15
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0 0.025 0.05 0.1
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+# #Training the dropout regularization with max-margin
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for dropout_rate in 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+#             do
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 15
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for h in 1 5 10
+#                             do
+#                                 for s in 500
+#                                 do
+#                                     for n in 0.0
+#                                     do
+#                                         for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                         do
+#                                             python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                         done
+#                                     done
+#                                 done
+#                             done       
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+
+#Variation with sample size
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for hANDdr in 1,0.9 5,0.6 10,0.4
+#             do
+#                 IFS=',' read h dropout_rate <<< "${hANDdr}"
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 15
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for s in 100 500 1000
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+
+
+
+# #Variation with epochs
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for hANDdr in 1,0.9 5,0.6 10,0.4
+#             do
+#                 IFS=',' read h dropout_rate <<< "${hANDdr}"
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 10 15 20
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+
+
+# #Variaiton with noise
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for r in 0
+#         do
+#             for hANDdr in 1,0.9 5,0.6 10,0.4
+#             do
+#                 IFS=',' read h dropout_rate <<< "${hANDdr}"
+#                 for l2_lambd in 0.0
+#                 do
+#                     for e in 15
+#                     do
+#                         for d in "non_causal"
+#                         do
+#                             for s in 500
+#                             do
+#                                 for n in 0.0 0.025 0.05 0.1
+#                                 do
+#                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                     do
+#                                         python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 2 -num_epochs $e -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp"
+#                                     done
+#                                 done
+#                             done
+#                         done       
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
 
 
 # for both svm and x_entropy we get the same lambda for f=diff layer
@@ -1719,7 +2004,97 @@ mkdir nlp_logs
 
 
 #VArying the main epoch
-for loss_type in "linear_svm"
+# for loss_type in "linear_svm"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for run in 0
+#         do
+#             for noise in 0.0
+#             do
+#                 for sample in 500
+#                 do
+#                     for hANDl2 in 0,0.01 1,0.01 2,0.001 4,0.001
+#                     do
+#                         IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
+#                         for mainepoch in 1 10 20
+#                         do
+#                             for mainmode in "non_causal"
+#                             do
+#                                 for advepoch in 20
+#                                 do
+#                                     for grstrength in 1
+#                                     do
+#                                         for remmode in "adversarial"
+#                                         do
+#                                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                             do
+#                                                 python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
+#                                             done
+#                                         done
+#                                     done       
+#                                 done
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+#Choose the correct lambda and then test the sample,epoch effect.
+#But is it correct to do the selection of lanmda which is most hurtful?
+
+
+
+#Starting the cross entorpy based adversarial removal but with regularization
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for run in 0
+#         do
+#             for noise in 0.0
+#             do
+#                 for sample in 500
+#                 do
+#                     for l2_lambd in 0.0
+#                     do
+#                         for dropout_rate in 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+#                         do
+#                             for mainepoch in 1
+#                             do
+#                                 for mainmode in "non_causal"
+#                                 do
+#                                     for hlayer in 0 1 2 4
+#                                     do
+#                                         for advepoch in 20
+#                                         do
+#                                             for grstrength in 1
+#                                             do
+#                                                 for remmode in "adversarial"
+#                                                 do
+#                                                     for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                                     do
+#                                                         python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp" -dropout_rate $dropout_rate
+#                                                     done
+#                                                 done
+#                                             done
+#                                         done       
+#                                     done
+#                                 done
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
+
+#Varying the sample size
+for loss_type in "x_entropy"
 do
     for hretrain in "no_warm_encoder"
     do
@@ -1727,24 +2102,27 @@ do
         do
             for noise in 0.0
             do
-                for sample in 500
+                for sample in 100 500 1000
                 do
-                    for hANDl2 in 0,0.01 1,0.01 2,0.001 4,0.001
+                    for l2_lambd in 0.0
                     do
-                        IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
-                        for mainepoch in 1 10 20
+                        for hANDdrate in 1,0.9 2,0.8 4,0.7
                         do
-                            for mainmode in "non_causal"
+                            IFS=',' read hlayer dropout_rate <<< "${hANDdrate}"
+                            for mainepoch in 1
                             do
-                                for advepoch in 20
+                                for mainmode in "non_causal"
                                 do
-                                    for grstrength in 1
+                                    for advepoch in 20
                                     do
-                                        for remmode in "adversarial"
+                                        for grstrength in 1
                                         do
-                                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                            for remmode in "adversarial"
                                             do
-                                                python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp" -dropout_rate $dropout_rate
+                                                done
                                             done
                                         done
                                     done       
@@ -1758,8 +2136,181 @@ do
     done
 done
 
-#Choose the correct lambda and then test the sample,epoch effect.
-#But is it correct to do the selection of lanmda which is most hurtful?
+
+#Varying the removal epochs
+for loss_type in "x_entropy"
+do
+    for hretrain in "no_warm_encoder"
+    do
+        for run in 0
+        do
+            for noise in 0.0
+            do
+                for sample in 500
+                do
+                    for l2_lambd in 0.0
+                    do
+                        for hANDdrate in 1,0.9 2,0.8 4,0.7
+                        do
+                            IFS=',' read hlayer dropout_rate <<< "${hANDdrate}"
+                            for mainepoch in 1
+                            do
+                                for mainmode in "non_causal"
+                                do
+                                    for advepoch in 5 10 20
+                                    do
+                                        for grstrength in 1
+                                        do
+                                            for remmode in "adversarial"
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp" -dropout_rate $dropout_rate
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
+
+
+#Varying the noise ratio
+for loss_type in "x_entropy"
+do
+    for hretrain in "no_warm_encoder"
+    do
+        for run in 0
+        do
+            for noise in 0.0 0.025 0.05 0.1
+            do
+                for sample in 500
+                do
+                    for l2_lambd in 0.0
+                    do
+                        for hANDdrate in 1,0.9 2,0.8 4,0.7
+                        do
+                            IFS=',' read hlayer dropout_rate <<< "${hANDdrate}"
+                            for mainepoch in 1
+                            do
+                                for mainmode in "non_causal"
+                                do
+                                    for advepoch in 20
+                                    do
+                                        for grstrength in 1
+                                        do
+                                            for remmode in "adversarial"
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp" -dropout_rate $dropout_rate
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
+
+
+#Varying the reversal strength
+for loss_type in "x_entropy"
+do
+    for hretrain in "no_warm_encoder"
+    do
+        for run in 0
+        do
+            for noise in 0.0
+            do
+                for sample in 500
+                do
+                    for l2_lambd in 0.0
+                    do
+                        for hANDdrate in 1,0.9 2,0.8 4,0.7
+                        do
+                            IFS=',' read hlayer dropout_rate <<< "${hANDdrate}"
+                            for mainepoch in 1
+                            do
+                                for mainmode in "non_causal"
+                                do
+                                    for advepoch in 20
+                                    do
+                                        for grstrength in 1 5 25
+                                        do
+                                            for remmode in "adversarial"
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp" -dropout_rate $dropout_rate
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
+
+
+#Varying the main epochs
+for loss_type in "x_entropy"
+do
+    for hretrain in "no_warm_encoder"
+    do
+        for run in 0
+        do
+            for noise in 0.0
+            do
+                for sample in 500
+                do
+                    for l2_lambd in 0.0
+                    do
+                        for hANDdrate in 1,0.9 2,0.8 4,0.7
+                        do
+                            IFS=',' read hlayer dropout_rate <<< "${hANDdrate}"
+                            for mainepoch in 1 10 20
+                            do
+                                for mainmode in "non_causal"
+                                do
+                                    for advepoch in 20
+                                    do
+                                        for grstrength in 1
+                                        do
+                                            for remmode in "adversarial"
+                                            do
+                                                for p in 0.5 0.6 0.7 0.8 0.9 0.99
+                                                do
+                                                    python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp" -dropout_rate $dropout_rate
+                                                done
+                                            done
+                                        done
+                                    done       
+                                done
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
 
 
 
@@ -1808,209 +2359,209 @@ done
 
 
 #Sample variaiton
-for loss_type in "x_entropy"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for run in 0
-        do
-            for noise in 0.0
-            do
-                for sample in 100 500 1000
-                do
-                    for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
-                    do
-                        IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
-                        for mainepoch in 1
-                        do
-                            for mainmode in "non_causal"
-                            do
-                                for advepoch in 20
-                                do
-                                    for grstrength in 1
-                                    do
-                                        for remmode in "adversarial"
-                                        do
-                                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                            do
-                                                python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
-                                            done
-                                        done
-                                    done
-                                done       
-                            done
-                        done
-                    done
-                done
-            done
-        done
-    done
-done
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for run in 0
+#         do
+#             for noise in 0.0
+#             do
+#                 for sample in 100 500 1000
+#                 do
+#                     for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
+#                     do
+#                         IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
+#                         for mainepoch in 1
+#                         do
+#                             for mainmode in "non_causal"
+#                             do
+#                                 for advepoch in 20
+#                                 do
+#                                     for grstrength in 1
+#                                     do
+#                                         for remmode in "adversarial"
+#                                         do
+#                                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                             do
+#                                                 python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
+#                                             done
+#                                         done
+#                                     done
+#                                 done       
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
 
-#Getting the noise variation
-for loss_type in "x_entropy"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for run in 0
-        do
-            for noise in 0.0 0.025 0.05 0.1
-            do
-                for sample in 500
-                do
-                    for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
-                    do
-                        IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
-                        for mainepoch in 1
-                        do
-                            for mainmode in "non_causal"
-                            do
-                                for advepoch in 20
-                                do
-                                    for grstrength in 1
-                                    do
-                                        for remmode in "adversarial"
-                                        do
-                                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                            do
-                                                python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
-                                            done
-                                        done
-                                    done
-                                done       
-                            done
-                        done
-                    done
-                done
-            done
-        done
-    done
-done
+# #Getting the noise variation
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for run in 0
+#         do
+#             for noise in 0.0 0.025 0.05 0.1
+#             do
+#                 for sample in 500
+#                 do
+#                     for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
+#                     do
+#                         IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
+#                         for mainepoch in 1
+#                         do
+#                             for mainmode in "non_causal"
+#                             do
+#                                 for advepoch in 20
+#                                 do
+#                                     for grstrength in 1
+#                                     do
+#                                         for remmode in "adversarial"
+#                                         do
+#                                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                             do
+#                                                 python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
+#                                             done
+#                                         done
+#                                     done
+#                                 done       
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
 
-#Getting the adv epoch variation
-for loss_type in "x_entropy"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for run in 0
-        do
-            for noise in 0.0
-            do
-                for sample in 500
-                do
-                    for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
-                    do
-                        IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
-                        for mainepoch in 1
-                        do
-                            for mainmode in "non_causal"
-                            do
-                                for advepoch in 5 10 20
-                                do
-                                    for grstrength in 1
-                                    do
-                                        for remmode in "adversarial"
-                                        do
-                                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                            do
-                                                python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
-                                            done
-                                        done
-                                    done
-                                done       
-                            done
-                        done
-                    done
-                done
-            done
-        done
-    done
-done
+# #Getting the adv epoch variation
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for run in 0
+#         do
+#             for noise in 0.0
+#             do
+#                 for sample in 500
+#                 do
+#                     for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
+#                     do
+#                         IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
+#                         for mainepoch in 1
+#                         do
+#                             for mainmode in "non_causal"
+#                             do
+#                                 for advepoch in 5 10 20
+#                                 do
+#                                     for grstrength in 1
+#                                     do
+#                                         for remmode in "adversarial"
+#                                         do
+#                                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                             do
+#                                                 python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
+#                                             done
+#                                         done
+#                                     done
+#                                 done       
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
 
-#Getting the removal strength variation
-for loss_type in "x_entropy"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for run in 0
-        do
-            for noise in 0.0
-            do
-                for sample in 500
-                do
-                    for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
-                    do
-                        IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
-                        for mainepoch in 1
-                        do
-                            for mainmode in "non_causal"
-                            do
-                                for advepoch in 20
-                                do
-                                    for grstrength in 1 5 25
-                                    do
-                                        for remmode in "adversarial"
-                                        do
-                                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                            do
-                                                python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
-                                            done
-                                        done
-                                    done
-                                done       
-                            done
-                        done
-                    done
-                done
-            done
-        done
-    done
-done
+# #Getting the removal strength variation
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for run in 0
+#         do
+#             for noise in 0.0
+#             do
+#                 for sample in 500
+#                 do
+#                     for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
+#                     do
+#                         IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
+#                         for mainepoch in 1
+#                         do
+#                             for mainmode in "non_causal"
+#                             do
+#                                 for advepoch in 20
+#                                 do
+#                                     for grstrength in 1 5 25
+#                                     do
+#                                         for remmode in "adversarial"
+#                                         do
+#                                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                             do
+#                                                 python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
+#                                             done
+#                                         done
+#                                     done
+#                                 done       
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
 
 
-#Later also hobserve the effect of main_epoch variaiton cuz that will be responsible for bringing the topic info upfront
-for loss_type in "x_entropy"
-do
-    for hretrain in "no_warm_encoder"
-    do
-        for run in 0
-        do
-            for noise in 0.0
-            do
-                for sample in 500
-                do
-                    for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
-                    do
-                        IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
-                        for mainepoch in 1 10 20
-                        do
-                            for mainmode in "non_causal"
-                            do
-                                for advepoch in 20
-                                do
-                                    for grstrength in 1
-                                    do
-                                        for remmode in "adversarial"
-                                        do
-                                            for p in 0.5 0.6 0.7 0.8 0.9 0.99
-                                            do
-                                                python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
-                                            done
-                                        done
-                                    done
-                                done       
-                            done
-                        done
-                    done
-                done
-            done
-        done
-    done
-done
+# #Later also hobserve the effect of main_epoch variaiton cuz that will be responsible for bringing the topic info upfront
+# for loss_type in "x_entropy"
+# do
+#     for hretrain in "no_warm_encoder"
+#     do
+#         for run in 0
+#         do
+#             for noise in 0.0
+#             do
+#                 for sample in 500
+#                 do
+#                     for hANDl2 in 0,0.0 1,0.0 2,0.0 4,0.0
+#                     do
+#                         IFS=',' read hlayer l2_lambd <<< "${hANDl2}"
+#                         for mainepoch in 1 10 20
+#                         do
+#                             for mainmode in "non_causal"
+#                             do
+#                                 for advepoch in 20
+#                                 do
+#                                     for grstrength in 1
+#                                     do
+#                                         for remmode in "adversarial"
+#                                         do
+#                                             for p in 0.5 0.6 0.7 0.8 0.9 0.99
+#                                             do
+#                                                 python transformer_debugger.py -expt_num "pt.rel.remmode($remmode).grstrength($grstrength).advepoch($advepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 2 -num_epochs $mainepoch -path "dataset/nlp_toy2/data/" -emb_path "glove-wiki-gigaword-100" -topic0_corr 1.0 -topic1_corr $p -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-3 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 1 -removal_mode $remmode -dtype "nlp"
+#                                             done
+#                                         done
+#                                     done
+#                                 done       
+#                             done
+#                         done
+#                     done
+#                 done
+#             done
+#         done
+#     done
+# done
 
 
 
