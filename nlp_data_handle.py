@@ -2229,23 +2229,23 @@ class DataHandleTransformer():
         example_df = example_df.sample(frac=1).reset_index(drop=True)
 
         #Assigning the number of example in each group (group1=group3 and group2=group4)
-        num_group1 = (self.data_args["num_sample"]/2.0)*self.data_args["neg_topic_corr"]
-        num_group4 = (self.data_args["num_sample"]/2.0)*(1-self.data_args["neg_topic_corr"])
+        num_group1 = int((self.data_args["num_sample"]/2.0)*self.data_args["neg_topic_corr"])
+        num_group4 = int((self.data_args["num_sample"]/2.0)*(1-self.data_args["neg_topic_corr"]))
 
         #Sampling the dataset for group1 (m=+,t=+) and group4 (m=+,t=-)
         group1_df = example_df[
-                                example_df["main_label"]==1 & example_df["neg_topic_label"]==1
+                                (example_df["main_label"]==1) & (example_df["neg_topic_label"]==1)
                     ][0:num_group1]
         group4_df = example_df[
-                                example_df["main_label"]==1 & example_df["neg_topic_label"]==0
+                                (example_df["main_label"]==1) & (example_df["neg_topic_label"]==0)
                     ][0:num_group4]
         
         #Sampling the dataset for group3(m=-,t=-) and group2 (m=-,t=+)
         group3_df = example_df[
-                                example_df["main_label"]==0 & example_df["neg_topic_label"]==0
+                                (example_df["main_label"]==0) & (example_df["neg_topic_label"]==0)
                     ][0:num_group1]
         group2_df = example_df[
-                                example_df["main_label"]==0 & example_df["neg_topic_label"]==1
+                                (example_df["main_label"]==0) & (example_df["neg_topic_label"]==1)
                     ][0:num_group4]
 
 
@@ -2306,8 +2306,10 @@ if __name__=="__main__":
     data_args["neg_topic_corr"]=0.7
     data_args["batch_size"]=100
     data_args["max_len"]=200
+    data_args["num_topics"]=1
+    data_args["noise_ratio"]=0.0
     data_handler = DataHandleTransformer(data_args)
-    data_handler.controlled_multinli_dataset_handler()
+    cat_dataset=data_handler.controlled_multinli_dataset_handler()
     pdb.set_trace()
 
 
