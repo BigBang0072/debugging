@@ -2133,10 +2133,38 @@ class DataHandleTransformer():
         '''
         #Getting the multinli_dataframe
         example_df = self._get_multinli_dataframe()
-        pdb.set_trace()
+        # pdb.set_trace()
 
-        #Now is the time to balance things
-        
+        #Get the synthetic dataset which is balanced with respect to p-value
+        pbalanced_df = self._get_pbalanced_dataframe(example_df)
+
+        #Getting the labels array
+        all_label_arr = np.stack([
+                                pbalanced_df["main_label"].to_numpy(),
+                                pbalanced_df["neg_topic_label"].to_numpy(),
+        ],axis=-1)
+        self._print_label_distribution(all_label_arr)
+        #Adding noise to the labels to have non-fully predictive causal features
+        all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
+
+
+        #Now encoding the text to be readable by model
+        input_idx,attn_mask = self._get_bert_tokenized_inputs(pbalanced_df)
+
+        #Now we are ready to create our dataset object
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    input_idx=input_idx,
+                                    attn_mask=attn_mask,
+                                    label=all_label_arr[:,0],
+                                    topic_label=all_label_arr[:,1:]
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+        return cat_dataset
+      
     def _get_multinli_dataframe(self,):
         '''
         Path Assumption:
@@ -2164,13 +2192,14 @@ class DataHandleTransformer():
             return 0
         
         def add_examples_from_file(fname,example_list):
+            print("Reading file: {}".format(fname))
             with jsonlines.open(self.data_args["path"]+fname) as rhandle:
                 for example_json in rhandle.iter():
                     example_dict = dict(
                                     sentence1 = example_json["sentence1"],
                                     sentence2 = example_json["sentence2"],
                                     main_label = 1 if example_json["gold_label"]=="contradiction" else 0,
-                                    topic_label = get_multinli_negation_topic(example_json["sentence2"])
+                                    neg_topic_label = get_multinli_negation_topic(example_json["sentence2"])
                     )
                     example_list.append(example_dict)
             
@@ -2178,15 +2207,75 @@ class DataHandleTransformer():
         
         #Getting all the examples in the train and dev set 
         train_fname = "multinli_1.0_train.jsonl"
-        valid_fname = "multinli_1.0_dev.jsonl"
+        valid_fname = "multinli_1.0_dev_matched.jsonl" #matched contains same generes as train
         example_list = []
-        example_list = add_examples_from_file(self.data_args["path"]+train_fname,example_list)
-        example_list = add_examples_from_file(self.data_args["path"]+valid_fname,example_list)
+        example_list = add_examples_from_file(train_fname,example_list)
+        example_list = add_examples_from_file(valid_fname,example_list)
 
         #Merging all the data into one dataframe
         example_df = pd.DataFrame(example_list)
         
         return example_df
+    
+    def _get_pbalanced_dataframe(self,example_df):
+        '''
+        Assumption is that both the main labels and the topic labels are binary right now
+        '''
+        #The maximum possible example in a group (decided by inspection)
+        group_ulim = 41000
+        assert self.data_args["num_sample"]<=2*group_ulim,"Examples Exhausted"
+
+        #Shuffling the dataframe first
+        example_df = example_df.sample(frac=1).reset_index(drop=True)
+
+        #Assigning the number of example in each group (group1=group3 and group2=group4)
+        num_group1 = (self.data_args["num_sample"]/2.0)*self.data_args["neg_topic_corr"]
+        num_group4 = (self.data_args["num_sample"]/2.0)*(1-self.data_args["neg_topic_corr"])
+
+        #Sampling the dataset for group1 (m=+,t=+) and group4 (m=+,t=-)
+        group1_df = example_df[
+                                example_df["main_label"]==1 & example_df["neg_topic_label"]==1
+                    ][0:num_group1]
+        group4_df = example_df[
+                                example_df["main_label"]==1 & example_df["neg_topic_label"]==0
+                    ][0:num_group4]
+        
+        #Sampling the dataset for group3(m=-,t=-) and group2 (m=-,t=+)
+        group3_df = example_df[
+                                example_df["main_label"]==0 & example_df["neg_topic_label"]==0
+                    ][0:num_group1]
+        group2_df = example_df[
+                                example_df["main_label"]==0 & example_df["neg_topic_label"]==1
+                    ][0:num_group4]
+
+
+        #Concatenating the overall dataset
+        pbalanced_df = pd.concat([group1_df,group4_df,group3_df,group2_df]).sample(frac=1).reset_index(drop=True)
+        return pbalanced_df
+    
+    def _get_bert_tokenized_inputs(self,pbalanced_df):
+        '''
+        '''
+        #Getting the list of sentence 1 and sentence2 from the df
+        sentence1_list, sentence2_list = [],[]
+        for eidx in range(pbalanced_df.shape[0]):
+            sentence1_list.append(pbalanced_df.iloc[eidx]["sentence1"])
+            sentence2_list.append(pbalanced_df.iloc[eidx]["sentence2"])
+        
+
+        #Now we will tokenize using our pre-trained tokenizer
+        encoded_doc = self.tokenizer(
+                                    sentence1_list,#[CLS] will be added upfront automatically
+                                    sentence2_list, #will automatically add the seperater [SEP]
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+        input_idx = encoded_doc["input_ids"]
+        attn_mask = encoded_doc["attention_mask"]
+
+        return input_idx,attn_mask
 
 
 if __name__=="__main__":
@@ -2212,7 +2301,14 @@ if __name__=="__main__":
     #Testing the data-handler
     data_args={}
     data_args["path"]="dataset/multinli_1.0/"
-    data_handler = DataHandler(data_args)
+    data_args["transformer_name"]="bert-base-uncased"
+    data_args["num_sample"]=1000
+    data_args["neg_topic_corr"]=0.7
+    data_args["batch_size"]=100
+    data_args["max_len"]=200
+    data_handler = DataHandleTransformer(data_args)
+    data_handler.controlled_multinli_dataset_handler()
+    pdb.set_trace()
 
 
 
