@@ -22,6 +22,7 @@ import pprint
 import pdb
 pp=pprint.PrettyPrinter(indent=4)
 import random
+import jsonlines
 
 #Setting the random seed
 random.seed(22)
@@ -2112,27 +2113,106 @@ class DataHandleTransformer():
         
         return replacement_dict
 
+    def controlled_multinli_dataset_handler(self,):
+        '''
+        Here we will create a multi-nli dataset where we simplify the setting
+        to make it close to what we were doing in the toyNLP2.
+
+        Instead of three-way classification, we will just have two classes
+            1. Contradiction
+            2. Non-Contradiction
+        
+        And the spurious topic will be:
+            1. Negation 
+            2. Non-negation words
+
+        We will synthetically control the correlation in the dataset to get the variation
+        across different value of p-value. One of the setting of p-value could be the
+        natural one where we dont make any synthetic balancing of the topic labels
+        to have a particular p-value.
+        '''
+        #Getting the multinli_dataframe
+        example_df = self._get_multinli_dataframe()
+        pdb.set_trace()
+
+        #Now is the time to balance things
+        
+    def _get_multinli_dataframe(self,):
+        '''
+        Path Assumption:
+        "dataset/multinli_1.0/"
+            1. "multinli_1.0_train.jsonl"
+            2. "multinli_1.0_dev.jsonl"
+
+
+        Labelling Convention:
+            1. Positive label = 1
+            2. Negative Label = 0
+        '''
+        def get_multinli_negation_topic(sentence):
+            '''
+            This will label a sentence positive (+1) if it contains either of :
+                1. nobody
+                2. no
+                3. never
+                4. nothing
+            '''
+            topic_words = ["negation","no","never","nothing"]
+            for word in topic_words:
+                if word in sentence:
+                    return 1
+            return 0
+        
+        def add_examples_from_file(fname,example_list):
+            with jsonlines.open(self.data_args["path"]+fname) as rhandle:
+                for example_json in rhandle.iter():
+                    example_dict = dict(
+                                    sentence1 = example_json["sentence1"],
+                                    sentence2 = example_json["sentence2"],
+                                    main_label = 1 if example_json["gold_label"]=="contradiction" else 0,
+                                    topic_label = get_multinli_negation_topic(example_json["sentence2"])
+                    )
+                    example_list.append(example_dict)
+            
+            return example_list
+        
+        #Getting all the examples in the train and dev set 
+        train_fname = "multinli_1.0_train.jsonl"
+        valid_fname = "multinli_1.0_dev.jsonl"
+        example_list = []
+        example_list = add_examples_from_file(self.data_args["path"]+train_fname,example_list)
+        example_list = add_examples_from_file(self.data_args["path"]+valid_fname,example_list)
+
+        #Merging all the data into one dataframe
+        example_df = pd.DataFrame(example_list)
+        
+        return example_df
+
 
 if __name__=="__main__":
     #Creating the data handler
-    data_args={}
-    data_args["max_len"]=100        
-    data_args["emb_path"]="random"
-    data_args["train_split"]=0.8
-    data_args["epsilon"] = 1e-3         #for numerical stability in sample weights
-    data_handle = DataHandler(data_args)
+    # data_args={}
+    # data_args["max_len"]=100        
+    # data_args["emb_path"]="random"
+    # data_args["train_split"]=0.8
+    # data_args["epsilon"] = 1e-3         #for numerical stability in sample weights
+    # data_handle = DataHandler(data_args)
 
-    #Now creating our dataset from domain1 (original sentiment)
-    # domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
-    # data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
+    # #Now creating our dataset from domain1 (original sentiment)
+    # # domain1_path = "counterfactually-augmented-data-master/sentiment/orig/"
+    # # data_handle.data_handler_ltdiff_paper_sentiment(domain1_path)
 
-    #Getting the dataset from amaon reviews 
-    cat_list = ["beauty","software","appliance","faishon","giftcard","magazine"]
-    path = "dataset/amazon/"
-    data_handle.data_handler_amazon_reviews(path,cat_list,1000)
+    # #Getting the dataset from amaon reviews 
+    # cat_list = ["beauty","software","appliance","faishon","giftcard","magazine"]
+    # path = "dataset/amazon/"
+    # data_handle.data_handler_amazon_reviews(path,cat_list,1000)
     # pdb.set_trace()
 
 
+    #Testing the data-handler
+    data_args={}
+    data_args["path"]="dataset/multinli_1.0/"
+    data_handler = DataHandler(data_args)
 
 
 
