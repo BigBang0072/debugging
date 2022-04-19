@@ -2506,6 +2506,8 @@ def nbow_trainer_stage2(data_args,model_args):
             causal_cat_dataset = data_handler.toy_nlp_dataset_handler2()
         elif data_args["dtype"]=="toytabular2":
             causal_cat_dataset = data_handler.toy_tabular_dataset_handler2()
+        elif "multinli" in data_args["path"]:
+            causal_cat_dataset = data_handler.controlled_multinli_dataset_handler()
         data_handler.data_args["topic_corr_list"][-1]=init_t1_pval
 
         #Now training the main classifier on this causal dataset
@@ -2750,7 +2752,9 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
     for ridx in range(model_args["adv_rm_epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
-        for data_batch in cat_dataset:
+        tbar = tqdm(range(len(cat_dataset)))
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
             #Training the main task classifier
             classifier_main.train_step_stage2(
                                     dataset_batch=data_batch,
@@ -2777,13 +2781,15 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
                                     cidx=tidx
                 )
             
-            #Also let us get the effect of pertubation of the feature on main classifier
-            for tidx in range(data_args["num_topics"]):
-                classifier_main.valid_step_stage2_flip_topic(
-                                    dataset_batch=data_batch,
-                                    P_matrix=P_identity,
-                                    cidx=tidx,
-                )
+            #In real model we dont have the pertubation power
+            if model_args["bert_as_encoder"]==False:
+                #Also let us get the effect of pertubation of the feature on main classifier
+                for tidx in range(data_args["num_topics"]):
+                    classifier_main.valid_step_stage2_flip_topic(
+                                        dataset_batch=data_batch,
+                                        P_matrix=P_identity,
+                                        cidx=tidx,
+                    )
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
