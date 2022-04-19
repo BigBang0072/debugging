@@ -2842,23 +2842,58 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,optimal_vacc_mai
 
         for tidx in range(data_args["num_topics"]):
             #Step1: Training the topic classifier now
-            tbar = tqdm(range(model_args["topic_epochs"]))
             #Resetting the topic classifier
             # classifier_main.topic_task_classifier = layers.Dense(2,activation="softmax")
-            for eidx in tbar:
-                for data_batch in cat_dataset:
-                    classifier_main.train_step_stage2(
-                                        dataset_batch=data_batch,
-                                        task="inlp_topic",
-                                        P_matrix=P_W,
-                                        cidx=tidx,
-                    )
+            if model_args["bert_as_encoder"]==True:
+                for tepoch in range(model_args["topic_epochs"]):
+                    bbar = tqdm(range(len(cat_dataset)))
+                    #Training the model 
+                    for bidx,data_batch in zip(bbar,cat_dataset):
+                        bbar.set_postfix_str("bsize:{},  bidx:{}".format(len(cat_dataset,bidx)))
+                        classifier_main.train_step_stage2(
+                                            dataset_batch=data_batch,
+                                            task="inlp_topic",
+                                            P_matrix=P_W,
+                                            cidx=tidx,
+                        )
+                    
+                    #Getting the validation accuracy
+                    for data_batch in cat_dataset:
+                        classifier_main.valid_step_stage2(
+                                                dataset_batch=data_batch,
+                                                P_matrix=P_W,
+                                                cidx=tidx,
+                        )
+                    print("topic:{:}\ttceloss:{:0.4f}\ttvacc:{:0.3f}".format(
+                                                tidx,
+                                                classifier_main.topic_pred_xentropy_list[tidx].result(),
+                                                classifier_main.topic_valid_accuracy_list[tidx].result()
+                    ))
 
-                #Updating the description of the tqdm
-                tbar.set_postfix_str("tceloss:{:0.4f},  tvacc:{:0.3f}".format(
-                                            classifier_main.topic_pred_xentropy_list[tidx].result(),
-                                            classifier_main.topic_valid_accuracy_list[tidx].result()
-                ))
+            else:
+                tbar = tqdm(range(model_args["topic_epochs"]))
+                for eidx in tbar:
+                    for data_batch in cat_dataset:
+                        classifier_main.train_step_stage2(
+                                            dataset_batch=data_batch,
+                                            task="inlp_topic",
+                                            P_matrix=P_W,
+                                            cidx=tidx,
+                        )
+                    
+                    #Getting the validation accuracy
+                    for data_batch in cat_dataset:
+                        classifier_main.valid_step_stage2(
+                                                dataset_batch=data_batch,
+                                                P_matrix=P_W,
+                                                cidx=tidx,
+                        )
+
+                    #Updating the description of the tqdm
+                    tbar.set_postfix_str("tceloss:{:0.4f},  tvacc:{:0.3f}".format(
+                                                classifier_main.topic_pred_xentropy_list[tidx].result(),
+                                                classifier_main.topic_valid_accuracy_list[tidx].result()
+                    ))
 
         #Getting the classifiers angle (after this step of training)
         classifier_main.reset_all_metrics()
@@ -3620,7 +3655,7 @@ if __name__=="__main__":
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
     parser.add_argument('-rev_grad_strength',dest="rev_grad_strength",type=float,default=None)
-    parser.add_argument('-adv_rm_method',dest="adv_rm_method",type=float,default=None)
+    parser.add_argument('-adv_rm_method',dest="adv_rm_method",type=str,default=None)
 
     parser.add_argument('-stage',dest="stage",type=int)
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
