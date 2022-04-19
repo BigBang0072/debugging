@@ -1375,7 +1375,7 @@ class SimpleNBOW(keras.Model):
 
 
                 #Adding to the total loss
-                total_loss += rm_topic_loss
+                total_loss += self.model_args["rev_grad_strength"]*rm_topic_loss
             
             #Updating the total loss for main 
             self.main_pred_xentropy.update_state(main_xentropy_loss)
@@ -2755,20 +2755,32 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
         tbar = tqdm(range(len(cat_dataset)))
         for bidx,data_batch in zip(tbar,cat_dataset):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
-            #Training the main task classifier
-            classifier_main.train_step_stage2(
-                                    dataset_batch=data_batch,
-                                    task="main",
-                                    P_matrix=P_identity,
-                                    cidx=None,
-            )
-            #Remove the debug_idx topic from the latent space adversarially
-            classifier_main.train_step_stage2(
-                                            dataset_batch=data_batch,
-                                            task="adv_rm_only_topic",
-                                            P_matrix=P_identity,
-                                            cidx=data_args["debug_tidx"],
-            )
+
+            if model_args["adv_rm_method"]=="adv_rm_only_topic":
+                #Training the main task classifier
+                classifier_main.train_step_stage2(
+                                        dataset_batch=data_batch,
+                                        task="main",
+                                        P_matrix=P_identity,
+                                        cidx=None,
+                )
+                #Remove the debug_idx topic from the latent space adversarially
+                classifier_main.train_step_stage2(
+                                                dataset_batch=data_batch,
+                                                task="adv_rm_only_topic",
+                                                P_matrix=P_identity,
+                                                cidx=data_args["debug_tidx"],
+                )
+            elif model_args["adv_rm_method"]=="adv_rm_with_main":
+                classifier_main.train_step_stage2(
+                                        dataset_batch=data_batch,
+                                        task="adv_rm_with_main",
+                                        P_matrix=P_identity,
+                                        cidx=None,
+                                        adv_rm_tidx=data_args["debug_tidx"],
+                )
+            else:
+                raise NotImplementedError()
 
         #Getting the validation scores once the train step is complete
         for data_batch in cat_dataset:
@@ -3608,6 +3620,7 @@ if __name__=="__main__":
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
     parser.add_argument('-rev_grad_strength',dest="rev_grad_strength",type=float,default=None)
+    parser.add_argument('-adv_rm_method',dest="adv_rm_method",type=float,default=None)
 
     parser.add_argument('-stage',dest="stage",type=int)
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
@@ -3731,6 +3744,7 @@ if __name__=="__main__":
     model_args["topic_epochs"]=args.topic_epochs
     model_args["adv_rm_epochs"]=args.adv_rm_epochs
     model_args["removal_mode"]=args.removal_mode
+    model_args["adv_rm_method"]=args.adv_rm_method
     model_args["main_model_mode"]=args.main_model_mode
     model_args["head_retrain_mode"] = args.head_retrain_mode
     model_args["l2_lambd"]=args.l2_lambd
