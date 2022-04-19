@@ -964,7 +964,8 @@ class SimpleNBOW(keras.Model):
         self.init_weights = defaultdict()
         self.small_epsilon = 1e-10
 
-
+        #Initilaize the proble metric list
+        self.probe_metric_list=[]
 
         #Now initilaizing some of the layers for encoder
         if self.data_args["dtype"]=="toynlp2":
@@ -1871,6 +1872,23 @@ class SimpleNBOW(keras.Model):
                         ]
                     )
         )
+    
+    def save_the_probe_metric_list(self):
+        '''
+        '''
+        #Getting the classifier information
+        init_conv_angle = self.get_angle_between_classifiers(class_idx=0)
+        #Getting the initial classifier accuracy
+        init_classifier_acc = self.get_all_classifier_accuracy()
+        self.probe_metric_list.append(dict(
+                    conv_angle_dict = init_conv_angle,
+                    classifier_acc_dict = init_classifier_acc
+        ))
+        #Dumping the first set of metrics we have
+        probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
+        print("Dumping the probe metrics in: {}".format(probe_metric_path))
+        with open(probe_metric_path,"w") as whandle:
+            json.dump(self.probe_metric_list,whandle,indent="\t")
 
 @tf.custom_gradient
 def grad_reverse(x):
@@ -2530,22 +2548,7 @@ def nbow_trainer_stage2(data_args,model_args):
 
     #Getting the optimal validation accuracy of main classifier
     optimal_vacc_main = classifier_main.main_valid_accuracy.result()
-
-    #Metrics to probe the classifiers
-    probe_metric_list = [] #list of  (conv_angle_dict,accracy_dict)
-    #Getting the classifier information
-    init_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
-    #Getting the initial classifier accuracy
-    init_classifier_acc = classifier_main.get_all_classifier_accuracy()
-    probe_metric_list.append(dict(
-                conv_angle_dict = init_conv_angle,
-                classifier_acc_dict = init_classifier_acc
-    ))
-    #Dumping the first set of metrics we have
-    probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
-    print("Dumping the probe metrics in: {}".format(probe_metric_path))
-    with open(probe_metric_path,"w") as whandle:
-        json.dump(probe_metric_list,whandle,indent="\t")
+    
     #Wont be using the removal part right now.
     # sys.exit(0)
     #Getting the MMD metrics to see usage
@@ -2560,14 +2563,12 @@ def nbow_trainer_stage2(data_args,model_args):
         perform_adversarial_removal_nbow(
                                         cat_dataset=cat_dataset,
                                         classifier_main=classifier_main,
-                                        probe_metric_list=probe_metric_list,
         )
     elif(model_args["removal_mode"]=="null_space"):
         print("Stage 2: Removing the topic information!")
         perform_null_space_removal_nbow(
                                         cat_dataset=cat_dataset,
                                         classifier_main=classifier_main,
-                                        probe_metric_list=probe_metric_list,
                                         optimal_vacc_main=optimal_vacc_main,
         )
     
@@ -2650,6 +2651,9 @@ def perform_head_classifier_training(data_args,model_args,cat_dataset,classifier
         #Saving the paramenters
         # checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         # classifier_main.save_weights(checkpoint_path)
+
+        #Saving the proble metric list
+        classifier_main.save_the_probe_metric_list()
     
     return classifier_main
 
@@ -2660,7 +2664,9 @@ def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier
     for eidx in range(model_args["epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
-        for data_batch in cat_dataset:
+        tbar = tqdm(range(len(cat_dataset)))
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
             #Training the main task classifier
             classifier_main.train_step_stage2(
                                     dataset_batch=data_batch,
@@ -2731,10 +2737,13 @@ def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier
         #Saving the paramenters
         # checkpoint_path = "nlp_logs/{}/cp_cat_main_{}.ckpt".format(data_args["expt_name"],eidx)
         # classifier_main.save_weights(checkpoint_path)
+
+        #Saving the probe metric list
+        classifier_main.save_the_probe_metric_list()
     
     return classifier_main
 
-def perform_adversarial_removal_nbow(cat_dataset,classifier_main,probe_metric_list):
+def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
     '''
     '''
     P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
@@ -2801,20 +2810,9 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main,probe_metric_li
         
 
         #Dumping the probe metrics at every iteration
-        step_conv_angle = classifier_main.get_angle_between_classifiers(class_idx=0)
-        #Getting the initial classifier accuracy
-        step_classifier_acc = classifier_main.get_all_classifier_accuracy()
-        probe_metric_list.append(dict(
-                    conv_angle_dict = step_conv_angle,
-                    classifier_acc_dict = step_classifier_acc
-        ))
-        #Dumping the first set of metrics we have
-        probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
-        print("Dumping the probe metrics in: {}".format(probe_metric_path))
-        with open(probe_metric_path,"w") as whandle:
-            json.dump(probe_metric_list,whandle,indent="\t")
+        classifier_main.save_the_probe_metric_list()
 
-def perform_null_space_removal_nbow(cat_dataset,classifier_main,probe_metric_list,optimal_vacc_main):
+def perform_null_space_removal_nbow(cat_dataset,classifier_main,optimal_vacc_main):
     '''
     '''
     #Next we will be going to use this trained classifier to do the null space projection
@@ -2865,12 +2863,7 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,probe_metric_lis
         topic_vacc_before = classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         
         #Getting the classifier information
-        conv_angle_dict = classifier_main.get_angle_between_classifiers(class_idx=0)
-        classifier_acc_dict = classifier_main.get_all_classifier_accuracy()
-        probe_metric_list.append(dict(
-                    conv_angle_dict=conv_angle_dict,
-                    classifier_acc_dict=classifier_acc_dict,
-        ))
+        classifier_main.save_the_probe_metric_list()
 
         #Step2: Remove the information and get the projection
         topic_W_matrix = classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].get_weights()[0].T
@@ -2921,12 +2914,6 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,probe_metric_lis
                                             topic_vacc_before,
                                             classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         ))
-    
-        #Saving the probe metrics in a json file
-        probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
-        print("Dumping the probe metrics in: {}".format(probe_metric_path))
-        with open(probe_metric_path,"w") as whandle:
-            json.dump(probe_metric_list,whandle,indent="\t")
 
 def get_cat_temb_importance_weight_variance(classifier):
     #Getting the topic importance
