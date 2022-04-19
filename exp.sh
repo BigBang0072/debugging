@@ -1632,7 +1632,7 @@ do
             do
                 for l2_lambd in 0.0
                 do
-                    for e in 3
+                    for e in 5
                     do
                         for d in "non_causal"
                         do
@@ -1642,9 +1642,9 @@ do
                                 do
                                     for n in 0.0
                                     do
-                                        for p in 0.7
+                                        for p in 0.5 0.6 0.7 0.8 0.9 0.99
                                         do
-                                            python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 1 -num_epochs $e -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-5 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr 0.8
+                                            python transformer_debugger.py -expt_num "pt.rel.lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 1 -num_epochs $e -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-5 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr $p
                                         done
                                     done
                                 done
