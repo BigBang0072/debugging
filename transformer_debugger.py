@@ -967,9 +967,9 @@ class SimpleNBOW(keras.Model):
 
 
         #Now initilaizing some of the layers for encoder
-        if self.data_args["dtype"]=="nlp":
+        if self.data_args["dtype"]=="toynlp2":
             self.pre_encoder_layer = self.get_nbow_avg_layer()
-        elif self.data_args["dtype"]=="tabular":
+        elif self.data_args["dtype"]=="toytabular2":
             self.pre_encoder_layer = self.get_dummy_linear_layer()
         elif self.model_args["bert_as_encoder"]==True:
             #Getting the "pre-encoder" layer
@@ -983,16 +983,16 @@ class SimpleNBOW(keras.Model):
         self.hidden_layer_list = []
         self.dropout_layer_list = []
         if self.model_args["num_hidden_layer"]!=0:
-            if self.data_args["dtype"]=="nlp":
+            if self.data_args["dtype"]=="toynlp2":
                 self.hlayer_dim = 50
-            elif self.data_args["dtype"]=="tabular":
+            elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
         else:
             if self.model_args["bert_as_encoder"]==True:
                 self.hlayer_dim = self.model_args["bemb_dim"]
-            elif self.data_args["dtype"]=="nlp":
+            elif self.data_args["dtype"]=="toynlp2":
                 self.hlayer_dim = self.emb_dim
-            elif self.data_args["dtype"]=="tabular":
+            elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
         
         for _ in range(self.model_args["num_hidden_layer"]):
@@ -1788,7 +1788,7 @@ class SimpleNBOW(keras.Model):
                 convergence_angle[cname1][cname2]=float(angle)
         
         #Getting the spurous reatio in case we have the dimensions known
-        if self.data_args["dtype"]=="tabular" and self.model_args["num_hidden_layer"]==0:
+        if self.data_args["dtype"]=="toytabular2" and self.model_args["num_hidden_layer"]==0:
             assert classifier_dict["main"].shape[0]==(self.data_args["inv_dims"]+self.data_args["sp_dims"])
             assert len(classifier_dict["main"].shape)==1
             #The first few inv dims are invariant feature
@@ -2436,18 +2436,18 @@ def nbow_trainer_stage2(data_args,model_args):
     if "amazon" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.amazon_reviews_handler()
     elif "nlp_toy2" in data_args["path"]:
-        if data_args["dtype"]=="nlp":
+        if data_args["dtype"]=="toynlp2":
             cat_dataset = data_handler.toy_nlp_dataset_handler2()
-        elif data_args["dtype"]=="tabular":
+        elif data_args["dtype"]=="toytabular2":
             cat_dataset = data_handler.toy_tabular_dataset_handler2()
     elif "nlp_toy" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
-    elif "mnli" in data_args["path"]:
+    elif "multinli" in data_args["path"]:
         cat_dataset = data_handler.controlled_multinli_dataset_handler()
     else:
         raise NotImplementedError()
     
-    if "nlp_toy2" not in data_args["path"] and "mnli" not in data_args["path"]:
+    if "nlp_toy2" not in data_args["path"] and "multinli" not in data_args["path"]:
         #NLP TOY2 has its data processing already bulit in its generation function
         #Getting the dataset for the required category and topic
         print("Getting the dataset for: cat:{}\ttopic:{}".format(
@@ -2484,9 +2484,9 @@ def nbow_trainer_stage2(data_args,model_args):
         #building the dataset where the spurious feature has p=0.5
         init_t1_pval = data_handler.data_args["topic_corr_list"][-1]
         data_handler.data_args["topic_corr_list"][-1]=0.5
-        if data_args["dtype"]=="nlp":
+        if data_args["dtype"]=="toynlp2":
             causal_cat_dataset = data_handler.toy_nlp_dataset_handler2()
-        elif data_args["dtype"]=="tabular":
+        elif data_args["dtype"]=="toytabular2":
             causal_cat_dataset = data_handler.toy_tabular_dataset_handler2()
         data_handler.data_args["topic_corr_list"][-1]=init_t1_pval
 
@@ -3688,6 +3688,8 @@ if __name__=="__main__":
         data_args["cat_list"]=["gender","race","orientation"]
     elif "multinli" in data_args["path"]:
         data_args["neg_topic_corr"]=args.neg_topic_corr
+        data_args["noise_ratio"]=args.noise_ratio
+        data_args["dtype"]=args.dtype
 
     data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
