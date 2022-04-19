@@ -2442,10 +2442,12 @@ def nbow_trainer_stage2(data_args,model_args):
             cat_dataset = data_handler.toy_tabular_dataset_handler2()
     elif "nlp_toy" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
+    elif "mnli" in data_args["path"]:
+        cat_dataset = data_handler.controlled_multinli_dataset_handler()
     else:
         raise NotImplementedError()
     
-    if "nlp_toy2" not in data_args["path"]:
+    if "nlp_toy2" not in data_args["path"] and "mnli" not in data_args["path"]:
         #NLP TOY2 has its data processing already bulit in its generation function
         #Getting the dataset for the required category and topic
         print("Getting the dataset for: cat:{}\ttopic:{}".format(
@@ -3606,6 +3608,7 @@ if __name__=="__main__":
     parser.add_argument('-tab_sigma_ubound',dest="tab_sigma_ubound",type=float,default=None)
     parser.add_argument('-dropout_rate',dest="dropout_rate",type=float,default=None)
     parser.add_argument('--save_emb',default=False,action="store_true")
+    parser.add_argument('-neg_topic_corr',dest="neg_topic_corr",type=float,default=None)
 
     
 
@@ -3683,6 +3686,8 @@ if __name__=="__main__":
         data_args["tab_sigma_ubound"]=args.tab_sigma_ubound
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]
+    elif "multinli" in data_args["path"]:
+        data_args["neg_topic_corr"]=args.neg_topic_corr
 
     data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
