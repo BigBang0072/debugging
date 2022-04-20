@@ -2495,20 +2495,33 @@ def nbow_trainer_stage2(data_args,model_args):
 
 
     print("Stage 1: Training the main classifier! (to be debugged later)")
-    if(model_args["main_model_mode"]=="causal" and "nlp_toy2" in data_args["path"]):
+    if(model_args["main_model_mode"]=="causal" and (
+                                        "nlp_toy2" in data_args["path"] or
+                                        "multinli" in data_args["path"]
+                                    )
+    ):
         #Here we will train on the main classifier to be purely causal
         print("Training a pure causal classifier where there is no spurious correlation")
 
         #building the dataset where the spurious feature has p=0.5
-        init_t1_pval = data_handler.data_args["topic_corr_list"][-1]
-        data_handler.data_args["topic_corr_list"][-1]=0.5
+        if "multinli" in data_args["path"]:
+            init_tneg_pval = data_handler.data_args["neg_topic_corr"]
+            data_handler.data_args["neg_topic_corr"]=0.5
+        else:
+            init_t1_pval = data_handler.data_args["topic_corr_list"][-1]
+            data_handler.data_args["topic_corr_list"][-1]=0.5
+        
         if data_args["dtype"]=="toynlp2":
             causal_cat_dataset = data_handler.toy_nlp_dataset_handler2()
         elif data_args["dtype"]=="toytabular2":
             causal_cat_dataset = data_handler.toy_tabular_dataset_handler2()
         elif "multinli" in data_args["path"]:
             causal_cat_dataset = data_handler.controlled_multinli_dataset_handler()
-        data_handler.data_args["topic_corr_list"][-1]=init_t1_pval
+        
+        if "multinli" in data_args["path"]:
+            data_handler.data_args["neg_topic_corr"]=init_tneg_pval
+        else:
+            data_handler.data_args["topic_corr_list"][-1]=init_t1_pval
 
         #Now training the main classifier on this causal dataset
         classifier_main = perform_main_classifier_training(
@@ -2849,7 +2862,7 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,optimal_vacc_mai
                     bbar = tqdm(range(len(cat_dataset)))
                     #Training the model 
                     for bidx,data_batch in zip(bbar,cat_dataset):
-                        bbar.set_postfix_str("bsize:{},  bidx:{}".format(len(cat_dataset,bidx)))
+                        bbar.set_postfix_str("bsize:{},  bidx:{}".format(len(cat_dataset),bidx))
                         classifier_main.train_step_stage2(
                                             dataset_batch=data_batch,
                                             task="inlp_topic",
@@ -2907,11 +2920,12 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,optimal_vacc_mai
                 )
 
                 #Getting the validation accuracy when we flip the topic info in input
-                classifier_main.valid_step_stage2_flip_topic(
-                                    dataset_batch=data_batch,
-                                    P_matrix=P_W,
-                                    cidx=tidx,
-                )
+                if model_args["bert_as_encoder"]==False:
+                    classifier_main.valid_step_stage2_flip_topic(
+                                        dataset_batch=data_batch,
+                                        P_matrix=P_W,
+                                        cidx=tidx,
+                    )
         #Get the topic metrics aftertraining the classifier
         topic_vacc_before = classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         
