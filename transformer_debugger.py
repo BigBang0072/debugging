@@ -3726,7 +3726,13 @@ if __name__=="__main__":
     data_args["max_len"]=200
     data_args["num_sample"]=args.num_samples
     data_args["num_topic_samples"]=args.num_topic_samples
-    data_args["batch_size"]=32
+    if args.transformer=="bert-base-uncased":
+        data_args["batch_size"]=32
+    elif args.transformer=="bert-large-uncased":
+        data_args["batch_size"]=8
+    else:
+        data_args["batch_size"]=32
+    
     data_args["shuffle_size"]=data_args["batch_size"]*3
     if "amazon" in data_args["path"]:
         data_args["cat_list"]=["arts","books","phones","clothes","groceries","movies","pets","tools"]
@@ -3773,7 +3779,10 @@ if __name__=="__main__":
     model_args["train_bert"]=args.train_bert
     model_args["cached_bemb"]=args.cached_bemb
     if args.bert_as_encoder==True:
-        model_args["bemb_dim"] = 768
+        if args.transformer=="bert-base-uncased":
+            model_args["bemb_dim"] = 768
+        elif args.transformer=="bert-large-uncased":
+            model_args["bemb_dim"] = 1024
     else:
         model_args["bemb_dim"] = 768 if args.stage==2 else len(data_args["topic_list"]) #The dimension of bert produced last layer
     model_args["hlayer_dim"]=args.hlayer_dim
