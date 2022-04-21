@@ -1,3 +1,4 @@
+from cProfile import label
 from collections import defaultdict
 import numpy as np
 import pandas as pd 
@@ -2149,13 +2150,15 @@ class DataHandleTransformer():
 
 
         #Now encoding the text to be readable by model
-        input_idx,attn_mask = self._get_bert_tokenized_inputs(pbalanced_df)
+        input_idx,attn_mask,flip_input_idx,flip_attn_mask = self._get_bert_tokenized_inputs(pbalanced_df)
 
         #Now we are ready to create our dataset object
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
                                     input_idx=input_idx,
                                     attn_mask=attn_mask,
+                                    input_idx_t0_flip=flip_input_idx,
+                                    attn_mask_t0_flip=flip_attn_mask,
                                     label=all_label_arr[:,0],
                                     topic_label=all_label_arr[:,1:]
                                 )
@@ -2177,6 +2180,7 @@ class DataHandleTransformer():
             1. Positive label = 1
             2. Negative Label = 0
         '''
+        negation_topic_words = ["negation","no","never","nothing"]
         def get_multinli_negation_topic(sentence):
             '''
             This will label a sentence positive (+1) if it contains either of :
@@ -2185,11 +2189,39 @@ class DataHandleTransformer():
                 3. never
                 4. nothing
             '''
-            topic_words = ["negation","no","never","nothing"]
-            for word in topic_words:
+            for word in negation_topic_words:
                 if word in sentence:
                     return 1
             return 0
+        
+        def get_negation_flipped_sentence(sentence,negation_label):
+            '''
+            Here we will operate in multiple modes:
+
+            1. add_non_negation : here we will add negation words to the sentence
+                                  which dont have negations. [half the data]
+            2. remove_negation  : this will remove the negation words from the 
+                                  sentence which contain the negation words
+            3. replace_negation : this will replace the negation words with something else
+                                  which has similar meaning. So it their embedding is very
+                                  different from the negation words then it will change the
+                                  decision. But this seems biased
+            '''
+            sentence=sentence.copy()
+            if negation_label==0:
+                sentence = sentence + " " + np.random.choice(negation_topic_words)
+            else:
+                if self.data_args["neg1_flip_method"]=="remove_negation":
+                    for word in negation_topic_words:
+                        sentence = sentence.replace(word," ")
+                elif self.data_args["neg1_flip_method"]=="replace_negation":
+                    for word in negation_topic_words:
+                        sentence = sentence.replace(word,"dont")
+                else:
+                    #So that we dont make a mistake of adding them
+                    sentence = None
+            
+            return sentence
         
         def add_examples_from_file(fname,example_list):
             print("Reading file: {}".format(fname))
@@ -2201,6 +2233,13 @@ class DataHandleTransformer():
                                     main_label = 1 if example_json["gold_label"]=="contradiction" else 0,
                                     neg_topic_label = get_multinli_negation_topic(example_json["sentence2"])
                     )
+                    #Flipping the spurious feature
+                    flip_sentence2 = get_negation_flipped_sentence(
+                                                sentence=example_dict["sentence2"],
+                                                negation_label=example_dict["neg_topic_label"],
+                    )
+                    example_dict["flip_sentence2"]=flip_sentence2
+
                     example_list.append(example_dict)
             
             return example_list
@@ -2257,10 +2296,11 @@ class DataHandleTransformer():
         '''
         '''
         #Getting the list of sentence 1 and sentence2 from the df
-        sentence1_list, sentence2_list = [],[]
+        sentence1_list, sentence2_list, flip_sentence2_list = [],[],[]
         for eidx in range(pbalanced_df.shape[0]):
             sentence1_list.append(pbalanced_df.iloc[eidx]["sentence1"])
             sentence2_list.append(pbalanced_df.iloc[eidx]["sentence2"])
+            flip_sentence2_list.append(pbalanced_df.iloc[eidx]["flip_sentence2"])
         
 
         #Now we will tokenize using our pre-trained tokenizer
@@ -2275,7 +2315,21 @@ class DataHandleTransformer():
         input_idx = encoded_doc["input_ids"]
         attn_mask = encoded_doc["attention_mask"]
 
-        return input_idx,attn_mask
+
+        #Tokenizing the flip inputs
+        flip_encoded_doc = self.tokenizer(
+                                    sentence1_list,#[CLS] will be added upfront automatically
+                                    flip_sentence2_list, #will automatically add the seperater [SEP]
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+        flip_input_idx = flip_encoded_doc["input_ids"]
+        flip_attn_mask = flip_encoded_doc["attention_mask"]
+
+
+        return input_idx,attn_mask,flip_input_idx,flip_attn_mask
 
 
 if __name__=="__main__":

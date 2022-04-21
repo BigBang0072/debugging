@@ -1045,6 +1045,7 @@ class SimpleNBOW(keras.Model):
         #since the delta_p will have smallar changes if the activation are very high which is made by the x-entorpy obj.
         self.topic_flip_main_logprob_delta_list = [] #Keeps the difference between the logprob of the output
         self.topic_flip_emb_diff_list = []   #Keep track of absolute change in the embedding 
+        self.topic_smin_main_valid_accuracy_list = []
         for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
             self.topic_task_classifier_list.append(
@@ -1062,6 +1063,7 @@ class SimpleNBOW(keras.Model):
             
             #To keep the main accuracy when we flip the features in the input
             self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
+            self.topic_smin_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_smin_main_vacc".format(tidx)))
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
             self.topic_flip_main_logprob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_logprob_delta".format(tidx)))
             self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
@@ -1110,6 +1112,7 @@ class SimpleNBOW(keras.Model):
             self.topic_pred_xentropy_list[tidx].reset_states()
             self.topic_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_valid_accuracy_list[tidx].reset_states()
+            self.topic_smin_main_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_prob_delta_list[tidx].reset_states()
             self.topic_flip_main_logprob_delta_list[tidx].reset_states()
             self.topic_flip_emb_diff_list[tidx].reset_states()
@@ -1630,11 +1633,30 @@ class SimpleNBOW(keras.Model):
         X_latent = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False)
         X_proj = self._get_proj_X_enc(X_latent,P_matrix)
 
+
+
+        #Getting the Smin group mask for this topic
+        smin_mask = tf.math.logical_or(
+                                    tf.math.logical_and(
+                                                            label_valid==1,
+                                                            topic_label_valid==0,
+                                    ),
+                                    tf.math.logical_and(
+                                                            label_valid==0,
+                                                            topic_label_valid==1,
+                                    ),
+        )
+
         if self.model_args["loss_type"]=="x_entropy":
             #Getting the validation accuracy of the main task
             #TODO: This assumes that this is the last layer of the both branches
             main_valid_prob = self.main_task_classifier(X_proj)
             self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+            #Getting the accuracy in Smin group
+            self.topic_smin_main_valid_accuracy_list[cidx].update_state(
+                                                        label_valid[smin_mask],
+                                                        main_valid_prob[smin_mask]
+            )
 
             #Getting the topic validation accuracy
             topic_valid_prob = self.topic_task_classifier_list[cidx](X_proj)
@@ -1645,6 +1667,11 @@ class SimpleNBOW(keras.Model):
             #Getting the probability from the margin
             main_valid_prob = self.get_max_margin_prob_vector(main_valid_margin)
             self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+            #Getting the accuracy in Smin group
+            self.topic_smin_main_valid_accuracy_list[cidx].update_state(
+                                                        label_valid[smin_mask],
+                                                        main_valid_prob[smin_mask]
+            )
 
             #Getting the topic accuracy
             topic_valid_margin = self.topic_task_classifier_list[cidx](X_proj)
@@ -1672,6 +1699,7 @@ class SimpleNBOW(keras.Model):
         label = dataset_batch["label"]
         idx = dataset_batch["input_idx"]
         flip_idx = dataset_batch["input_idx_t{}_flip".format(cidx)]
+        topic_label = dataset_batch["topic_label"]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
@@ -1686,8 +1714,10 @@ class SimpleNBOW(keras.Model):
 
         #Getting the attention mask if we are validating the BERT
         attn_mask_valid=None
+        flip_attn_mask_valid=None
         if self.model_args["bert_as_encoder"]==True:
             attn_mask_valid = dataset_batch["attn_mask"][valid_idx:]
+            flip_attn_mask_valid = dataset_batch["attn_mask_t{}_flip".format(cidx)][valid_idx:]
 
 
         #Getting the probability of main label form the actual input
@@ -1696,14 +1726,31 @@ class SimpleNBOW(keras.Model):
         X_proj_actual = self._get_proj_X_enc(X_latent,P_matrix)
 
         #Getting the latent representaiton for the flipped input
-        X_latent = self._encoder(flip_idx_valid,attn_mask=attn_mask_valid,training=False)
+        X_latent = self._encoder(flip_idx_valid,attn_mask=flip_attn_mask_valid,training=False)
         X_proj_flip = self._get_proj_X_enc(X_latent,P_matrix)
+
+
+        def get_measure_flip_mask():
+            '''
+            If we dont want to measure the flip delta_prob in some type of example
+            '''
+            #Getting the lebel for which we are flipping
+            topic_label_valid = topic_label[valid_idx:,cidx]
+
+            if self.data_args["neg1_flip_method"]=="dont_measure":
+                mask = topic_label_valid==0
+            else:
+                mask= topic_label_valid>-1
+
+            return mask
+        measure_flip_mask = get_measure_flip_mask()
 
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
         if self.model_args["loss_type"]=="x_entropy":
-            main_valid_prob_actual = self.main_task_classifier(X_proj_actual) #This is softmaxed already
-            main_valid_prob_flip = self.main_task_classifier(X_proj_flip)
+            #Getting the probability
+            main_valid_prob_actual = self.main_task_classifier(X_proj_actual)[measure_flip_mask] #This is softmaxed already
+            main_valid_prob_flip = self.main_task_classifier(X_proj_flip)[measure_flip_mask]
 
             #Getting the difference in the log prob bw the actual and pertured
             main_valid_logprob_actual = tf.math.log(main_valid_prob_actual+self.small_epsilon)
@@ -1712,8 +1759,8 @@ class SimpleNBOW(keras.Model):
             self.topic_flip_main_logprob_delta_list[cidx].update_state(logprob_delta)
         elif self.model_args["loss_type"]=="linear_svm":
             #Getting the actual prob
-            main_valid_margin_actual = self.main_task_classifier(X_proj_actual)
-            main_valid_prob_actual = self.get_max_margin_prob_vector(main_valid_margin_actual)
+            main_valid_margin_actual = self.main_task_classifier(X_proj_actual)[measure_flip_mask]
+            main_valid_prob_actual = self.get_max_margin_prob_vector(main_valid_margin_actual)[measure_flip_mask]
 
             #Getting the flip prob
             main_valid_margin_flip = self.main_task_classifier(X_proj_flip)
@@ -1812,6 +1859,7 @@ class SimpleNBOW(keras.Model):
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_smin_main".format(tidx)]=float(self.topic_smin_main_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_pdelta".format(tidx)]=float(self.topic_flip_main_prob_delta_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_logpdelta".format(tidx)]=float(self.topic_flip_main_logprob_delta_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_emb_diff".format(tidx)]=float(self.topic_flip_emb_diff_list[tidx].result().numpy())
@@ -2626,7 +2674,7 @@ def perform_head_classifier_training(data_args,model_args,cat_dataset,classifier
                                         P_matrix=P_identity,
                                         cidx=tidx
                 )
-                if model_args["bert_as_encoder"]==False:
+                if model_args["measure_flip_pdelta"]==True:
                     #Updating the flip topic main accuracy also
                     classifier_main.valid_step_stage2_flip_topic(
                                             dataset_batch=data_batch,
@@ -2712,7 +2760,7 @@ def perform_main_classifier_training(data_args,model_args,cat_dataset,classifier
                                         cidx=tidx,
                 )
 
-                if model_args["bert_as_encoder"]==False:
+                if model_args["measure_flip_pdelta"]==True:
                     #Updating the flip topic main accuracy also
                     classifier_main.valid_step_stage2_flip_topic(
                                             dataset_batch=data_batch,
@@ -2807,7 +2855,7 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
                 )
             
             #In real model we dont have the pertubation power
-            if model_args["bert_as_encoder"]==False:
+            if model_args["measure_flip_pdelta"]==True:
                 #Also let us get the effect of pertubation of the feature on main classifier
                 for tidx in range(data_args["num_topics"]):
                     classifier_main.valid_step_stage2_flip_topic(
@@ -2920,7 +2968,7 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,optimal_vacc_mai
                 )
 
                 #Getting the validation accuracy when we flip the topic info in input
-                if model_args["bert_as_encoder"]==False:
+                if model_args["measure_flip_pdelta"]==True:
                     classifier_main.valid_step_stage2_flip_topic(
                                         dataset_batch=data_batch,
                                         P_matrix=P_W,
@@ -3663,6 +3711,8 @@ if __name__=="__main__":
     parser.add_argument('-dropout_rate',dest="dropout_rate",type=float,default=None)
     parser.add_argument('--save_emb',default=False,action="store_true")
     parser.add_argument('-neg_topic_corr',dest="neg_topic_corr",type=float,default=None)
+    parser.add_argument('-neg1_flip_method',dest="neg1_flip_method",type=str,default=None)
+    parser.add_argument('--measure_flip_pdelta',default=False,action="store_true")
 
     
 
@@ -3808,6 +3858,8 @@ if __name__=="__main__":
     model_args["l2_lambd"]=args.l2_lambd
     model_args["loss_type"]=args.loss_type
     model_args["dropout_rate"]=args.dropout_rate
+    model_args["neg1_flip_method"]=args.neg1_flip_method
+    model_args["measure_flip_pdelta"]=args.measure_flip_pdelta
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
