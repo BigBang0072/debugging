@@ -2207,7 +2207,7 @@ class DataHandleTransformer():
                                   different from the negation words then it will change the
                                   decision. But this seems biased
             '''
-            sentence=sentence.copy()
+            # sentence=sentence.copy()
             if negation_label==0:
                 sentence = sentence + " " + np.random.choice(negation_topic_words)
             else:
@@ -2219,7 +2219,7 @@ class DataHandleTransformer():
                         sentence = sentence.replace(word,"dont")
                 else:
                     #So that we dont make a mistake of adding them
-                    sentence = None
+                    sentence = sentence
             
             return sentence
         

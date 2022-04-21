@@ -1744,6 +1744,8 @@ class SimpleNBOW(keras.Model):
 
             return mask
         measure_flip_mask = get_measure_flip_mask()
+        #Getting the masked label valid
+        label_valid = label_valid[measure_flip_mask]
 
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
@@ -3815,6 +3817,7 @@ if __name__=="__main__":
     data_args["num_neigh"]=args.num_neigh
     # data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
     data_args["save_emb"]=args.save_emb
+    data_args["neg1_flip_method"]=args.neg1_flip_method
 
     #Defining the Model args
     model_args={}
@@ -3858,7 +3861,6 @@ if __name__=="__main__":
     model_args["l2_lambd"]=args.l2_lambd
     model_args["loss_type"]=args.loss_type
     model_args["dropout_rate"]=args.dropout_rate
-    model_args["neg1_flip_method"]=args.neg1_flip_method
     model_args["measure_flip_pdelta"]=args.measure_flip_pdelta
 
     #Creating the metadata folder
