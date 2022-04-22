@@ -964,6 +964,9 @@ class SimpleNBOW(keras.Model):
         self.init_weights = defaultdict()
         self.small_epsilon = 1e-10
 
+        #Saving the experiment configuration to a file
+        self.save_the_experiment_config()
+
         #Initilaize the proble metric list
         self.probe_metric_list=[]
 
@@ -1942,6 +1945,29 @@ class SimpleNBOW(keras.Model):
         print("Dumping the probe metrics in: {}".format(probe_metric_path))
         with open(probe_metric_path,"w") as whandle:
             json.dump(self.probe_metric_list,whandle,indent="\t")
+    
+    def save_the_experiment_config(self,):
+        '''
+        This function will save all hte expeirments config into one json file.
+        '''
+        config={}
+        #Adding the data_args
+        for key,value in self.data_args.items():
+            config[key]=value 
+        
+        #Getting the model args
+        for key,value in self.model_args.items():
+            config[key]=value
+        
+        #Saving the config
+        self.config = config
+        
+        #Saving the config
+        config_path = "nlp_logs/{}/config.json".format(data_args["expt_name"])
+        print("Dumping the config in: {}".format(config_path))
+        with open(config_path,"w") as whandle:
+            json.dump(config,whandle,indent="\t")
+
 
 @tf.custom_gradient
 def grad_reverse(x):
