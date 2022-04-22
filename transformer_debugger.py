@@ -1746,6 +1746,9 @@ class SimpleNBOW(keras.Model):
         measure_flip_mask = get_measure_flip_mask()
         #Getting the masked label valid
         label_valid = label_valid[measure_flip_mask]
+        #Skipping if we dont have enough samples after masking --> Gave NaNs when calculating metrics
+        if(label_valid.shape[0]==0):
+            return
 
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
