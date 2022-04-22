@@ -1664,7 +1664,7 @@ mkdir nlp_logs
 
 
 #Training the bert model
-for model_type in "bert-base-uncased"
+for model_type in "bert-large-uncased"
 do
     for loss_type in "x_entropy"
     do
@@ -1688,7 +1688,7 @@ do
                                         do
                                             for p in 0.99 0.9 0.8 0.7 0.6 0.5
                                             do
-                                                python transformer_debugger.py -expt_num "pt.rel.model_type($model_type).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 1 -num_epochs $e -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-5 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr $p -transformer $model_type -neg1_flip_method "dont_measure" --measure_flip_pdelta
+                                                python transformer_debugger.py -expt_num "pt.rel.model_type($model_type).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).d($d).n($n).h($h).s($s).e($e).p($p).r($r)" -num_sample $s -num_topics 1 -num_epochs $e -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $n -num_hidden_layer $h -stage 2 -main_model_mode $d --normalize_emb -lr 5e-6 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -dropout_rate $dropout_rate -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr $p -transformer $model_type -neg1_flip_method "dont_measure" --measure_flip_pdelta
                                             done
                                         done
                                     done
@@ -2646,8 +2646,8 @@ done
 
 
 
-#Training the BERT model for the adversarial removal
-for model_type in "bert-base-uncased"
+# Training the BERT model for the adversarial removal
+for model_type in "bert-large-uncased"
 do
     for loss_type in "x_entropy"
     do
@@ -2679,7 +2679,7 @@ do
                                                         do
                                                             for p in 0.99 0.9 0.8 0.7 0.6 0.5
                                                             do
-                                                                python transformer_debugger.py -expt_num "pt.rel.model_type($model_type).remmode($remmode).adv_rm_method($adv_rm_method).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).noise($noise).hlayer($hlayer).sample($sample).p($p).run($run)" -num_sample $sample -num_topics 1 -num_epochs $mainepoch -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-5 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 0 -removal_mode $remmode -dropout_rate $dropout_rate -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr $p -transformer $model_type -adv_rm_method $adv_rm_method -neg1_flip_method "dont_measure" --measure_flip_pdelta
+                                                                python transformer_debugger.py -expt_num "pt.rel.model_type($model_type).remmode($remmode).adv_rm_method($adv_rm_method).grstrength($grstrength).advepoch($advepoch).lt($loss_type).dropout_rate($dropout_rate).l2($l2_lambd).hretrain($hretrain).noise($noise).hlayer($hlayer).sample($sample).p($p).run($run)" -num_sample $sample -num_topics 1 -num_epochs $mainepoch -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-6 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -adv_rm_epochs $advepoch -rev_grad_strength $grstrength -debug_tidx 0 -removal_mode $remmode -dropout_rate $dropout_rate -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr $p -transformer $model_type -adv_rm_method $adv_rm_method -neg1_flip_method "dont_measure" --measure_flip_pdelta
                                                             done
                                                         done
                                                     done
@@ -2997,7 +2997,7 @@ done
 
 
 #Training the null-space model for the BERT
-for model_type in "bert-base-uncased"
+for model_type in "bert-large-uncased"
 do
     for loss_type in "x_entropy"
     do
@@ -3024,7 +3024,7 @@ do
                                             do
                                                 for p in 0.99 0.9 0.8 0.7 0.6 0.5
                                                 do
-                                                    python transformer_debugger.py -expt_num "pt.rel.model_type($model_type).remmode($remmode).advepoch($advepoch).topicepoch($topicepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 1 -num_epochs $mainepoch -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-5 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -num_proj_iter $advepoch  -debug_tidx 0 -removal_mode $remmode -topic_epochs $topicepoch -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr $p -transformer $model_type -neg1_flip_method "dont_measure" --measure_flip_pdelta
+                                                    python transformer_debugger.py -expt_num "pt.rel.model_type($model_type).remmode($remmode).advepoch($advepoch).topicepoch($topicepoch).lt($loss_type).l2($l2_lambd).hretrain($hretrain).mainmode($mainmode).noise($noise).hlayer($hlayer).sample($sample).mainepoch($mainepoch).p($p).run($run)" -num_sample $sample -num_topics 1 -num_epochs $mainepoch -path "dataset/multinli_1.0/" -emb_path "glove-wiki-gigaword-100" -noise_ratio $noise -num_hidden_layer $hlayer -stage 2 -main_model_mode $mainmode --normalize_emb -lr 5e-6 -head_retrain_mode $hretrain -l2_lambd $l2_lambd -loss_type $loss_type -num_proj_iter $advepoch  -debug_tidx 0 -removal_mode $remmode -topic_epochs $topicepoch -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr $p -transformer $model_type -neg1_flip_method "dont_measure" --measure_flip_pdelta
                                                 done
                                             done
                                         done
