@@ -981,8 +981,8 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
         
-        #Setting the gpu
-        self.set_gpu()
+        # #Setting the gpu
+        # self.set_gpu()
         
 
 
@@ -1073,20 +1073,6 @@ class SimpleNBOW(keras.Model):
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
             self.topic_flip_main_logprob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_logprob_delta".format(tidx)))
             self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
-
-    def set_gpu(self,):
-        '''
-        '''
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            # Restrict TensorFlow to only use the first GPU
-            try:
-                tf.config.set_visible_devices(gpus[self.model_args["gpu_num"]], 'GPU')
-                logical_gpus = tf.config.list_logical_devices('GPU')
-                print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
-            except RuntimeError as e:
-                # Visible devices must be set before GPUs have been initialized
-                print(e)
 
     def get_all_head_init_weights(self,):
         '''
@@ -3725,6 +3711,22 @@ def worker_kernel(problem_config):
         json.dump(problem_config,fp,indent="\t")
     
     return problem_config
+
+
+def set_gpu(self,gpu_num):
+    '''
+    '''
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        # Restrict TensorFlow to only use the first GPU
+        try:
+            print("Using GPU No: {}".format(gpu_num))
+            tf.config.set_visible_devices(gpus[gpu_num], 'GPU')
+            logical_gpus = tf.config.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+        except RuntimeError as e:
+            # Visible devices must be set before GPUs have been initialized
+            print(e)
        
 
 if __name__=="__main__":
@@ -3810,6 +3812,8 @@ if __name__=="__main__":
 
     args=parser.parse_args()
     print(args)
+    #Setting the GPU
+    set_gpu(args.gpu_num)
 
     #Defining the Data args
     data_args={}
