@@ -3713,7 +3713,7 @@ def worker_kernel(problem_config):
     return problem_config
 
 
-def set_gpu(self,gpu_num):
+def set_gpu(gpu_num):
     '''
     '''
     gpus = tf.config.list_physical_devices('GPU')
