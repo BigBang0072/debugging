@@ -1071,6 +1071,20 @@ class SimpleNBOW(keras.Model):
             self.topic_flip_main_logprob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_logprob_delta".format(tidx)))
             self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
 
+    def set_gpu(self,):
+        '''
+        '''
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            # Restrict TensorFlow to only use the first GPU
+            try:
+                tf.config.set_visible_devices(gpus[self.model_args["gpu_num"]], 'GPU')
+                logical_gpus = tf.config.list_logical_devices('GPU')
+                print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+            except RuntimeError as e:
+                # Visible devices must be set before GPUs have been initialized
+                print(e)
+
     def get_all_head_init_weights(self,):
         '''
         This will get the initialized weights which can be used later for
@@ -3744,6 +3758,7 @@ if __name__=="__main__":
     parser.add_argument('-neg_topic_corr',dest="neg_topic_corr",type=float,default=None)
     parser.add_argument('-neg1_flip_method',dest="neg1_flip_method",type=str,default=None)
     parser.add_argument('--measure_flip_pdelta',default=False,action="store_true")
+    parser.add_argument('-gpu_num',dest="gpu_num",type=int,default=0)
 
     
 
@@ -3891,6 +3906,7 @@ if __name__=="__main__":
     model_args["loss_type"]=args.loss_type
     model_args["dropout_rate"]=args.dropout_rate
     model_args["measure_flip_pdelta"]=args.measure_flip_pdelta
+    model_args["gpu_num"]=args.gpu_num
 
     #Creating the metadata folder
     meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
