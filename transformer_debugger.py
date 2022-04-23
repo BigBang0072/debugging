@@ -981,6 +981,9 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
         
+        #Setting the gpu
+        self.set_gpu()
+        
 
 
         #Initialiing the hidden layer after encoding
