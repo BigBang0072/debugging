@@ -13,3 +13,6 @@ python -m spacy download en_core_web_sm
 python -m spacy download en_core_web_lg
 
 
+#Setting up the git config
+git config --global user.email "t-abkumar@microsoft.com"
+git config --global user.name "Abhinav Kumar"
