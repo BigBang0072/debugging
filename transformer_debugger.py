@@ -1789,6 +1789,10 @@ class SimpleNBOW(keras.Model):
                                     main_valid_prob_actual[subgroup_mask]\
                                         -main_valid_prob_flip[subgroup_mask]
             ))
+            #Skipping if we dont have any sample after masking to avoid nans in subgroup
+            if(main_valid_prob_actual[subgroup_mask].shape[0]==0):
+                continue
+            
             #Updating the subgroup pdelta
             self.topic_flip_main_prob_delta_ldict[cidx][subgroup].update_state(sub_pdelta)
             
