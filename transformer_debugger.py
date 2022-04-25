@@ -1048,6 +1048,7 @@ class SimpleNBOW(keras.Model):
         self.topic_valid_accuracy_list = []
         self.topic_flip_main_valid_accuracy_list = [] #Main Accuracy we get on flipping the feature/topic
         self.topic_flip_main_prob_delta_list = [] #Keep the mean probabilty change happened to the examples
+        self.topic_flip_main_prob_delta_ldict = [] #pdelta in for every subgroup in the dataset
         #since the delta_p will have smallar changes if the activation are very high which is made by the x-entorpy obj.
         self.topic_flip_main_logprob_delta_list = [] #Keeps the difference between the logprob of the output
         self.topic_flip_emb_diff_list = []   #Keep track of absolute change in the embedding 
@@ -1073,6 +1074,13 @@ class SimpleNBOW(keras.Model):
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
             self.topic_flip_main_logprob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_logprob_delta".format(tidx)))
             self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
+
+            #Creting the metrics to measure the pdelta for every subgroup
+            subgroup_pdelta_metric_dict = {}
+            for subgroup in ["m1t1","m0t1","m0t0","m1t0","smin","smaj","all"]:
+                subgroup_pdelta_metric_dict[subgroup]=keras.metrics.Mean(name="topic_{}_flip_main_prob_delta_{}".format(tidx,subgroup))
+            #Adding the subgroup metric dict to the list
+            self.topic_flip_main_prob_delta_ldict.append(subgroup_pdelta_metric_dict)
 
     def get_all_head_init_weights(self,):
         '''
@@ -1122,6 +1130,10 @@ class SimpleNBOW(keras.Model):
             self.topic_flip_main_prob_delta_list[tidx].reset_states()
             self.topic_flip_main_logprob_delta_list[tidx].reset_states()
             self.topic_flip_emb_diff_list[tidx].reset_states()
+
+            #Resetting the metrics for the pdelta subgroups
+            for subgroup in self.topic_flip_main_prob_delta_ldict[tidx].keys():
+                    self.topic_flip_main_prob_delta_ldict[tidx][subgroup].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1713,6 +1725,8 @@ class SimpleNBOW(keras.Model):
         idx_valid = idx[valid_idx:]
         label_valid = label[valid_idx:]
         flip_idx_valid = flip_idx[valid_idx:]
+        #Getting the lebel for which we are flipping
+        topic_label_valid = topic_label[valid_idx:,cidx]
         
         #Skipping if we dont have enough samples
         if(idx_valid.shape[0]==0):
@@ -1734,34 +1748,14 @@ class SimpleNBOW(keras.Model):
         #Getting the latent representaiton for the flipped input
         X_latent = self._encoder(flip_idx_valid,attn_mask=flip_attn_mask_valid,training=False)
         X_proj_flip = self._get_proj_X_enc(X_latent,P_matrix)
-
-
-        def get_measure_flip_mask():
-            '''
-            If we dont want to measure the flip delta_prob in some type of example
-            '''
-            #Getting the lebel for which we are flipping
-            topic_label_valid = topic_label[valid_idx:,cidx]
-
-            if self.data_args["neg1_flip_method"]=="dont_measure":
-                mask = topic_label_valid==0
-            else:
-                mask= topic_label_valid>-1
-
-            return mask
-        measure_flip_mask = get_measure_flip_mask()
-        #Getting the masked label valid
-        label_valid = label_valid[measure_flip_mask]
-        #Skipping if we dont have enough samples after masking --> Gave NaNs when calculating metrics
-        if(label_valid.shape[0]==0):
-            return
+        
 
         #Getting the validation accuracy of the main task
         #TODO: This assumes that this is the last layer of the both branches
         if self.model_args["loss_type"]=="x_entropy":
             #Getting the probability
-            main_valid_prob_actual = self.main_task_classifier(X_proj_actual)[measure_flip_mask] #This is softmaxed already
-            main_valid_prob_flip = self.main_task_classifier(X_proj_flip)[measure_flip_mask]
+            main_valid_prob_actual = self.main_task_classifier(X_proj_actual) #This is softmaxed already
+            main_valid_prob_flip = self.main_task_classifier(X_proj_flip)
 
             #Getting the difference in the log prob bw the actual and pertured
             main_valid_logprob_actual = tf.math.log(main_valid_prob_actual+self.small_epsilon)
@@ -1770,8 +1764,8 @@ class SimpleNBOW(keras.Model):
             self.topic_flip_main_logprob_delta_list[cidx].update_state(logprob_delta)
         elif self.model_args["loss_type"]=="linear_svm":
             #Getting the actual prob
-            main_valid_margin_actual = self.main_task_classifier(X_proj_actual)[measure_flip_mask]
-            main_valid_prob_actual = self.get_max_margin_prob_vector(main_valid_margin_actual)[measure_flip_mask]
+            main_valid_margin_actual = self.main_task_classifier(X_proj_actual)
+            main_valid_prob_actual = self.get_max_margin_prob_vector(main_valid_margin_actual)
 
             #Getting the flip prob
             main_valid_margin_flip = self.main_task_classifier(X_proj_flip)
@@ -1783,7 +1777,22 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
         
-
+        #Now measuring the pdelta for every subgroup
+        subgroup_mask_dict=self._generate_all_subgroup_mask_dict(
+                                                    main_label_valid = label_valid,
+                                                    topic_label_valid = topic_label_valid,
+        )
+        for subgroup in self.topic_flip_main_prob_delta_ldict[cidx].keys():
+            subgroup_mask = subgroup_mask_dict[subgroup]
+            #Now calculating the pdelta for the subgroup
+            sub_pdelta = tf.math.reduce_mean(tf.math.abs(
+                                    main_valid_prob_actual[subgroup_mask]\
+                                        -main_valid_prob_flip[subgroup_mask]
+            ))
+            #Updating the subgroup pdelta
+            self.topic_flip_main_prob_delta_ldict[cidx][subgroup].update_state(sub_pdelta)
+            
+        
         #Getting the global probability after pertubation
         self.topic_flip_main_valid_accuracy_list[cidx].update_state(label_valid,main_valid_prob_flip)
 
@@ -1795,7 +1804,54 @@ class SimpleNBOW(keras.Model):
         #Getting the chnage in the embedding after pertubation
         avg_emb_diff = tf.math.reduce_mean(tf.norm((X_proj_actual-X_proj_flip),axis=-1))
         self.topic_flip_emb_diff_list[cidx].update_state(avg_emb_diff)
- 
+    
+    def _generate_all_subgroup_mask_dict(self,main_label_valid,topic_label_valid):
+        '''
+        '''
+        subgroup_mask_dict={}
+
+        #Getting the group1 subgroup
+        subgroup_mask_dict["m1t1"]=tf.math.logical_and(
+                                                    main_label_valid==1,
+                                                    topic_label_valid==1,
+        )
+        #Getting the group2 subgroup
+        subgroup_mask_dict["m0t1"]=tf.math.logical_and(
+                                                    main_label_valid==0,
+                                                    topic_label_valid==1,
+        )
+        #Getting the group3 subgroup
+        subgroup_mask_dict["m0t0"]=tf.math.logical_and(
+                                                    main_label_valid==0,
+                                                    topic_label_valid==0,
+        )
+        #Getting the group4 subgroup
+        subgroup_mask_dict["m1t0"]=tf.math.logical_and(
+                                                    main_label_valid==1,
+                                                    topic_label_valid==0,
+        )
+
+
+        #Getting the smin mask
+        subgroup_mask_dict["smin"]=tf.math.logical_or(
+                                                subgroup_mask_dict["m0t1"],
+                                                subgroup_mask_dict["m1t0"]
+        )
+
+        #Getting the smaj mask
+        subgroup_mask_dict["smaj"]=tf.math.logical_or(
+                                                subgroup_mask_dict["m1t1"],
+                                                subgroup_mask_dict["m0t0"]
+        )
+
+        #Getting the overall mask
+        subgroup_mask_dict["all"]=tf.math.logical_or(
+                                                subgroup_mask_dict["smin"],
+                                                subgroup_mask_dict["smaj"]
+        )
+
+        return subgroup_mask_dict
+
     def _get_proj_X_enc(self,X_enc,P_matrix):
         '''
         This will give the projected encoded latent representaion which will be furthur
