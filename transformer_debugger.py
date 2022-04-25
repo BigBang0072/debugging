@@ -1931,6 +1931,14 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}_flip_main_logpdelta".format(tidx)]=float(self.topic_flip_main_logprob_delta_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_emb_diff".format(tidx)]=float(self.topic_flip_emb_diff_list[tidx].result().numpy())
 
+            #Adding the pdelta for each of the subgroups
+            for subgroup in self.topic_flip_main_prob_delta_ldict[tidx].keys():
+                classifier_accuracy["topic{}_flip_main_pdelta_{}".format(tidx,subgroup)]=float(
+                                        self.topic_flip_main_prob_delta_ldict[tidx][subgroup].result().numpy()
+                )
+        print("Clasifier Accuracy:")
+        mypp(classifier_accuracy)
+
         return classifier_accuracy
     
     def save_data_for_embedding_proj(self,cat_dataset,P_matrix,fname):
