@@ -7,10 +7,20 @@ target:
   vc: resrchvc
 
 environment:
-  image: tensorflow/tensorflow:2.3-gpu
+  image: tensorflow/tensorflow:latest-gpu
   registry: docker.io # any public registry can be specified here
   setup:
-    - . experiment_setup.sh
+    - pip install tensorflow
+      pip install tensorflow_addons
+      pip install gensim==4.0
+      pip install transformers
+      pip install spacy
+      pip install jsonlines
+      pip install sklearn
+      pip install pandas
+      python -m spacy download en_core_web_sm
+      python -m spacy download en_core_web_lg
+
 
 code:
   # local directory of the code. this will be uploaded to the server.
