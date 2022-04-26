@@ -2230,7 +2230,7 @@ class DataHandleTransformer():
         
         def add_examples_from_file(fname,example_list):
             print("Reading file: {}".format(fname))
-            with jsonlines.open(self.data_args["path"]+fname) as rhandle:
+            with jsonlines.open(self.data_args["path"]+"/"+fname) as rhandle:
                 for example_json in rhandle.iter():
                     example_dict = dict(
                                     sentence1 = example_json["sentence1"],

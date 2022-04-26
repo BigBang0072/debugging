@@ -2013,7 +2013,7 @@ class SimpleNBOW(keras.Model):
                     classifier_acc_dict = init_classifier_acc
         ))
         #Dumping the first set of metrics we have
-        probe_metric_path = "nlp_logs/{}/probe_metric_list.json".format(data_args["expt_name"])
+        probe_metric_path = "{}/probe_metric_list.json".format(data_args["expt_meta_path"])
         print("Dumping the probe metrics in: {}".format(probe_metric_path))
         with open(probe_metric_path,"w") as whandle:
             json.dump(self.probe_metric_list,whandle,indent="\t")
@@ -2035,7 +2035,7 @@ class SimpleNBOW(keras.Model):
         self.config = config
         
         #Saving the config
-        config_path = "nlp_logs/{}/config.json".format(data_args["expt_name"])
+        config_path = "{}/config.json".format(data_args["expt_meta_path"])
         print("Dumping the config in: {}".format(config_path))
         with open(config_path,"w") as whandle:
             json.dump(config,whandle,indent="\t")
@@ -3810,6 +3810,7 @@ if __name__=="__main__":
     parser.add_argument('-lr',dest="lr",type=float)
 
     parser.add_argument('-path',dest="path",type=str)
+    parser.add_argument('-out_path',dest="out_path",type=str,default=".")
     parser.add_argument('-task_name',dest="task_name",type=str,default="sentiment")
     parser.add_argument('-spurious_ratio',dest="spurious_ratio",type=float,default=None)
     parser.add_argument('-causal_ratio',dest="causal_ratio",type=float,default=None)
@@ -3888,6 +3889,8 @@ if __name__=="__main__":
     #Defining the Data args
     data_args={}
     data_args["path"] = args.path                   #"dataset/amazon/"
+    data_args["expt_name"]=args.expt_name
+    data_args["out_path"] = args.out_path
     data_args["task_name"] = args.task_name         #"sentiment or regard ..."
     data_args["causal_ratio"] = args.causal_ratio
     data_args["spurious_ratio"] = args.spurious_ratio
@@ -3940,6 +3943,12 @@ if __name__=="__main__":
     data_args["save_emb"]=args.save_emb
     data_args["neg1_flip_method"]=args.neg1_flip_method
 
+    #Creating the metadata folder
+    meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])
+    print("Creating log file in: {}".format(meta_folder))
+    os.makedirs(meta_folder,exist_ok=True)
+    data_args["expt_meta_path"]=meta_folder
+
 
     #Setting the seeds
     data_args["run_num"]=args.run_num
@@ -3947,10 +3956,14 @@ if __name__=="__main__":
     random.seed(data_args["run_num"])
     np.random.seed(data_args["run_num"])
 
+
+
+
+
+
     #Defining the Model args
     model_args={}
-    model_args["expt_name"]=args.expt_name
-    data_args["expt_name"]=model_args["expt_name"]
+    model_args["expt_name"]=data_args["expt_name"]
     model_args["load_weight_exp"]=args.load_weight_exp
     model_args["load_weight_epoch"]=args.load_weight_epoch
     model_args["lr"]=args.lr
@@ -3992,10 +4005,6 @@ if __name__=="__main__":
     model_args["measure_flip_pdelta"]=args.measure_flip_pdelta
     model_args["gpu_num"]=args.gpu_num
 
-    #Creating the metadata folder
-    meta_folder = "nlp_logs/{}".format(model_args["expt_name"])
-    os.makedirs(meta_folder,exist_ok=True)
-    data_args["expt_meta_path"]=meta_folder
 
     #################################################
     #        SELECT ONE OF THE JOBS FROM BELOW      #
