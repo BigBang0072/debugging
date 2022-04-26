@@ -8,6 +8,7 @@ import pandas as pd
 from tensorflow._api.v2 import data
 import scipy
 from scipy.spatial import distance
+import random
 
 import tensorflow as tf
 from tensorflow import keras
@@ -3801,6 +3802,7 @@ if __name__=="__main__":
     import argparse
     parser=argparse.ArgumentParser()
     parser.add_argument('-expt_num',dest="expt_name",type=str)
+    parser.add_argument('-run_num',dest="run_num",type=int)
     parser.add_argument('-num_samples',dest="num_samples",type=int,default=None)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int,default=None)
@@ -3937,6 +3939,13 @@ if __name__=="__main__":
     # data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
     data_args["save_emb"]=args.save_emb
     data_args["neg1_flip_method"]=args.neg1_flip_method
+
+
+    #Setting the seeds
+    data_args["run_num"]=args.run_num
+    tf.random.set_seed(data_args["run_num"])
+    random.seed(data_args["run_num"])
+    np.random.seed(data_args["run_num"])
 
     #Defining the Model args
     model_args={}

@@ -26,8 +26,8 @@ import random
 import jsonlines
 
 #Setting the random seed
-random.seed(22)
-np.random.seed(22)
+# random.seed(22)
+# np.random.seed(22)
 
 from transformers import AutoTokenizer
 
@@ -272,6 +272,11 @@ class DataHandleTransformer():
     '''
     def __init__(self,data_args):
         self.data_args = data_args
+        #Setting the seed for the furthur operation
+        tf.random.set_seed(data_args["run_num"])
+        random.seed(data_args["run_num"])
+        np.random.seed(data_args["run_num"])
+
         self.tokenizer = AutoTokenizer.from_pretrained(data_args["transformer_name"])
 
         self.delimiter=",|\?|\!|-|\*| |  |;|\.|\(|\)|\n|\"|:|'|/|&|`|[|]|\{|\}|\>|\<"
