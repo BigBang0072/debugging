@@ -117,7 +117,7 @@ def plot_all_results(ax,pval_list,all_result_dict,plot_item_list,extra_label="")
         yval = [all_result_dict[pval][item_name]["mean"] for pval in pval_list]
         yerr = [all_result_dict[pval][item_name]["std"] for pval in pval_list]
         #Plotting the guy
-        ax[iidx].errorbar(pval_list,yval,yerr,ls="-.",marker="o",label=item_name+extra_label)
+        ax[iidx].errorbar(pval_list,yval,yerr,ls="-.",marker="o",label=item_name+extra_label,alpha=0.7)
         # ax[iidx].set_ylim(0.0,1.0)
         ax[iidx].set_xlabel("correlation value [0.5,1]")
         ax[iidx].set_ylabel("result")
@@ -135,7 +135,7 @@ def plot_one_timeline(pval_list,all_result_timeline,plot_item_list):
             x_val = range(len(pdict_timeline[item_name]["mean"])) #Denotes the number of epoch
             y_val = pdict_timeline[item_name]["mean"]
             y_err = pdict_timeline[item_name]["std"]
-            ax[iidx].errorbar(x_val,y_val,y_err,marker="o",ls="-.",label="pval={}".format(pval))
+            ax[iidx].errorbar(x_val,y_val,y_err,marker="o",ls="-.",label="pval={}".format(pval),alpha=0.7)
             ax[iidx].set_xlabel("epochs")
             ax[iidx].set_ylabel(item_name)
             ax[iidx].legend()
