@@ -1054,6 +1054,8 @@ class SimpleNBOW(keras.Model):
         self.topic_flip_main_logprob_delta_list = [] #Keeps the difference between the logprob of the output
         self.topic_flip_emb_diff_list = []   #Keep track of absolute change in the embedding 
         self.topic_smin_main_valid_accuracy_list = []
+        #For testing if the probing classifier is wrong
+        self.main_smin_topic_valid_accuracy_list = [] #here the smin is defined wrt to main label and we get topic accuracy
         for tidx in range(self.data_args["num_topics"]):
             #Initializing the classifier for the topic task
             self.topic_task_classifier_list.append(
@@ -1072,6 +1074,7 @@ class SimpleNBOW(keras.Model):
             #To keep the main accuracy when we flip the features in the input
             self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
             self.topic_smin_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_smin_main_vacc".format(tidx)))
+            self.main_smin_topic_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="main_smin_topic_{}_vacc".format(tidx)))
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
             self.topic_flip_main_logprob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_logprob_delta".format(tidx)))
             self.topic_flip_emb_diff_list.append(tf.keras.metrics.Mean(name="topic_{}_flip_emb_delta".format(tidx)))
@@ -1128,6 +1131,7 @@ class SimpleNBOW(keras.Model):
             self.topic_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_valid_accuracy_list[tidx].reset_states()
             self.topic_smin_main_valid_accuracy_list[tidx].reset_states()
+            self.main_smin_topic_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_prob_delta_list[tidx].reset_states()
             self.topic_flip_main_logprob_delta_list[tidx].reset_states()
             self.topic_flip_emb_diff_list[tidx].reset_states()
@@ -1680,6 +1684,11 @@ class SimpleNBOW(keras.Model):
             #Getting the topic validation accuracy
             topic_valid_prob = self.topic_task_classifier_list[cidx](X_proj)
             self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+            #Getting the topic-accuracy of Smin group wrt to main labels now
+            self.main_smin_topic_valid_accuracy_list[cidx].update_state(
+                                                        topic_label_valid[smin_mask],
+                                                        topic_valid_prob[smin_mask]
+            )
         elif self.model_args["loss_type"]=="linear_svm":
             #Getting the main task accuracy
             main_valid_margin = self.main_task_classifier(X_proj)
@@ -1696,6 +1705,11 @@ class SimpleNBOW(keras.Model):
             topic_valid_margin = self.topic_task_classifier_list[cidx](X_proj)
             topic_valid_prob = self.get_max_margin_prob_vector(topic_valid_margin)
             self.topic_valid_accuracy_list[cidx].update_state(topic_label_valid,topic_valid_prob)
+            #Getting the topic-accuracy of Smin group wrt to main labels now
+            self.main_smin_topic_valid_accuracy_list[cidx].update_state(
+                                                        topic_label_valid[smin_mask],
+                                                        topic_valid_prob[smin_mask]
+            )
         else:
             raise NotImplementedError()
 
@@ -1932,6 +1946,7 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_smin_main".format(tidx)]=float(self.topic_smin_main_valid_accuracy_list[tidx].result().numpy())
+            classifier_accuracy["main_smin_topic{}".format(tidx)]=float(self.main_smin_topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_pdelta".format(tidx)]=float(self.topic_flip_main_prob_delta_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_logpdelta".format(tidx)]=float(self.topic_flip_main_logprob_delta_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_emb_diff".format(tidx)]=float(self.topic_flip_emb_diff_list[tidx].result().numpy())

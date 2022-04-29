@@ -57,7 +57,8 @@ def aggregate_random_runs(rdict_list):
     for key,val in rdict_agg_list.items():
         rdict_agg[key] = dict(
                             mean = np.mean(val),
-                            std  = np.std(val)
+                            std  = np.std(val),
+                            val_list = val,
         )
     
     return rdict_agg
