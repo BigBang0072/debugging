@@ -3,7 +3,7 @@ description: Testing the job sumbmission via amlt
 target:
   service: amlk8s
   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
-  name: itpeusp40cl
+  name: itpeusp100cl
   vc: resrchvc
 
 environment:
@@ -61,7 +61,7 @@ search:
     - name: hlayer
       values: [0]
     - name: sample
-      values: [20000,40000]
+      values: [10000]
     - name: epoch
       values: [20]
     - name: pval
