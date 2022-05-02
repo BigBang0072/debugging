@@ -2461,8 +2461,8 @@ class DataHandleTransformer():
             in our dataset by measuring the correlation bw male and female topic
             with the topic label
             '''
-            if "aae" in data_args["path"]:
-                return 
+            if "aae" in self.data_args["path"]:
+                return
 
             #This is only for the gender data we are doing
             male_counter = 0.0
