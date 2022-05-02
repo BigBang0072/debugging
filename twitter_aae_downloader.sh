@@ -17,3 +17,9 @@ mkdir sentiment_race
 python make_data.py ./TwitterAAE-full-v1/twitteraae_all ./sentiment_race sentiment race
 
 
+
+
+#Downloading the PAN-16 dataset
+#1. Get the request access on the website --> email will be sent with the link
+#Add the token in the link we get to the downloader link to download on terminal
+wget https://zenodo.org/record/3745963/files/pan16-author-profiling-training-dataset-2016-04-25.zip?token=eyJhbGciOiJIUzUxMiIsImV4cCI6MTY1NDEyMDc5OSwiaWF0IjoxNjUxNDc0NjY4fQ.eyJkYXRhIjp7InJlY2lkIjozNzQ1OTYzfSwiaWQiOjIyNzAyLCJybmQiOiJjNGY3YmNiNCJ9.MGnTbv5FqtPF-WeqmyBkgOZSkT_BVXqMr28twn_eyJXf_5x31_KBAaftaHJNS2GuUNom4-pJpeFNQLVdE-fmIw#.Ym-IWNpBxaQ
