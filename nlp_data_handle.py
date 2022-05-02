@@ -2335,6 +2335,21 @@ class DataHandleTransformer():
 
 
         return input_idx,attn_mask,flip_input_idx,flip_attn_mask
+    
+    def controlled_twitter_aae_dataset_handler(self,):
+        '''
+        This function will add the twitter dataset in the pipeline
+        as the 2nd NLP dataset where we want to experiment.
+
+        Here we dont know how to do the pdelta_calculation becuase
+        we dont know about how race information looks in the input.
+
+        Maybe that's a good thing to see the results in the dataset
+        where we cant intervene. But then we dont have any way to know
+        if the results are correact except the Acc(Smin) metric.
+        '''
+        
+
 
 
 if __name__=="__main__":
