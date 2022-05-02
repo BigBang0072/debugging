@@ -2336,20 +2336,90 @@ class DataHandleTransformer():
 
         return input_idx,attn_mask,flip_input_idx,flip_attn_mask
     
-    def controlled_twitter_aae_dataset_handler(self,):
+    def controlled_twitter_dataset_handler(self,):
         '''
         This function will add the twitter dataset in the pipeline
         as the 2nd NLP dataset where we want to experiment.
 
+
+        AAE:
+        Task: Sentiment
+        Spurious Attribute: Race
         Here we dont know how to do the pdelta_calculation becuase
         we dont know about how race information looks in the input.
 
         Maybe that's a good thing to see the results in the dataset
         where we cant intervene. But then we dont have any way to know
         if the results are correact except the Acc(Smin) metric.
+
+
+        PAN16:
+        Task: Mention
+        Spuriosu Attribute: Gender
+        This dataset contains the tweets with mention task and gender 
+        and age is also labelled along with it. 
+        Here we could easily pertub the gender from the dataset
         '''
+        #Getting the example dataframe
+        example_df = self._get_twitter_dataframe()
+
         
 
+    
+    def _get_twitter_dataframe(self,):
+        '''
+        '''
+        #Getting the vocab dict
+        i2w_dict = {}
+        with open(self.data_args["path"]+"/.vocab.txt","r") as vocab_handle:
+            for widx,word in enumerate(vocab_handle):
+                i2w_dict[widx]=word
+        
+
+        #First of all we have to read the files and put them in single place
+        def get_example_from_file(fname,main_label,topic_label):
+            example_dict_list =[]
+            with open(self.data_args["path"]+"/"+fname,"r") as rhandle:
+                for example in rhandle:
+                    example_string = " ".join(
+                                    [i2w_dict[int(widx)] for widx in example.split(" ")]
+                    )
+                    example_dict_list.append(
+                        dict(
+                            sentence = example_string,
+                            main_label=main_label,
+                            topic_label=topic_label
+                        )
+                    )
+            return example_dict_list
+        #Getting all the examples
+        all_example_dict_list=[]
+        all_example_dict_list.append(get_example_from_file(
+                            fname="pos_pos",
+                            main_label=1,
+                            topic_label=1
+        ))
+        all_example_dict_list.append(get_example_from_file(
+                            fname="pos_neg",
+                            main_label=1,
+                            topic_label=0
+        ))
+        all_example_dict_list.append(get_example_from_file(
+                            fname="neg_pos",
+                            main_label=0,
+                            topic_label=1
+        ))
+        all_example_dict_list.append(get_example_from_file(
+                            fname="neg_neg",
+                            main_label=0,
+                            topic_label=0
+        ))
+
+
+        #Creating the dataframe
+        example_df = pd.DataFrame(all_example_dict_list)
+        pdb.set_trace()
+        return example_df
 
 
 if __name__=="__main__":
@@ -2373,18 +2443,26 @@ if __name__=="__main__":
 
 
     #Testing the data-handler
+    # data_args={}
+    # data_args["path"]="dataset/multinli_1.0/"
+    # data_args["transformer_name"]="bert-base-uncased"
+    # data_args["num_sample"]=1000
+    # data_args["neg_topic_corr"]=0.7
+    # data_args["batch_size"]=100
+    # data_args["max_len"]=200
+    # data_args["num_topics"]=1
+    # data_args["noise_ratio"]=0.0
+    # data_handler = DataHandleTransformer(data_args)
+    # cat_dataset=data_handler.controlled_multinli_dataset_handler()
+    # pdb.set_trace()
+
+
+    #Testing the twitter datahandler
     data_args={}
     data_args["path"]="dataset/multinli_1.0/"
     data_args["transformer_name"]="bert-base-uncased"
-    data_args["num_sample"]=1000
-    data_args["neg_topic_corr"]=0.7
-    data_args["batch_size"]=100
-    data_args["max_len"]=200
-    data_args["num_topics"]=1
-    data_args["noise_ratio"]=0.0
     data_handler = DataHandleTransformer(data_args)
-    cat_dataset=data_handler.controlled_multinli_dataset_handler()
-    pdb.set_trace()
+    data_handler.controlled_twitter_dataset_handler()
 
 
 
