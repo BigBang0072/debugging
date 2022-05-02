@@ -2142,7 +2142,10 @@ class DataHandleTransformer():
         # pdb.set_trace()
 
         #Get the synthetic dataset which is balanced with respect to p-value
-        pbalanced_df = self._get_pbalanced_dataframe(example_df)
+        pbalanced_df = self._get_pbalanced_dataframe(
+                                                    example_df=example_df,
+                                                    group_ulim=41000,
+        )
 
         #Getting the labels array
         all_label_arr = np.stack([
@@ -2261,12 +2264,11 @@ class DataHandleTransformer():
         
         return example_df
     
-    def _get_pbalanced_dataframe(self,example_df):
+    def _get_pbalanced_dataframe(self,example_df,group_ulim):
         '''
         Assumption is that both the main labels and the topic labels are binary right now
         '''
         #The maximum possible example in a group (decided by inspection)
-        group_ulim = 41000
         assert self.data_args["num_sample"]<=2*group_ulim,"Examples Exhausted"
 
         #Shuffling the dataframe first
@@ -2363,63 +2365,212 @@ class DataHandleTransformer():
         #Getting the example dataframe
         example_df = self._get_twitter_dataframe()
 
-        
+        #Get the synthetic dataset which is balanced with respect to p-value
+        pbalanced_df = self._get_pbalanced_dataframe(
+                                                    example_df=example_df,
+                                                    group_ulim=80000,
+        )
 
+        #Getting the labels array
+        all_label_arr = np.stack([
+                                pbalanced_df["main_label"].to_numpy(),
+                                pbalanced_df["neg_topic_label"].to_numpy(),
+        ],axis=-1)
+        self._print_label_distribution(all_label_arr)
+        #Adding noise to the labels to have non-fully predictive causal features
+        all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
+
+        #Now encoding the text to be readable by model
+        input_idx,attn_mask,flip_input_idx,flip_attn_mask = self._get_bert_tokenized_inputs_twitter(pbalanced_df)
+
+        #Now we are ready to create our dataset object
+        cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                dict(
+                                    input_idx=input_idx,
+                                    attn_mask=attn_mask,
+                                    input_idx_t0_flip=flip_input_idx,
+                                    attn_mask_t0_flip=flip_attn_mask,
+                                    label=all_label_arr[:,0],
+                                    topic_label=all_label_arr[:,1:]
+                                )
+        )
+
+        #Batching the dataset
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+        return cat_dataset
     
     def _get_twitter_dataframe(self,):
         '''
         '''
-        #Getting the vocab dict
-        i2w_dict = {}
-        with open(self.data_args["path"]+"/.vocab.txt","r") as vocab_handle:
-            for widx,word in enumerate(vocab_handle):
-                i2w_dict[widx]=word
+        male_topic_words = [
+            "his","he","him","himself","man","male","actor",
+            "husband","father","uncle",
+            "gentleman","masculine","chap","bloke","lad","dude",
+            "bro","brother","son"
+        ]
+        female_topic_words = [ 
+            "her","she","herself","women","actress","lady","girl",
+            "gal","sister","daughter","wife","mother","aunt","nanny"
+        ]
+
+        #Generating the flip
+        def get_flipped_sentence(sentence):
+            '''
+            '''
+            if "pan16" in self.data_args["path"]:
+                #Now generating the flip for the sentence
+                word_list=[]
+                for word in sentence.split():
+                    #If we have a male related word we will replace with female word
+                    if word in male_topic_words:
+                        if self.data_args["neg1_flip_method"]=="remove_negation":
+                            continue
+                        elif self.data_args["neg1_flip_method"]=="replace_negation":
+                            #Sampling a female related word
+                            female_word = str(
+                                    np.random.choice(female_topic_words,1)[0]
+                            )
+                            word_list.append(female_word)
+                        else:
+                            raise NotImplementedError()
+                    elif word in female_topic_words:
+                        if self.data_args["neg1_flip_method"]=="remove_negation":
+                            continue 
+                        elif self.data_args["neg1_flip_method"]=="replace_negation":
+                            #Sampling a male related words
+                            male_word = str(
+                                    np.random.choice(male_topic_words,1)[0]
+                            )
+                            word_list.append(male_word)
+                        else:
+                            raise NotImplementedError()
+                    else:
+                        word_list.append(word)
+                sentence = " ".join(word_list)
+                return sentence
+            elif "aae" in self.data_args["path"]:
+                #Currently we dont know how to make pertubation to the race
+                #Think
+                return sentence
+            else:
+                raise NotImplementedError()
         
+        def print_topic_model_topic_correlation(example_dict_list,topic_label):
+            '''
+            This function will see if we are correctly capturing the topic
+            in our dataset by measuring the correlation bw male and female topic
+            with the topic label
+            '''
+            if "aae" in data_args["path"]:
+                return 
+
+            #This is only for the gender data we are doing
+            male_counter = 0.0
+            female_counter = 0.0
+            for example in example_dict_list:
+                sentence = example["sentence"]
+                if(example["neg_topic_label"]!=topic_label):
+                    continue
+                for word in sentence.split():
+                    if word in male_topic_words:
+                        male_counter +=1
+                    elif word in female_topic_words:
+                        female_counter+=1
+            
+            print("topic label:{:}\tmale_ratio:{:0.2f}\tfemale_ratio{:0.2f}".format(
+                               topic_label,
+                               male_counter/(male_counter+female_counter),
+                               female_counter/(male_counter+female_counter)
+            ))
+
 
         #First of all we have to read the files and put them in single place
         def get_example_from_file(fname,main_label,topic_label):
             example_dict_list =[]
             with open(self.data_args["path"]+"/"+fname,"r") as rhandle:
                 for example in rhandle:
-                    example_string = " ".join(
-                                    [i2w_dict[int(widx)] for widx in example.split(" ")]
-                    )
+                    #Nowmalizing the sentence
+                    example = example.strip().lower()
+
+                    #Creating the example dict
                     example_dict_list.append(
                         dict(
-                            sentence = example_string,
+                            sentence = example,
                             main_label=main_label,
-                            topic_label=topic_label
+                            neg_topic_label=topic_label,#just using same name as multinlp
+                            flip_sentence=get_flipped_sentence(example)
                         )
                     )
             return example_dict_list
+        
+
         #Getting all the examples
         all_example_dict_list=[]
-        all_example_dict_list.append(get_example_from_file(
+        all_example_dict_list+=get_example_from_file(
                             fname="pos_pos",
                             main_label=1,
                             topic_label=1
-        ))
-        all_example_dict_list.append(get_example_from_file(
+        )
+        all_example_dict_list+=get_example_from_file(
                             fname="pos_neg",
                             main_label=1,
                             topic_label=0
-        ))
-        all_example_dict_list.append(get_example_from_file(
+        )
+        all_example_dict_list+=get_example_from_file(
                             fname="neg_pos",
                             main_label=0,
                             topic_label=1
-        ))
-        all_example_dict_list.append(get_example_from_file(
+        )
+        all_example_dict_list+=get_example_from_file(
                             fname="neg_neg",
                             main_label=0,
                             topic_label=0
-        ))
+        )
+
+        #Printing the label correlation
+        print("\n\nPrinting the topic-label Correlation with topic model")
+        print_topic_model_topic_correlation(all_example_dict_list,1)
+        print_topic_model_topic_correlation(all_example_dict_list,0)
+        print("\n\n")
 
 
         #Creating the dataframe
         example_df = pd.DataFrame(all_example_dict_list)
-        pdb.set_trace()
+        # pdb.set_trace()
         return example_df
+    
+    def _get_bert_tokenized_inputs_twitter(self,pbalanced_df):
+        '''
+        '''
+        #Getting the list of sentence 1 and sentence2 from the df
+        sentence_list, flip_sentence_list = [],[]
+        for eidx in range(pbalanced_df.shape[0]):
+            sentence_list.append(pbalanced_df.iloc[eidx]["sentence"])
+            flip_sentence_list.append(pbalanced_df.iloc[eidx]["flip_sentence"])
+        
+        #Tokenize the sentence with our pre-trained tokenizer
+        encoded_doc = self.tokenizer(
+                                    sentence_list,#[CLS] will be added upfront automatically
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+        input_idx = encoded_doc["input_ids"]
+        attn_mask = encoded_doc["attention_mask"]
+
+        #Tokenizing the flip sentence
+        flip_encoded_doc = self.tokenizer(
+                                    flip_sentence_list, #will automatically add the seperater [SEP]
+                                    padding='max_length',
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+        flip_input_idx = flip_encoded_doc["input_ids"]
+        flip_attn_mask = flip_encoded_doc["attention_mask"]
+
+        return input_idx,attn_mask,flip_input_idx,flip_attn_mask
 
 
 if __name__=="__main__":
@@ -2459,10 +2610,21 @@ if __name__=="__main__":
 
     #Testing the twitter datahandler
     data_args={}
-    data_args["path"]="dataset/multinli_1.0/"
+    data_args["path"]="dataset/twitter_pan16_mention_gender"
+    # data_args["path"]="dataset/twitter_aae_sentiment_race"
     data_args["transformer_name"]="bert-base-uncased"
+    data_args["num_sample"]=10000
+    data_args["neg_topic_corr"]=0.7
+    data_args["batch_size"]=100
+    data_args["max_len"]=200
+    data_args["num_topics"]=1
+    data_args["noise_ratio"]=0.0
+    data_args["run_num"]=14
+    data_args["neg1_flip_method"]="remove_negation"
+
     data_handler = DataHandleTransformer(data_args)
-    data_handler.controlled_twitter_dataset_handler()
+    cat_dataset=data_handler.controlled_twitter_dataset_handler()
+    pdb.set_trace()
 
 
 

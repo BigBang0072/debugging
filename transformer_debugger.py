@@ -2628,10 +2628,13 @@ def nbow_trainer_stage2(data_args,model_args):
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
     elif "multinli" in data_args["path"]:
         cat_dataset = data_handler.controlled_multinli_dataset_handler()
+    elif "twitter" in data_args["path"]:
+        cat_dataset = data_handler.controlled_twitter_dataset_handler()
     else:
         raise NotImplementedError()
     
-    if "nlp_toy2" not in data_args["path"] and "multinli" not in data_args["path"]:
+    if "nlp_toy2" not in data_args["path"] and "multinli" not in data_args["path"]\
+            and "twitter" not in data_args["path"]:
         #NLP TOY2 has its data processing already bulit in its generation function
         #Getting the dataset for the required category and topic
         print("Getting the dataset for: cat:{}\ttopic:{}".format(
@@ -2663,14 +2666,15 @@ def nbow_trainer_stage2(data_args,model_args):
     print("Stage 1: Training the main classifier! (to be debugged later)")
     if(model_args["main_model_mode"]=="causal" and (
                                         "nlp_toy2" in data_args["path"] or
-                                        "multinli" in data_args["path"]
+                                        "multinli" in data_args["path"] or
+                                        "twitter"  in data_args["path"]
                                     )
     ):
         #Here we will train on the main classifier to be purely causal
         print("Training a pure causal classifier where there is no spurious correlation")
 
         #building the dataset where the spurious feature has p=0.5
-        if "multinli" in data_args["path"]:
+        if "multinli" in data_args["path"] or "twitter" in data_args["path"]:
             init_tneg_pval = data_handler.data_args["neg_topic_corr"]
             data_handler.data_args["neg_topic_corr"]=0.5
         else:
@@ -2683,8 +2687,10 @@ def nbow_trainer_stage2(data_args,model_args):
             causal_cat_dataset = data_handler.toy_tabular_dataset_handler2()
         elif "multinli" in data_args["path"]:
             causal_cat_dataset = data_handler.controlled_multinli_dataset_handler()
+        elif "twitter" in data_args["path"]:
+            causal_cat_dataset = data_handler.controlled_twitter_dataset_handler()
         
-        if "multinli" in data_args["path"]:
+        if "multinli" in data_args["path"] or "twitter" in data_args["path"]:
             data_handler.data_args["neg_topic_corr"]=init_tneg_pval
         else:
             data_handler.data_args["topic_corr_list"][-1]=init_t1_pval
@@ -3938,7 +3944,7 @@ if __name__=="__main__":
         data_args["tab_sigma_ubound"]=args.tab_sigma_ubound
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]
-    elif "multinli" in data_args["path"]:
+    elif "multinli" in data_args["path"] or "twitter" in data_args["path"]:
         data_args["neg_topic_corr"]=args.neg_topic_corr
         data_args["noise_ratio"]=args.noise_ratio
         data_args["dtype"]=args.dtype
