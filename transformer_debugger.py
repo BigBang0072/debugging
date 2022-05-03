@@ -1408,6 +1408,22 @@ class SimpleNBOW(keras.Model):
             #Updating the x-entropy loss for topic
             self.topic_pred_xentropy_list[adv_rm_tidx].update_state(rm_topic_loss)
 
+            #We will measure the topic accuracy before taking the gradient steps
+            #So that we measure the actual topic information in the latent space
+            if self.model_args["valid_before_gupdate"]==True:
+                self.valid_step_stage2(
+                                    dataset_batch=dataset_batch,
+                                    P_matrix=P_matrix,
+                                    cidx=adv_rm_tidx,
+                )
+                #Also we will measure the pdeltas if we want to 
+                if model_args["measure_flip_pdelta"]==True:
+                    self.valid_step_stage2_flip_topic(
+                                        dataset_batch=dataset_batch,
+                                        P_matrix=P_matrix,
+                                        cidx=adv_rm_tidx,
+                    )
+
             #Getting the gradient and updating the parameter
             grads = tape.gradient(total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
@@ -2968,25 +2984,27 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
                 raise NotImplementedError()
 
         #Getting the validation scores once the train step is complete
-        for data_batch in cat_dataset:
-            #Validate the other topic so that we know the accuracy etc
-            for tidx in range(data_args["num_topics"]):
-                #Getting the validation accuracy
-                classifier_main.valid_step_stage2(
-                                    dataset_batch=data_batch,
-                                    P_matrix=P_identity,
-                                    cidx=tidx
-                )
-            
-            #In real model we dont have the pertubation power
-            if model_args["measure_flip_pdelta"]==True:
-                #Also let us get the effect of pertubation of the feature on main classifier
+        if model_args["valid_before_gupdate"]==False:
+            print("Validating after the Gradient update!")
+            for data_batch in cat_dataset:
+                #Validate the other topic so that we know the accuracy etc
                 for tidx in range(data_args["num_topics"]):
-                    classifier_main.valid_step_stage2_flip_topic(
+                    #Getting the validation accuracy
+                    classifier_main.valid_step_stage2(
                                         dataset_batch=data_batch,
                                         P_matrix=P_identity,
-                                        cidx=tidx,
+                                        cidx=tidx
                     )
+                
+                #In real model we dont have the pertubation power
+                if model_args["measure_flip_pdelta"]==True:
+                    #Also let us get the effect of pertubation of the feature on main classifier
+                    for tidx in range(data_args["num_topics"]):
+                        classifier_main.valid_step_stage2_flip_topic(
+                                            dataset_batch=data_batch,
+                                            P_matrix=P_identity,
+                                            cidx=tidx,
+                        )
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
@@ -3856,7 +3874,7 @@ if __name__=="__main__":
     parser.add_argument('-neg1_flip_method',dest="neg1_flip_method",type=str,default=None)
     parser.add_argument('--measure_flip_pdelta',default=False,action="store_true")
     parser.add_argument('-gpu_num',dest="gpu_num",type=int,default=0)
-
+    parser.add_argument('--valid_before_gupdate',default=False,action="store_true")
     
 
     #Arguments related to the adversarial removal
@@ -4025,6 +4043,7 @@ if __name__=="__main__":
     model_args["dropout_rate"]=args.dropout_rate
     model_args["measure_flip_pdelta"]=args.measure_flip_pdelta
     model_args["gpu_num"]=args.gpu_num
+    model_args["valid_before_gupdate"]=args.valid_before_gupdate
 
 
     #################################################
