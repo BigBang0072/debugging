@@ -29,6 +29,8 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         pdict["topic0_logpdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_logpdelta"])
         pdict["topic0_pdelta_m1t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_m1t0"])
         pdict["topic0_pdelta_m0t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_m0t0"])
+        pdict["topic0_pdelta_m1t1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_m1t1"])
+        pdict["topic0_pdelta_m0t1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_m0t1"])
         pdict["topic0_pdelta_all"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_all"])
         pdict["topic0_pdelta_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_smin"])
         pdict["main_smin_topic0"].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic0"])
@@ -100,7 +102,7 @@ def get_all_result_timeline(run_list,pval_list,fname_pattern):
         prdict_list = []
         for ridx in run_list:
             fname = fname_pattern.format(pval,ridx)
-            print("Loading file: {}".format(fname))
+            # print("Loading file: {}".format(fname))
             prdict = load_probe_metric_list(fname)
             prdict_list.append(prdict)
         #Getting the aggregate list

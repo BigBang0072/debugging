@@ -2487,10 +2487,12 @@ class DataHandleTransformer():
         #First of all we have to read the files and put them in single place
         def get_example_from_file(fname,main_label,topic_label):
             example_dict_list =[]
-            with open(self.data_args["path"]+"/"+fname,"r") as rhandle:
-                for example in rhandle:
+            with open(self.data_args["path"]+"/"+fname,"r",encoding="ISO-8859-1") as rhandle:
+                for eidx,example in enumerate(rhandle):
                     #Nowmalizing the sentence
                     example = example.strip().lower()
+                    # print("Reading the example:{}".format(example))
+
 
                     #Creating the example dict
                     example_dict_list.append(
@@ -2610,10 +2612,10 @@ if __name__=="__main__":
 
     #Testing the twitter datahandler
     data_args={}
-    data_args["path"]="dataset/twitter_pan16_mention_gender"
-    # data_args["path"]="dataset/twitter_aae_sentiment_race"
+    # data_args["path"]="dataset/twitter_pan16_mention_gender"
+    data_args["path"]="dataset/twitter_aae_sentiment_race"
     data_args["transformer_name"]="bert-base-uncased"
-    data_args["num_sample"]=10000
+    data_args["num_sample"]=1000
     data_args["neg_topic_corr"]=0.7
     data_args["batch_size"]=100
     data_args["max_len"]=200

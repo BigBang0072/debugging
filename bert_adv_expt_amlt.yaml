@@ -26,7 +26,9 @@ data:
 
   # The data will be uploaded to your default storage.
   #   Check ``multi_storage.yaml'' for more flexibility.
-  remote_dir: dataset/multinli_1.0/
+  remote_dir: dataset/twitter_pan16_mention_gender/
+  # remote_dir: dataset/twitter_aae_sentiment_race/
+  # remote_dir: dataset/multinli_1.0/
 
 
 
@@ -41,7 +43,7 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [1,2,3]
+      values: [2,3]
     - name: remmode
       values: ["adversarial"]
     - name: adv_rm_method
