@@ -15,7 +15,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
-from transformers import TFBertModel,TFDistilBertModel
+from transformers import TFBertModel,TFDistilBertModel,TFRobertaModel
 
 import pdb
 import json
@@ -1261,8 +1261,12 @@ class SimpleNBOW(keras.Model):
                 super(BERTLayer,self).__init__()
                 #Initializing the BERT model as required
                 if "distil" in data_args["transformer_name"]:
-                        self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
+                    self.bert_model = TFDistilBertModel.from_pretrained(data_args["transformer_name"])
+                elif "roberta" in data_args["transformer_name"]:
+                    print("Initializing the Roberta model: {}".format(data_args["transformer_name"]))
+                    self.bert_model = TFRobertaModel.from_pretrained(data_args["transformer_name"])
                 else:
+                    print("Initializing the BERT model: {}".format(data_args["transformer_name"]))
                     self.bert_model = TFBertModel.from_pretrained(data_args["transformer_name"])
                 
                 #Do we want to train the full BERT or not

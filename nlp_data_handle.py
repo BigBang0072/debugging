@@ -1,3 +1,4 @@
+from base64 import encode
 from cProfile import label
 from collections import defaultdict
 import numpy as np
@@ -29,7 +30,7 @@ import jsonlines
 # random.seed(22)
 # np.random.seed(22)
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, RobertaTokenizer
 
 class DataHandler():
     '''
@@ -277,7 +278,10 @@ class DataHandleTransformer():
         random.seed(data_args["run_num"])
         np.random.seed(data_args["run_num"])
 
-        self.tokenizer = AutoTokenizer.from_pretrained(data_args["transformer_name"])
+        if "roberta" in data_args["transformer_name"]:
+            self.tokenizer = RobertaTokenizer.from_pretrained(data_args["transformer_name"])
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(data_args["transformer_name"])
 
         self.delimiter=",|\?|\!|-|\*| |  |;|\.|\(|\)|\n|\"|:|'|/|&|`|[|]|\{|\}|\>|\<"
         self.word_count=defaultdict(int)
@@ -2158,7 +2162,8 @@ class DataHandleTransformer():
 
 
         #Now encoding the text to be readable by model
-        input_idx,attn_mask,flip_input_idx,flip_attn_mask = self._get_bert_tokenized_inputs(pbalanced_df)
+        input_idx,attn_mask,token_type_idx,flip_input_idx,flip_attn_mask,flip_token_type_idx\
+                                 = self._get_bert_tokenized_inputs(pbalanced_df)
 
         #Now we are ready to create our dataset object
         cat_dataset = tf.data.Dataset.from_tensor_slices(
@@ -2321,6 +2326,9 @@ class DataHandleTransformer():
             )
         input_idx = encoded_doc["input_ids"]
         attn_mask = encoded_doc["attention_mask"]
+        token_type_idx=None
+        if "token_type_ids" in encoded_doc:
+            token_type_idx = encoded_doc["token_type_ids"]
 
 
         #Tokenizing the flip inputs
@@ -2334,9 +2342,12 @@ class DataHandleTransformer():
             )
         flip_input_idx = flip_encoded_doc["input_ids"]
         flip_attn_mask = flip_encoded_doc["attention_mask"]
+        flip_token_type_idx = None
+        if "token_type_ids" in flip_encoded_doc:
+            flip_token_type_idx = flip_encoded_doc["token_type_ids"]
 
 
-        return input_idx,attn_mask,flip_input_idx,flip_attn_mask
+        return input_idx,attn_mask,token_type_idx,flip_input_idx,flip_attn_mask,flip_token_type_idx
     
     def controlled_twitter_dataset_handler(self,):
         '''
@@ -2381,7 +2392,8 @@ class DataHandleTransformer():
         all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
 
         #Now encoding the text to be readable by model
-        input_idx,attn_mask,flip_input_idx,flip_attn_mask = self._get_bert_tokenized_inputs_twitter(pbalanced_df)
+        input_idx,attn_mask,token_type_idx,flip_input_idx,flip_attn_mask,flip_token_type_idx\
+                                    = self._get_bert_tokenized_inputs_twitter(pbalanced_df)
 
         #Now we are ready to create our dataset object
         cat_dataset = tf.data.Dataset.from_tensor_slices(
@@ -2560,6 +2572,9 @@ class DataHandleTransformer():
             )
         input_idx = encoded_doc["input_ids"]
         attn_mask = encoded_doc["attention_mask"]
+        token_type_idx=None
+        if "token_type_ids" in encoded_doc:
+            token_type_idx = encoded_doc["token_type_ids"]
 
         #Tokenizing the flip sentence
         flip_encoded_doc = self.tokenizer(
@@ -2571,8 +2586,11 @@ class DataHandleTransformer():
             )
         flip_input_idx = flip_encoded_doc["input_ids"]
         flip_attn_mask = flip_encoded_doc["attention_mask"]
+        flip_token_type_idx=None
+        if "token_type_ids" in flip_encoded_doc:
+            flip_token_type_idx = flip_encoded_doc["token_type_ids"]
 
-        return input_idx,attn_mask,flip_input_idx,flip_attn_mask
+        return input_idx,attn_mask,token_type_idx,flip_input_idx,flip_attn_mask,flip_token_type_idx
 
 
 if __name__=="__main__":
@@ -2596,37 +2614,39 @@ if __name__=="__main__":
 
 
     #Testing the data-handler
+    data_args={}
+    data_args["path"]="dataset/multinli_1.0/"
+    data_args["transformer_name"]="roberta-base"
+    data_args["num_sample"]=1000
+    data_args["neg_topic_corr"]=0.7
+    data_args["batch_size"]=32
+    data_args["max_len"]=200
+    data_args["num_topics"]=1
+    data_args["noise_ratio"]=0.0
+    data_args["run_num"]=14
+    data_args["neg1_flip_method"]="remove_negation"
+    data_handler = DataHandleTransformer(data_args)
+    cat_dataset=data_handler.controlled_multinli_dataset_handler()
+    pdb.set_trace()
+
+
+    #Testing the twitter datahandler
     # data_args={}
-    # data_args["path"]="dataset/multinli_1.0/"
-    # data_args["transformer_name"]="bert-base-uncased"
+    # # data_args["path"]="dataset/twitter_pan16_mention_gender"
+    # data_args["path"]="dataset/twitter_aae_sentiment_race"
+    # data_args["transformer_name"]="roberta-base"
     # data_args["num_sample"]=1000
     # data_args["neg_topic_corr"]=0.7
     # data_args["batch_size"]=100
     # data_args["max_len"]=200
     # data_args["num_topics"]=1
     # data_args["noise_ratio"]=0.0
+    # data_args["run_num"]=14
+    # data_args["neg1_flip_method"]="remove_negation"
+
     # data_handler = DataHandleTransformer(data_args)
-    # cat_dataset=data_handler.controlled_multinli_dataset_handler()
+    # cat_dataset=data_handler.controlled_twitter_dataset_handler()
     # pdb.set_trace()
-
-
-    #Testing the twitter datahandler
-    data_args={}
-    # data_args["path"]="dataset/twitter_pan16_mention_gender"
-    data_args["path"]="dataset/twitter_aae_sentiment_race"
-    data_args["transformer_name"]="bert-base-uncased"
-    data_args["num_sample"]=1000
-    data_args["neg_topic_corr"]=0.7
-    data_args["batch_size"]=100
-    data_args["max_len"]=200
-    data_args["num_topics"]=1
-    data_args["noise_ratio"]=0.0
-    data_args["run_num"]=14
-    data_args["neg1_flip_method"]="remove_negation"
-
-    data_handler = DataHandleTransformer(data_args)
-    cat_dataset=data_handler.controlled_twitter_dataset_handler()
-    pdb.set_trace()
 
 
 
