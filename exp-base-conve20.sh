@@ -1,5 +1,5 @@
 #Training the bert model
-for model_type in "bert-base-uncased"
+for model_type in "roberta-base"
 do
     for neg1_flip_method in "remove_negation"
     do
