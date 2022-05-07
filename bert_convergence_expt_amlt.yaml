@@ -37,16 +37,16 @@ search:
     name: search_{experiment_name:s}_{auto:3s}
     sku: G1
     command:
-    - python transformer_debugger.py -expt_num "pt.rel.model_type({model_type}).neg1_fmethod({neg1_flip_method}).lt({loss_type}).dropout_rate({dropout_rate}).l2({l2_lambd}).noise({noise}).hlayer({hlayer}).sample({sample}).epoch({epoch}).pval({pval}).rnum({run_num})" -num_sample {sample} -num_topics 1 -num_epochs {epoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -noise_ratio {noise} -num_hidden_layer {hlayer} -stage 2 -main_model_mode {main_mode} --normalize_emb -lr 5e-5 -head_retrain_mode {hretrain} -l2_lambd {l2_lambd} -loss_type {loss_type} -dropout_rate {dropout_rate} -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr {pval} -transformer {model_type} -neg1_flip_method {neg1_flip_method} --measure_flip_pdelta -run_num {run_num}
+    - python transformer_debugger.py -expt_num "pt.rel.model_type({model_type}).neg1_fmethod({neg1_flip_method}).lt({loss_type}).dropout_rate({dropout_rate}).l2({l2_lambd}).noise({noise}).hlayer({hlayer}).sample({sample}).epoch({epoch}).pval({pval}).rnum({run_num})" -num_sample {sample} -num_topics 1 -num_epochs {epoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -noise_ratio {noise} -num_hidden_layer {hlayer} -stage 2 -main_model_mode {main_mode} --normalize_emb -lr 1e-5 -head_retrain_mode {hretrain} -l2_lambd {l2_lambd} -loss_type {loss_type} -dropout_rate {dropout_rate} -dtype "nlp_bert" --bert_as_encoder --train_bert -neg_topic_corr {pval} -transformer {model_type} -neg1_flip_method {neg1_flip_method} --measure_flip_pdelta -run_num {run_num}
   type: grid
   max_trials: 100000
   params:
     - name: run_num
       values: [1,2,3]
     - name: model_type
-      values: ["bert-base-uncased"]
+      values: ["roberta-base"]
     - name: neg1_flip_method
-      values: ["replace_negation"]
+      values: ["remove_negation"]
     - name: loss_type
       values: ["x_entropy"]
     - name: dropout_rate
@@ -67,5 +67,8 @@ search:
       values: [20]
     - name: pval
       values: [0.5,0.6,0.7,0.8,0.9,0.99]
+
+# - name: lr 
+#   values: ["1e-2","5e-3","1e-3","5e-4","1e-4","5e-5","1e-5","5e-6","1e-6","5e-7"]
 
 

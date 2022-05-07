@@ -110,7 +110,7 @@ def get_all_result_timeline(run_list,pval_list,fname_pattern):
         all_result_timeline[pval] = prdict_agg
     return all_result_timeline
 
-def plot_all_results(ax,pval_list,all_result_dict,plot_item_list,extra_label=""):
+def plot_all_results(ax,pval_list,all_result_dict,plot_item_list,plot_item_custname=None,extra_label=""):
     '''
     '''
     #Now we can reuse the previous ax
@@ -121,11 +121,31 @@ def plot_all_results(ax,pval_list,all_result_dict,plot_item_list,extra_label="")
         #Colletcing the metrics
         yval = [all_result_dict[pval][item_name]["mean"] for pval in pval_list]
         yerr = [all_result_dict[pval][item_name]["std"] for pval in pval_list]
+        ylb = [
+            all_result_dict[pval][item_name]["mean"]-all_result_dict[pval][item_name]["std"]
+                for pval in pval_list
+        ]
+        yub = [ 
+            all_result_dict[pval][item_name]["mean"]+all_result_dict[pval][item_name]["std"]
+                for pval in pval_list
+        ]
         #Plotting the guy
-        ax[iidx].errorbar(pval_list,yval,yerr,ls="-.",marker="o",label=item_name+extra_label,alpha=0.7)
+        ax[iidx].errorbar(pval_list,yval,yerr,ls="-.",marker="o",label=extra_label,alpha=0.7)
+        ax[iidx].fill_between(pval_list,ylb,yub,alpha=0.2)
+
+
+        #Setting the plot attributes
         # ax[iidx].set_ylim(0.0,1.0)
-        ax[iidx].set_xlabel("correlation value [0.5,1]")
-        ax[iidx].set_ylabel("result")
+        ax[iidx].set_xlabel("predictive-correlation between invariant and spurious attribute")
+
+        if plot_item_custname!=None:
+            ylabel = plot_item_custname[iidx]
+        else:
+            ylabel = item_name
+        ax[iidx].set_ylabel(ylabel)
+
+
+
         ax[iidx].legend()
         ax[iidx].grid(True)
         ax[iidx].set_title(item_name)
