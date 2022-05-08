@@ -1,0 +1,42 @@
+===============================
+ONLY SPURIOUS TOPICS
+1. religion
+2. gender
+3. electronics 
+4. pronoun
+5. kitchen
+6. genre
+===============================
+
+
+Indomain Validation Accuracy:
+{'arts': 0.5967742,
+ 'books': 0.64285713,
+ 'clothes': 0.5921659,
+ 'groceries': 0.62211984,
+ 'movies': 0.6267281,
+ 'pets': 0.562212,
+ 'phones': 0.56682026,
+ 'tools': 0.66820276}
+
+Getting the overall OOD drop!
+cat:arts        drop:-0.16129040718078613
+cat:books       drop:-0.5207372903823853
+cat:phones      drop:-0.15207365155220032
+cat:clothes     drop:-0.7281105220317841
+cat:groceries   drop:-0.7511523067951202
+cat:movies      drop:-0.39170506596565247
+cat:pets        drop:-0.13364055752754211
+cat:tools       drop:-0.9907833337783813
+
+
+
+Overall Drop					: -3.829493135213852
+Mean Drop in OOD Vacc 				: -0.09340227
+
+Overall variance in the OOD performace		: 0.07773567
+
+Mean OOD Valid-Acc				: 0.55976385
+Mean INDO Valid-Acc				: 0.609735
+
+Avg OOD vacc / |Avg OOD vacc drop|		: 5.9930434  [lower --> more spurious]
