@@ -19,13 +19,13 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
     
     for idx in range(len(probe_metric_list)):
         pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
-        # pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
-        # pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
         pdict["acc:main"].append(probe_metric_list[idx]["classifier_acc_dict"]["main"])
+        
+  
         pdict["acc:topic0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0"])
         pdict["topic0_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main"])
         pdict["topic0_pdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta"])
-        pdict["topic0_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_smin_main"])
+        
         pdict["topic0_logpdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_logpdelta"])
         pdict["topic0_pdelta_m1t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_m1t0"])
         pdict["topic0_pdelta_m0t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_m0t0"])
@@ -33,7 +33,31 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         pdict["topic0_pdelta_m0t1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_m0t1"])
         pdict["topic0_pdelta_all"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_all"])
         pdict["topic0_pdelta_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta_smin"])
+
         pdict["main_smin_topic0"].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic0"])
+        pdict["topic0_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_smin_main"])
+
+
+        if "topic1" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
+            pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
+
+            pdict["acc:topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1"])
+            pdict["topic1_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main"])
+            pdict["topic1_pdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta"])
+
+            
+            pdict["main_smin_topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic1"])
+            pdict["topic1_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_smin_main"])
+
+            pdict["topic1_logpdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_logpdelta"])
+            pdict["topic1_pdelta_m1t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m1t0"])
+            pdict["topic1_pdelta_m0t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m0t0"])
+            pdict["topic1_pdelta_m1t1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m1t1"])
+            pdict["topic1_pdelta_m0t1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m0t1"])
+            pdict["topic1_pdelta_all"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_all"])
+            pdict["topic1_pdelta_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_smin"])
+
         # pdict["acc:topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1"])
         # pdict["topic1_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main"])
         # pdict["topic1_pdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta"])
