@@ -43,13 +43,13 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [2,3]
+      values: [3,]
     - name: model_type
       values: ["nbow"]
     - name: neg1_flip_method
       values: ["remove_negation"]
     - name: loss_type
-      values: ["x_entropy"]
+      values: ["linear_svm"]
     - name: dropout_rate
       values: ["0.0"]
     - name: l2_lambd

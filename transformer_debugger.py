@@ -2989,6 +2989,22 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
 
         #Getting the validation scores once the train step is complete
         if model_args["valid_before_gupdate"]==False:
+            #Getting the weights of the classifier we are debugging
+            debug_classifier_weights = classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].get_weights()
+            
+            #Retraining the topic classifier (without encoder) to get correct topic acctuacy
+            tbar = tqdm(range(len(cat_dataset)))
+            print("Training the topic classifier again to estimate metrics correctly")
+            for bidx,data_batch in zip(tbar,cat_dataset):
+                tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+                classifier_main.train_step_stage2(
+                                        dataset_batch=data_batch,
+                                        task="inlp_topic",
+                                        P_matrix=P_identity,
+                                        cidx=data_args["debug_tidx"],
+                )
+                    
+
             print("Validating after the Gradient update!")
             for data_batch in cat_dataset:
                 #Validate the other topic so that we know the accuracy etc
@@ -3009,6 +3025,11 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
                                             P_matrix=P_identity,
                                             cidx=tidx,
                         )
+            
+            #Resetting the weights of the debug topic classifier
+            classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].set_weights(
+                                        debug_classifier_weights,
+            )
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"

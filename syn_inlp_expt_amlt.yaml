@@ -27,8 +27,9 @@ data:
   # The data will be uploaded to your default storage.
   #   Check ``multi_storage.yaml'' for more flexibility.
   # remote_dir: dataset/twitter_pan16_mention_gender/
-  remote_dir: dataset/twitter_aae_sentiment_race/
+  # remote_dir: dataset/twitter_aae_sentiment_race/
   # remote_dir: dataset/multinli_1.0/
+  remote_dir: dataset/nlp_toy2/
 
 
 # Training all the configuration as hyperparam sweep
@@ -42,7 +43,7 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [1,2,3]
+      values: [3,]
     - name: remmode
       values: ["null_space"]
     - name: mainepoch
@@ -56,7 +57,7 @@ search:
     - name: neg1_flip_method
       values: ["remove_negation"]
     - name: loss_type
-      values: ["x_entropy","linear_svm"]
+      values: ["x_entropy"]
     - name: dropout_rate
       values: ["0.0"]
     - name: l2_lambd
@@ -68,7 +69,7 @@ search:
     - name: noise
       values: [0.0,0.1,0.3]
     - name: hlayer
-      values: [0,5]
+      values: [0,5,10]
     - name: sample
       values: [1000]
     - name: pval
