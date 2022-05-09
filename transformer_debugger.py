@@ -2993,8 +2993,8 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
             debug_classifier_weights = classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].get_weights()
             
             #Retraining the topic classifier (without encoder) to get correct topic acctuacy
-            tbar = tqdm(range(len(cat_dataset)))
             print("Training the topic classifier again to estimate metrics correctly")
+            tbar = tqdm(range(len(cat_dataset)))
             for bidx,data_batch in zip(tbar,cat_dataset):
                 tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
                 classifier_main.train_step_stage2(
