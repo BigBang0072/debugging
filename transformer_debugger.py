@@ -1085,6 +1085,14 @@ class SimpleNBOW(keras.Model):
                 subgroup_pdelta_metric_dict[subgroup]=keras.metrics.Mean(name="topic_{}_flip_main_prob_delta_{}".format(tidx,subgroup))
             #Adding the subgroup metric dict to the list
             self.topic_flip_main_prob_delta_ldict.append(subgroup_pdelta_metric_dict)
+        
+        #Creating fresh classiifer for the topic which is getting debugged to get the correct metric for debug classifier
+        self.debug_topic_fresh_classifier = layers.Dense(
+                            self.last_layer_dim,
+                            activation=self.last_layer_activation,
+                            kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
+        )
+        self.debug_topic_og_classifier = self.topic_task_classifier_list[self.data_args["debug_tidx"]]
 
     def get_all_head_init_weights(self,):
         '''
@@ -1527,7 +1535,7 @@ class SimpleNBOW(keras.Model):
                     topic_xentropy_loss = scxentropy_loss(topic_label_train,rm_topic_train_prob)
                     topic_total_loss = topic_xentropy_loss
 
-                    #Getting the regularization loss
+                    #Getting the regularization loss (l2 lambda is already done when defining the layer)
                     regularization_loss = tf.math.add_n(self.losses)
                     topic_total_loss += regularization_loss
 
@@ -2990,7 +2998,9 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
         #Getting the validation scores once the train step is complete
         if model_args["valid_before_gupdate"]==False:
             #Getting the weights of the classifier we are debugging
-            debug_classifier_weights = classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].get_weights()
+            # debug_classifier_weights = classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].get_weights()
+            #Assigning the fresh classifier in place of the OG classifier
+            classifier_main.topic_task_classifier_list[data_args["debug_tidx"]]=classifier_main.debug_topic_fresh_classifier
             
             #Retraining the topic classifier (without encoder) to get correct topic acctuacy
             print("Training the topic classifier again to estimate metrics correctly")
@@ -3027,9 +3037,11 @@ def perform_adversarial_removal_nbow(cat_dataset,classifier_main):
                         )
             
             #Resetting the weights of the debug topic classifier
-            classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].set_weights(
-                                        debug_classifier_weights,
-            )
+            # classifier_main.topic_task_classifier_list[data_args["debug_tidx"]].set_weights(
+            #                             debug_classifier_weights,
+            # )
+            #Resetting the OG classifier to the topic list of classifier
+            classifier_main.topic_task_classifier_list[data_args["debug_tidx"]]=classifier_main.debug_topic_og_classifier
         
         #Printing the classifier loss and accuracy
         log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
