@@ -1789,12 +1789,15 @@ class DataHandleTransformer():
             all_index_arr = all_index_arr_only_t0
         elif self.data_args["main_model_mode"]=="causal_rebalance_sp":
             print("Loading the data where the spurious-topic  is balanced (in causal mode)")
-            self.data_args["topic_corr_list"][tidx1]=init_corr_value
             #The change in p-value will already make the all_index_arr correct
             all_index_arr=all_index_arr
         elif self.data_args["main_model_mode"]=="causal_same_sp":
             print("Loading the data where the spurious-topic set to fixed val")
             all_index_arr=all_index_arr_t1_is_1
+        
+        #Correcting the p-value now
+        if return_causal==True:
+            self.data_args["topic_corr_list"][tidx1]=init_corr_value
         
 
         cat_dataset = tf.data.Dataset.from_tensor_slices(
@@ -2163,7 +2166,7 @@ class DataHandleTransformer():
         
         return replacement_dict
 
-    def controlled_multinli_dataset_handler(self,):
+    def controlled_multinli_dataset_handler(self,return_causal=False):
         '''
         Here we will create a multi-nli dataset where we simplify the setting
         to make it close to what we were doing in the toyNLP2.
@@ -2185,11 +2188,31 @@ class DataHandleTransformer():
         example_df = self._get_multinli_dataframe()
         # pdb.set_trace()
 
-        #Get the synthetic dataset which is balanced with respect to p-value
-        pbalanced_df = self._get_pbalanced_dataframe(
+        #Switching off the causal data generation arg
+        if self.data_args["main_model_mode"]=="causal_same_sp" \
+                and return_causal==True:
+            pbalanced_df = self._get_no_neg_dataframe(
+                                                example_df=example_df,
+                                                group_ulim=41000,
+            )
+        elif self.data_args["main_model_mode"]=="causal_rebalance_sp" \
+                and return_causal==True:
+            #Changing the correlation value
+            init_corr_value = self.data_args["neg_topic_corr"]
+            self.data_args["neg_topic_corr"]=0.5
+
+            #Getting the balanced dataset
+            pbalanced_df = self._get_pbalanced_dataframe(
                                                     example_df=example_df,
                                                     group_ulim=41000,
-        )
+            )
+            #Resetting the initial p-value (upde will happenin in case of causal return)
+            self.data_args["neg_topic_corr"]=init_corr_value
+        else:
+            pbalanced_df = self._get_pbalanced_dataframe(
+                                                    example_df=example_df,
+                                                    group_ulim=41000,
+            )
 
         #Getting the labels array
         all_label_arr = np.stack([
@@ -2342,6 +2365,28 @@ class DataHandleTransformer():
 
         #Concatenating the overall dataset
         pbalanced_df = pd.concat([group1_df,group4_df,group3_df,group2_df]).sample(frac=1).reset_index(drop=True)
+        return pbalanced_df
+    
+    def _get_no_neg_dataframe(self,example_df,group_ulim):
+        '''
+        '''
+        #The maximum possible example in a group (decided by inspection)
+        assert self.data_args["num_sample"]<=2*group_ulim,"Examples Exhausted"
+
+        #Shuffling the dataframe first
+        example_df = example_df.sample(frac=1).reset_index(drop=True)
+
+        num_positive = int(self.data_args["num_sample"]//2)
+        #Filtering out only those example which dont have negation
+        positive_df = example_df[
+            (example_df["neg_topic_label"]==0) & (example_df["main_label"]==1)
+        ][0:num_positive]
+
+        negative_df = example_df[
+            (example_df["neg_topic_label"]==0) & (example_df["main_label"]==0)
+        ][0:num_positive]
+
+        pbalanced_df = pd.concat([positive_df,negative_df]).sample(frac=1).reset_index(drop=True)
         return pbalanced_df
     
     def _get_bert_tokenized_inputs(self,pbalanced_df):
