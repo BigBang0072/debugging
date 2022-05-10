@@ -2692,7 +2692,7 @@ def nbow_trainer_stage2(data_args,model_args):
 
 
     print("Stage 1: Training the main classifier! (to be debugged later)")
-    if(model_args["main_model_mode"]=="causal" and (
+    if("causal" in model_args["main_model_mode"] and (
                                         "nlp_toy2" in data_args["path"] or
                                         "multinli" in data_args["path"] or
                                         "twitter"  in data_args["path"]
@@ -2710,13 +2710,13 @@ def nbow_trainer_stage2(data_args,model_args):
             data_handler.data_args["topic_corr_list"][-1]=0.5
         
         if data_args["dtype"]=="toynlp2":
-            causal_cat_dataset = data_handler.toy_nlp_dataset_handler2()
+            causal_cat_dataset = data_handler.toy_nlp_dataset_handler2(return_causal=True)
         elif data_args["dtype"]=="toytabular2":
-            causal_cat_dataset = data_handler.toy_tabular_dataset_handler2()
+            causal_cat_dataset = data_handler.toy_tabular_dataset_handler2(return_causal=True)
         elif "multinli" in data_args["path"]:
-            causal_cat_dataset = data_handler.controlled_multinli_dataset_handler()
+            causal_cat_dataset = data_handler.controlled_multinli_dataset_handler(return_causal=True)
         elif "twitter" in data_args["path"]:
-            causal_cat_dataset = data_handler.controlled_twitter_dataset_handler()
+            causal_cat_dataset = data_handler.controlled_twitter_dataset_handler(return_causal=True)
         
         if "multinli" in data_args["path"] or "twitter" in data_args["path"]:
             data_handler.data_args["neg_topic_corr"]=init_tneg_pval
@@ -2785,6 +2785,12 @@ def nbow_trainer_stage2(data_args,model_args):
                                         cat_dataset=cat_dataset,
                                         classifier_main=classifier_main,
                                         optimal_vacc_main=optimal_vacc_main,
+        )
+    elif(model_args["removal_mode"]=="probing"):
+        #The name is just kept as removal mode. Its not doing removal actually
+        perform_probing_experiment(
+                            cat_dataset=cat_dataset,
+                            classifier_main=classifier_main,
         )
     
     return
@@ -3208,6 +3214,56 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,optimal_vacc_mai
                                             topic_vacc_before,
                                             classifier_main.topic_valid_accuracy_list[data_args["debug_tidx"]].result()
         ))
+
+def perform_probing_experiment(cat_dataset,classifier_main):
+    '''
+    '''
+    P_identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+    #Starting the probing for the topic
+    for eidx in range(classifier_main.model_args["adv_rm_epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        tbar = tqdm(range(len(cat_dataset)))
+
+        #Training the topic classifier
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+            classifier_main.train_step_stage2(
+                                    dataset_batch=data_batch,
+                                    task="inlp_topic",
+                                    P_matrix=P_identity,
+                                    cidx=data_args["debug_tidx"],
+            )
+        
+        #Now getting the validation metrics for the probed classifier
+        for data_batch in cat_dataset:
+            classifier_main.valid_step_stage2(
+                                dataset_batch=data_batch,
+                                P_matrix=P_identity,
+                                cidx=data_args["debug_tidx"]
+            )
+        
+        #Now we have to log the metrics to the json
+        classifier_main.save_the_probe_metric_list()
+
+
+        log_format="epoch:{:}\tcname:{}\txloss:{:0.4f}\tvacc:{:0.3f}"
+        print(log_format.format(
+                            eidx,
+                            "main",
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+        ))
+        #Printing the topic accuracy
+        for tidx in range(data_args["num_topics"]):
+            print(log_format.format(
+                            eidx,
+                            "topic-{}".format(tidx),
+                            classifier_main.topic_pred_xentropy_list[tidx].result(),
+                            classifier_main.topic_valid_accuracy_list[tidx].result()
+            ))
+    
+    return classifier_main
 
 def get_cat_temb_importance_weight_variance(classifier):
     #Getting the topic importance
@@ -4018,6 +4074,7 @@ if __name__=="__main__":
     # data_args["mask_feature_dims"]=list(range(4,len(data_args["topic_list"])))
     data_args["save_emb"]=args.save_emb
     data_args["neg1_flip_method"]=args.neg1_flip_method
+    data_args["main_model_mode"]=args.main_model_mode
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])

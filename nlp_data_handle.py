@@ -1634,7 +1634,7 @@ class DataHandleTransformer():
 
         return all_cat_ds,all_topic_ds,new_all_cat_df
     
-    def toy_nlp_dataset_handler2(self,):
+    def toy_nlp_dataset_handler2(self,return_causal=False):
         '''
         In this handler we will add multiple topics at a time into
         the text and then test the removal and the topic convergence.
@@ -1657,6 +1657,22 @@ class DataHandleTransformer():
             "switch", "watch", "sun", "cloud", "river", "town", "cow", "shadow",
             "pencil", "eraser"
         ]
+
+        #Setting up for generating the causal data
+        init_corr_value=self.data_args["topic_corr_list"][-1]
+        if return_causal==True:
+            '''
+            So, if we try to geenrate the non-causal data, in that case we will 
+            have label correlation long with the data will also have that correlation
+            with the spurious feature. but again the main classifier is not trained in those
+            scenarios so dosent matter
+
+            In other cases even if we generate the non-causal data, we will either
+            remove the spurious topic or we will have that single topic-value feature in the
+            whole dataset. So, the label should not be predictive
+            '''
+            #making the data balanced in terms of spurious correlation
+            self.data_args["topic_corr_list"][-1]=0.5
 
         #Creating the examples
         all_example_list = []
@@ -1731,6 +1747,11 @@ class DataHandleTransformer():
             neg_example_only_t0 = neg_example + neg_add_topic0
             all_example_list_only_t0+=[pos_example_only_t0,neg_example_only_t0]
 
+            #Creating the example which have topic1=1 everytime
+            pos_example_t1_is_1 = pos_example + pos_add_topic0 + " "+" ".join(["fill"]*10)
+            neg_example_t1_is_1 = neg_example + neg_add_topic0 + " "+" ".join(["fill"]*10)
+            all_example_list_t1_is_1+=[pos_example_t1_is_1,neg_example_t1_is_1]
+
             #Creating example with only t1
             # pos_example_only_t1 = pos_example + pos_add_topic1
             # neg_example_only_t1 = neg_example + neg_add_topic1
@@ -1747,6 +1768,8 @@ class DataHandleTransformer():
         all_index_arr_t1_flip = self._convert_text_to_widx(all_example_list_t1_flip)
         #Getting the input idx where only feature0 is present
         all_index_arr_only_t0 = self._convert_text_to_widx(all_example_list_only_t0)
+        #Getting the input idx where topic1 is set to a fixed label =1
+        all_index_arr_t1_is_1 = self._convert_text_to_widx(all_example_list_t1_is_1)
 
         
         #Creating the dataset object
@@ -1756,6 +1779,20 @@ class DataHandleTransformer():
         #Adding noise to the labels to have non-fully predictive causal features
         all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
         
+
+
+        # if return_causal==True:
+        #Creating the data-based on the main_model_mode
+        if self.data_args["main_model_mode"]=="causal_removed_sp":
+            all_index_arr = all_index_arr_only_t0
+        elif self.data_args["main_model_mode"]=="causal_rebalance_sp":
+            self.data_args["topic_corr_list"][tidx1]=init_corr_value
+            #The change in p-value will already make the all_index_arr correct
+            all_index_arr=all_index_arr
+        elif self.data_args["main_model_mode"]=="causal_same_sp":
+            all_index_arr=all_index_arr_t1_is_1
+        
+
         cat_dataset = tf.data.Dataset.from_tensor_slices(
                                 dict(
                                     #label=all_label_arr[:,self.data_args["main_topic"]+1],
@@ -1763,7 +1800,6 @@ class DataHandleTransformer():
                                     input_idx = all_index_arr,
                                     input_idx_t0_flip = all_index_arr_t0_flip,
                                     input_idx_t1_flip = all_index_arr_t1_flip,
-                                    input_idx_only_t0 = all_index_arr_only_t0,
                                     topic_label = all_label_arr[:,1:]
                                 )
         )
