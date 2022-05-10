@@ -2787,6 +2787,7 @@ def nbow_trainer_stage2(data_args,model_args):
                                         optimal_vacc_main=optimal_vacc_main,
         )
     elif(model_args["removal_mode"]=="probing"):
+        print("Stage 2: Probing the topic information!")
         #The name is just kept as removal mode. Its not doing removal actually
         perform_probing_experiment(
                             cat_dataset=cat_dataset,

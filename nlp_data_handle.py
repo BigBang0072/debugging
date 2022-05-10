@@ -1679,6 +1679,7 @@ class DataHandleTransformer():
         all_example_list_t0_flip = []
         all_example_list_t1_flip = []   #These have the flipped corresponding topic
         all_example_list_only_t0 = []   #These example have spurious feature absent
+        all_example_list_t1_is_1 = []   #where the topic feature is set to a value
         all_label_list= []
         for sidx in range(self.data_args["num_sample"]):
             pos_label_list = [1,]
@@ -1784,12 +1785,15 @@ class DataHandleTransformer():
         # if return_causal==True:
         #Creating the data-based on the main_model_mode
         if self.data_args["main_model_mode"]=="causal_removed_sp":
+            print("Loading the data where the spurious-topic is removed")
             all_index_arr = all_index_arr_only_t0
         elif self.data_args["main_model_mode"]=="causal_rebalance_sp":
+            print("Loading the data where the spurious-topic  is balanced (in causal mode)")
             self.data_args["topic_corr_list"][tidx1]=init_corr_value
             #The change in p-value will already make the all_index_arr correct
             all_index_arr=all_index_arr
         elif self.data_args["main_model_mode"]=="causal_same_sp":
+            print("Loading the data where the spurious-topic set to fixed val")
             all_index_arr=all_index_arr_t1_is_1
         
 
