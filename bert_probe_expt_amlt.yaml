@@ -26,9 +26,9 @@ data:
 
   # The data will be uploaded to your default storage.
   #   Check ``multi_storage.yaml'' for more flexibility.
-  # remote_dir: dataset/twitter_pan16_mention_gender/
+  remote_dir: dataset/twitter_pan16_mention_gender/
   # remote_dir: dataset/twitter_aae_sentiment_race/
-  remote_dir: dataset/multinli_1.0/
+  # remote_dir: dataset/multinli_1.0/
   # remote_dir: dataset/nlp_toy2/
 
 
@@ -66,7 +66,7 @@ search:
     - name: main_mode
       values: ["causal_rebalance_sp","causal_same_sp"]
     - name: noise
-      values: [0.0,0.1]
+      values: [0.0,]
     - name: hlayer
       values: [0,]
     - name: sample

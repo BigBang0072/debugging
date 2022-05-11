@@ -50,7 +50,7 @@ search:
     - name: advepoch
       values: [20]
     - name: topicepoch
-      values: [1]
+      values: [1,2]
     - name: model_type
       values: ["roberta-base"]
     - name: neg1_flip_method
@@ -64,9 +64,9 @@ search:
     - name: hretrain
       values: ["no_warm_encoder"]
     - name: main_mode
-      values: ["causal"]
+      values: ["causal_same_sp"]
     - name: noise
-      values: [0.1,0.2]
+      values: [0.0,]
     - name: hlayer
       values: [0]
     - name: sample

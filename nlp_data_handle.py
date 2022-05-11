@@ -2434,7 +2434,7 @@ class DataHandleTransformer():
 
         return input_idx,attn_mask,token_type_idx,flip_input_idx,flip_attn_mask,flip_token_type_idx
     
-    def controlled_twitter_dataset_handler(self,):
+    def controlled_twitter_dataset_handler(self,return_causal=False):
         '''
         This function will add the twitter dataset in the pipeline
         as the 2nd NLP dataset where we want to experiment.
@@ -2461,11 +2461,33 @@ class DataHandleTransformer():
         #Getting the example dataframe
         example_df = self._get_twitter_dataframe()
 
-        #Get the synthetic dataset which is balanced with respect to p-value
-        pbalanced_df = self._get_pbalanced_dataframe(
+
+        #Switching off the causal data generation arg
+        if self.data_args["main_model_mode"]=="causal_same_sp" \
+                and return_causal==True:
+            pbalanced_df = self._get_no_neg_dataframe(
+                                                example_df=example_df,
+                                                group_ulim=80000,
+            )
+        elif self.data_args["main_model_mode"]=="causal_rebalance_sp" \
+                and return_causal==True:
+            #Changing the correlation value
+            init_corr_value = self.data_args["neg_topic_corr"]
+            self.data_args["neg_topic_corr"]=0.5
+
+            #Getting the balanced dataset
+            pbalanced_df = self._get_pbalanced_dataframe(
                                                     example_df=example_df,
                                                     group_ulim=80000,
-        )
+            )
+            #Resetting the initial p-value (upde will happenin in case of causal return)
+            self.data_args["neg_topic_corr"]=init_corr_value
+        else:
+            pbalanced_df = self._get_pbalanced_dataframe(
+                                                    example_df=example_df,
+                                                    group_ulim=80000,
+            )
+
 
         #Getting the labels array
         all_label_arr = np.stack([
