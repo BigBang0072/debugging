@@ -1,9 +1,37 @@
+from distutils.command import clean
 import numpy as np
 import json
 from pprint import pprint
 import matplotlib.pyplot as plt
 from collections import defaultdict
 
+
+#Calculating the spuriousness score
+def calculate_spuriousness_score(curr_smin,clean_smin):
+    '''
+    '''
+    return np.abs(1.0 - (curr_smin*1.0)/(clean_smin*1.0))
+
+def calculate_spuriousness_score_estimate(smin_acc_list,clean_smin_acc_list):
+    '''
+    Given list of multiple runs of current classifier and the 
+    multiple runs of clean classifier --> esrimate the clean acc list 
+
+    calculte the spuriousness scrore
+    '''
+    sp_score_estm_list=[]
+    for curr_smin in smin_acc_list:
+        for clean_smin in clean_smin_acc_list:
+            sp_score_estm_list.append(
+                        calculate_spuriousness_score(
+                                    curr_smin=curr_smin,
+                                    clean_smin=clean_smin
+                        )
+            )
+    
+    mean_sp_score = np.mean(sp_score_estm_list)
+    std_sp_score = np.std(sp_score_estm_list)
+    return sp_score_estm_list
 
 #Opening the experiment json
 def load_probe_metric_list(fname,only_one=False,epoch=None):
@@ -104,23 +132,45 @@ def aggregate_random_runs_timeline(prdict_list):
         #Getting the aggreget acorss axis =0 [[timeline_run1],[timeline_run2]...]
         rdict_agg[key]["mean"] = np.mean(timeline_run_matrix,axis=0)
         rdict_agg[key]["std"]  = np.std(timeline_run_matrix,axis=0)
+        rdict_agg[key]["val_mat"] = timeline_run_matrix
     return rdict_agg
 
-def get_all_result_dict(run_list,pval_list,enum,fname_pattern):
+def get_all_result_dict(run_list,pval_list,enum,fname_pattern,clean_smin_acc_list_dict=None):
     all_result_dict = {}
     for pidx,pval in enumerate(pval_list):
         prdict_list = []
         for nidx in run_list:
             fname = fname_pattern.format(pval,nidx)
-            prdict = load_probe_metric_list(fname,only_one=True,epoch=enum-1)
+            prdict = load_probe_metric_list(
+                                fname,
+                                only_one=True,
+                                epoch=enum-1,
+            )
             prdict_list.append(prdict)
         #Getting the aggregate result
         prdict_agg = aggregate_random_runs(prdict_list)
+
+        #Now claculating the spuriousness score for the desrired classifiers
+        if clean_smin_acc_list_dict!=None:
+            for metric_name in clean_smin_acc_list_dict.keys():
+                smin_acc_list = prdict_agg[metric_name]["val_list"]
+                clean_smin_acc_list = clean_smin_acc_list_dict[metric_name]
+                sp_score_estm_list = calculate_spuriousness_score_estimate(
+                                        smin_acc_list=smin_acc_list,
+                                        clean_smin_acc_list=clean_smin_acc_list
+                )
+                #Adding the result to the the aggregate dict
+                prdict_agg[metric_name+"_sp_score"]=dict(
+                                            mean=np.mean(sp_score_estm_list),
+                                            std=np.std(sp_score_estm_list),
+                                            val_list=sp_score_estm_list,
+                )
+        #Adding the aggregate dict to al result dict
         all_result_dict[pval] = prdict_agg
 
     return all_result_dict
 
-def get_all_result_timeline(run_list,pval_list,fname_pattern):
+def get_all_result_timeline(run_list,pval_list,fname_pattern,clean_smin_acc_list_dict=None):
     all_result_timeline={}
     for pval in pval_list:
         prdict_list = []
@@ -131,6 +181,31 @@ def get_all_result_timeline(run_list,pval_list,fname_pattern):
             prdict_list.append(prdict)
         #Getting the aggregate list
         prdict_agg = aggregate_random_runs_timeline(prdict_list)
+        #Getting the degree of spuriousness score for every timestep
+        if clean_smin_acc_list_dict!=None:
+            for metric_name in clean_smin_acc_list_dict.keys():
+                #Now going one time step at a time and getting the score
+                timestep_mean_sp_score_list=[]
+                # print(prdict_agg)
+                for tidx in range(prdict_agg[metric_name]["mean"].shape[0]):
+                    smin_acc_list = prdict_agg[metric_name]["val_mat"][:,tidx]
+                    clean_smin_acc_list = clean_smin_acc_list_dict[metric_name]
+                    sp_score_estm_list = calculate_spuriousness_score_estimate(
+                                        smin_acc_list=smin_acc_list,
+                                        clean_smin_acc_list=clean_smin_acc_list
+                    )
+                    timestep_mean_sp_score_list.append(sp_score_estm_list)
+                #Creating the sp score matrix
+                timestep_mean_sp_score_mat = np.array(timestep_mean_sp_score_list).T
+                #Now saving the aggregate
+                prdict_agg[metric_name+"_sp_score"]=dict(
+                                            mean=np.mean(timestep_mean_sp_score_mat,axis=0),
+                                            std=np.std(timestep_mean_sp_score_mat,axis=0),
+                                            val_mat=timestep_mean_sp_score_mat,
+                )
+
+
+        #Saving the aggregate list
         all_result_timeline[pval] = prdict_agg
     return all_result_timeline
 
