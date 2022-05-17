@@ -49,13 +49,13 @@ search:
     - name: adv_rm_method
       values: ["adv_rm_with_main"]
     - name: grstrength
-      values: [0.00001,0.0001,0.001,0.01,0.1,0.5,1.0,2.0]
+      values: [0.00001,0.0001,]
     - name: mainepoch
-      values: [6]
+      values: [0]
     - name: advepoch
       values: [20]
     - name: model_type
-      values: ["roberta-base",]
+      values: ["bert-base-uncased",]
     - name: neg1_flip_method
       values: ["remove_negation"]
     - name: loss_type
@@ -67,7 +67,7 @@ search:
     - name: hretrain
       values: ["no_warm_encoder"]
     - name: main_mode
-      values: ["causal_same_sp"]
+      values: ["non_causal"]
     - name: noise
       values: [0.0]
     - name: hlayer
@@ -77,6 +77,6 @@ search:
     - name: pval
       values: [0.5,0.6,0.7,0.8,0.9,0.99]
     - name: lr
-      values: ["1e-5"]
+      values: ["5e-5"]
 
 
