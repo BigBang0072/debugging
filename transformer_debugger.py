@@ -2651,7 +2651,16 @@ def nbow_trainer_stage2(data_args,model_args):
         if data_args["dtype"]=="toynlp2":
             cat_dataset = data_handler.toy_nlp_dataset_handler2()
         elif data_args["dtype"]=="toytabular2":
+            given_noise_ratio = data_handler.data_args["noise_ratio"]
+
+            #Adding no noise in the removal dataset
+            if(model_args["removal_mode"]=="null_space"):
+                data_handler.data_args["noise_ratio"]=0.0
             cat_dataset = data_handler.toy_tabular_dataset_handler2()
+
+            #Restroing the noise level in case someone else want to get noisy data
+            data_handler.data_args["noise_ratio"] = given_noise_ratio
+
     elif "nlp_toy" in data_args["path"]:
         all_cat_ds,all_topic_ds,new_all_cat_df = data_handler.toy_nlp_dataset_handler()
     elif "multinli" in data_args["path"]:

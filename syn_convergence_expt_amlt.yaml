@@ -43,17 +43,17 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [3,]
+      values: [1,2,3]
     - name: model_type
       values: ["nbow"]
     - name: neg1_flip_method
       values: ["remove_negation"]
     - name: loss_type
-      values: ["linear_svm"]
+      values: ["x_entropy"]
     - name: dropout_rate
       values: ["0.0"]
     - name: l2_lambd
-      values: ["0.0","0.0001","0.001","0.01","0.1","1.0","10.0"]
+      values: ["0.0",]
     - name: hretrain
       values: ["no_warm_encoder"]
     - name: main_mode
@@ -61,7 +61,7 @@ search:
     - name: noise
       values: [0.0,0.1,0.3]
     - name: hlayer
-      values: [0,5,10]
+      values: [1,]
     - name: sample
       values: [1000,]
     - name: epoch
