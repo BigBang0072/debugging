@@ -43,13 +43,13 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [3]
+      values: [1,2,3]
     - name: remmode
       values: ["adversarial"]
     - name: adv_rm_method
       values: ["adv_rm_with_main"]
     - name: grstrength
-      values: [2.0]
+      values: [0.00001,0.0001]
     - name: mainepoch
       values: [0]
     - name: advepoch
