@@ -1039,6 +1039,8 @@ class SimpleNBOW(keras.Model):
         #Initializing some of the metrics for main task
         self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
         self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
+        #Keep track of the embedding norm 
+        self.post_proj_embedding_norm = keras.metrics.Mean(name="pp_emb_norm")
 
         ###############################################################
         #CAUTION : ADD a reset metric Function for every metric added
@@ -1092,7 +1094,8 @@ class SimpleNBOW(keras.Model):
                             activation=self.last_layer_activation,
                             kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
         )
-        self.debug_topic_og_classifier = self.topic_task_classifier_list[self.data_args["debug_tidx"]]
+        if(self.model_args["removal_mode"]=="adversarial"):
+            self.debug_topic_og_classifier = self.topic_task_classifier_list[self.data_args["debug_tidx"]]
 
     def get_all_head_init_weights(self,):
         '''
@@ -1132,6 +1135,7 @@ class SimpleNBOW(keras.Model):
         #Resetting the main task related metrics
         self.main_pred_xentropy.reset_states()
         self.main_valid_accuracy.reset_states()
+        self.post_proj_embedding_norm.reset_states()
 
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
@@ -1683,6 +1687,12 @@ class SimpleNBOW(keras.Model):
         #Getting the latent representaiton for the input
         X_latent = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False)
         X_proj = self._get_proj_X_enc(X_latent,P_matrix)
+        #Getting the embedding norm [to test the removal from the null-space]
+        self.post_proj_embedding_norm.update_state(
+                                tf.math.reduce_mean(
+                                    tf.norm(X_proj,axis=-1)
+                                )
+        )
 
 
 
@@ -1970,6 +1980,7 @@ class SimpleNBOW(keras.Model):
         '''
         classifier_accuracy = {}
         classifier_accuracy["main"]=float(self.main_valid_accuracy.result().numpy())
+        classifier_accuracy["pp_emb_norm"]=float(self.post_proj_embedding_norm.result().numpy())
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())

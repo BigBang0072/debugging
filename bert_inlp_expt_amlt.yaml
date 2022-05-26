@@ -7,7 +7,7 @@ target:
   vc: resrchvc
 
 environment:
-  image: tensorflow/tensorflow:latest-gpu
+  image: tensorflow/tensorflow:2.7.1-gpu
   registry: docker.io # any public registry can be specified here
   setup:
     - bash experiment_setup.sh
@@ -26,8 +26,8 @@ data:
 
   # The data will be uploaded to your default storage.
   #   Check ``multi_storage.yaml'' for more flexibility.
-  # remote_dir: dataset/twitter_pan16_mention_gender/
-  remote_dir: dataset/twitter_aae_sentiment_race/
+  remote_dir: dataset/twitter_pan16_mention_gender/
+  # remote_dir: dataset/twitter_aae_sentiment_race/
   # remote_dir: dataset/multinli_1.0/
 
 
@@ -42,15 +42,15 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [1,2,3]
+      values: [4,5,6]
     - name: remmode
       values: ["null_space"]
     - name: mainepoch
       values: [6]
     - name: advepoch
-      values: [20]
+      values: [10]
     - name: topicepoch
-      values: [1,]
+      values: [2,]
     - name: model_type
       values: ["roberta-base"]
     - name: neg1_flip_method
@@ -64,7 +64,7 @@ search:
     - name: hretrain
       values: ["no_warm_encoder"]
     - name: main_mode
-      values: ["causal_same_sp","causal_rebalance_sp"]
+      values: ["causal_same_sp",]
     - name: noise
       values: [0.0,]
     - name: hlayer

@@ -7,7 +7,7 @@ target:
   vc: resrchvc
 
 environment:
-  image: tensorflow/tensorflow:latest-gpu
+  image: tensorflow/tensorflow:2.7.1-gpu
   registry: docker.io # any public registry can be specified here
   setup:
     - bash experiment_setup.sh
@@ -43,7 +43,7 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [4,5,6]
+      values: [1,2,3]
     - name: remmode
       values: ["null_space"]
     - name: mainepoch
@@ -61,15 +61,15 @@ search:
     - name: dropout_rate
       values: ["0.0"]
     - name: l2_lambd
-      values: ["0.0",]
+      values: ["0.0","0.001","0.01","0.1","1.0","10.0","100.0","1000.0"]
     - name: hretrain
       values: ["no_warm_encoder"]
     - name: main_mode
       values: ["causal_same_sp"]
     - name: noise
-      values: [0.0,0.1,0.3]
+      values: [0.0,]
     - name: hlayer
-      values: [0,]
+      values: [1,]
     - name: sample
       values: [1000]
     - name: pval

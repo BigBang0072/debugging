@@ -48,8 +48,10 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
     for idx in range(len(probe_metric_list)):
         pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
         pdict["acc:main"].append(probe_metric_list[idx]["classifier_acc_dict"]["main"])
+        if "pp_emb_norm" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["pp_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["pp_emb_norm"])
         
-  
+
         pdict["acc:topic0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0"])
         pdict["topic0_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main"])
         pdict["topic0_pdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_pdelta"])
@@ -230,7 +232,7 @@ def plot_all_results(ax,pval_list,all_result_dict,plot_item_list,plot_item_custn
         ]
         #Plotting the guy
         ax[iidx].errorbar(pval_list,yval,yerr,ls="-.",marker="o",label=extra_label,alpha=0.7)
-        ax[iidx].fill_between(pval_list,ylb,yub,alpha=0.2)
+        # ax[iidx].fill_between(pval_list,ylb,yub,alpha=0.2)
 
 
         #Setting the plot attributes
