@@ -1,0 +1,85 @@
+description: Testing the job sumbmission via amlt
+
+target:
+  service: amlk8s
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: itpeusp40cl
+  vc: resrchvc
+
+environment:
+  image: pytorch/pytorch:latest
+  registry: docker.io # any public registry can be specified here
+  # setup:
+  #   - bash experiment_setup.sh
+
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  local_dir: $CONFIG_DIR/
+
+data:
+  # You need to run "python src/download_data.py" beforehand
+  # to generate the dataset to be uploaded
+  # don't forget to run with --upload-data
+  local_dir: $CONFIG_DIR/data/
+
+  # The data will be uploaded to your default storage.
+  #   Check ``multi_storage.yaml'' for more flexibility.
+  # remote_dir: dataset/twitter_pan16_mention_gender/
+  # remote_dir: dataset/twitter_aae_sentiment_race/
+  # remote_dir: dataset/multinli_1.0/
+  # remote_dir: dataset/nlp_toy2/
+
+
+
+jobs:
+  - name: test_job
+    sku: G1
+    command:
+    - python abc.py
+
+# Training all the configuration as hyperparam sweep
+# search:
+#   job_template:
+#     name: search_{experiment_name:s}_{auto:3s}
+#     sku: G1
+#     command:
+#     - python transformer_debugger.py -expt_num "pt.rel.mt({model_type}).neg1_fmethod({neg1_flip_method}).remmode({remmode}).mainmode({main_mode}).advepoch({advepoch}).lt({loss_type}).drate({dropout_rate}).l2({l2_lambd}).n({noise}).h({hlayer}).s({sample}).e({mainepoch}).p({pval}).r({run_num})" -num_sample {sample} -num_topics 1 -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -noise_ratio {noise} -num_hidden_layer {hlayer} -stage 2 -main_model_mode {main_mode} --normalize_emb -lr {lr} -head_retrain_mode {hretrain} -l2_lambd {l2_lambd} -loss_type {loss_type} -dropout_rate {dropout_rate}  -adv_rm_epochs {advepoch} -debug_tidx 0 -removal_mode {remmode} -dtype "nlp_bert"  --bert_as_encoder --train_bert -neg_topic_corr {pval} -transformer {model_type}  -neg1_flip_method {neg1_flip_method} --measure_flip_pdelta -run_num {run_num} 
+#   type: grid
+#   max_trials: 100000
+#   params:
+#     - name: run_num
+#       values: [1,2,3]
+#     - name: remmode
+#       values: ["probing"]
+#     - name: mainepoch
+#       values: [10]
+#     - name: advepoch
+#       values: [10]
+#     - name: model_type
+#       values: ["roberta-base",]
+#     - name: neg1_flip_method
+#       values: ["remove_negation"]
+#     - name: loss_type
+#       values: ["x_entropy",]
+#     - name: dropout_rate
+#       values: ["0.0"]
+#     - name: l2_lambd
+#       values: ["0.0",]
+#     - name: hretrain
+#       values: ["no_warm_encoder"]
+#     - name: main_mode
+#       values: ["causal_rebalance_sp","causal_same_sp"]
+#     - name: noise
+#       values: [0.0,]
+#     - name: hlayer
+#       values: [0,]
+#     - name: sample
+#       values: [10000]
+#     - name: pval
+#       values: [0.5,0.6,0.7,0.8,0.9,0.99]
+#     - name: lr 
+#       values: ["1e-5"]
+
+
