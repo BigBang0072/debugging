@@ -1,3 +1,4 @@
+from email.policy import default
 import os
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -26,6 +27,7 @@ from itertools import combinations
 from multiprocessing import Pool
 import multiprocessing
 from tqdm import tqdm
+import glob
 
 
 from nlp_data_handle import *
@@ -2036,9 +2038,10 @@ class SimpleNBOW(keras.Model):
                 self.main_pred_xentropy.update_state(main_xentropy_loss)
             
             #Training the head parameters of the main classifier
-            grads = tape.gradient(main_xentropy_loss,self.main_task_classifier.trainable_weights)
+            main_head_params = self.main_task_classifier.trainable_weights
+            grads = tape.gradient(main_xentropy_loss,main_head_params)
             self.optimizer.apply_gradients(
-                zip(grads,self.trainable_weights)
+                        zip(grads,main_head_params)
             )
         else:
             raise NotImplementedError()
@@ -2221,6 +2224,18 @@ class SimpleNBOW(keras.Model):
         '''
         This function will save all hte expeirments config into one json file.
         '''
+        #Saving the config
+        self.config = self.get_experiment_config()
+
+        #Saving the config
+        config_path = "{}/config.json".format(data_args["expt_meta_path"])
+        print("Dumping the config in: {}".format(config_path))
+        with open(config_path,"w") as whandle:
+            json.dump(self.config,whandle,indent="\t")
+    
+    def get_experiment_config(self,):
+        '''
+        '''
         config={}
         #Adding the data_args
         for key,value in self.data_args.items():
@@ -2230,14 +2245,8 @@ class SimpleNBOW(keras.Model):
         for key,value in self.model_args.items():
             config[key]=value
         
-        #Saving the config
-        self.config = config
-        
-        #Saving the config
-        config_path = "{}/config.json".format(data_args["expt_meta_path"])
-        print("Dumping the config in: {}".format(config_path))
-        with open(config_path,"w") as whandle:
-            json.dump(config,whandle,indent="\t")
+        self.config = self.get_experiment_config()
+        return config
 
 
 @tf.custom_gradient
@@ -4116,6 +4125,9 @@ def nbow_trainer_mouli(data_args,model_args):
         keras.optimizers.Adam(learning_rate=model_args["lr"])
     )
 
+    #Saving the experiment metrics
+    all_metrics_dict = defaultdict(list)
+
     #Training the model with both and main contrastive objective
     print("Starting the training steps!")
     for eidx in range(model_args["epochs"]):
@@ -4135,6 +4147,7 @@ def nbow_trainer_mouli(data_args,model_args):
             )
         
         #Testing how much the rep are predictive (no encoder training)
+        tbar = tqdm(range(len(cat_dataset)))
         print("Training the main-head to see the predictive power of rep")
         for bidx,data_batch in zip(tbar,cat_dataset):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
@@ -4163,6 +4176,24 @@ def nbow_trainer_mouli(data_args,model_args):
                             classifier_main.last_emb_norm.result()
         ))
 
+        #Saving the metrics
+        all_metrics_dict["main_xentropy"].append(float(classifier_main.main_pred_xentropy.result().numpy()))
+        all_metrics_dict["main_vacc"].append(float(classifier_main.main_valid_accuracy.result().numpy()))
+        all_metrics_dict["pos_con_loss"].append(float(classifier_main.pos_con_loss.result().numpy()))
+        all_metrics_dict["neg_con_loss"].append(float(classifier_main.neg_con_loss.result().numpy()))
+        all_metrics_dict["last_emb_norm"].append(float(classifier_main.last_emb_norm.result().numpy()))
+
+    #Getting the final experiment dict
+    experiment_dict={
+                "config":classifier_main.get_experiment_config(),
+                "metrics_tline":all_metrics_dict
+    }
+    #Saving the json
+    expt_num = len(glob.glob("*.json"))
+    expt_path = data_args["out_path"]+"expt{}.json".format(expt_num)
+    print("Dumping the config in: {}".format(expt_path))
+    with open(expt_path,"w") as whandle:
+        json.dump(experiment_dict,whandle,indent="\t")
 
 if __name__=="__main__":
     import argparse
