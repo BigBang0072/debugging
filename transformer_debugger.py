@@ -1097,6 +1097,12 @@ class SimpleNBOW(keras.Model):
         if(self.model_args["removal_mode"]=="adversarial"):
             self.debug_topic_og_classifier = self.topic_task_classifier_list[self.data_args["debug_tidx"]]
 
+
+        #Creating the metrics for the Invariant leanrning problem
+        self.pos_con_loss = self.keras.metrics.Mean(name="pos_con_loss")
+        self.neg_con_loss = self.keras.metrics.Mean(name="neg_con_loss")
+        self.last_emb_norm = self.keras.metrics.Mean(name="last_emb_norm")
+
     def get_all_head_init_weights(self,):
         '''
         This will get the initialized weights which can be used later for
@@ -1136,6 +1142,11 @@ class SimpleNBOW(keras.Model):
         self.main_pred_xentropy.reset_states()
         self.main_valid_accuracy.reset_states()
         self.post_proj_embedding_norm.reset_states()
+
+        #Resetting the Invariant learning metrics
+        self.pos_con_loss.reset_states()
+        self.neg_con_loss.reset_states()
+        self.last_emb_norm.reset_states()
 
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
@@ -1197,7 +1208,8 @@ class SimpleNBOW(keras.Model):
                 X_emb_weighted = X_emb_norm * tf.sigmoid(X_weight) * non_unk_mask
                 #Now we need to take average of the embedding (zero vec non-train)
                 X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),num_words)
-
+                #Even average will produce the effect of length variation because there are multiple words
+                #but correct this sum to average in the Probing paper in arxiv
                 return X_bow
         
         #Get the embedding and weight matrix
@@ -1922,6 +1934,125 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
+    def train_step_mouli(self,dataset_batch,inv_idx):
+        '''
+        inv_idx         : the topic which we want our representation to be invariant of
+        '''
+        #Getting the train dataset
+        label = dataset_batch["label"]
+        idx = dataset_batch["input_idx"]
+        idx_t0_cf = dataset_batch["input_idx_t0_cf"]
+        idx_t1_cf = dataset_batch["input_idx_t1_cf"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+
+        label_train = label[0:valid_idx]
+        idx_train = idx[0:valid_idx]
+        idx_t0_cf_train = idx_t0_cf[0:valid_idx]
+        idx_t1_cf_train = idx_t1_cf[0:valid_idx]
+
+        pos_cf_idx_train, neg_cf_idx_train = None,None
+        #Assigning the positive and negative samples
+        if inv_idx==0:
+            pos_cf_idx_train = idx_t0_cf_train 
+            neg_cf_idx_train = idx_t1_cf_train
+        else:
+            pos_cf_idx_train = idx_t1_cf_train 
+            neg_cf_idx_train = idx_t0_cf_train
+        
+        #Initializing the attention mask
+        attn_mask_train = None      #This will be used when using the NBOW
+
+        #First we have to sample the positive and negative samples
+        assert self.data_args["cfactuals_bsize"]>=self.model_args["num_pos_sample"]
+        assert self.data_args["cfactuals_bsize"]>=self.model_args["num_neg_sample"]
+        sample_idxs = tf.range(tf.shape(pos_cf_idx_train)[1])
+        pos_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
+        neg_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_neg_sample"]]
+        #Sampling the samples
+        pos_cf_idx_train = tf.gather(pos_cf_idx_train,pos_sample_idxs,axis=0)
+        neg_cf_idx_train = tf.gather(neg_cf_idx_train,neg_sample_idxs,axis=0)
+
+        #Initializing the loss metric
+        scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+
+
+
+        #Now we are ready to train our model
+        if self.model_args["closs_type"]=="mse":
+            with tf.GradientTape() as tape:
+                #Encoding the input first
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                extd_input_enc = tf.expand_dims(input_enc,axis=1)
+                #Getting the main task loss
+                main_task_prob = self.get_main_task_pred_prob(input_enc)
+                main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                self.main_pred_xentropy.update_state(main_xentropy_loss)
+
+                #Next encoding the positive examples
+                flat_pos_cf_idx = tf.reshape(pos_cf_idx_train,[-1,self.data_args["max_len"]])
+                flat_pos_cf_enc = self._encoder(flat_pos_cf_idx,attn_mask=attn_mask_train,training=True)
+                pos_cf_enc = tf.reshape(flat_pos_cf_enc,
+                                            [-1,self.model_args["num_pos_sample"],self.emb_dim]
+                )
+                #Getting the positive contrastive loss
+                pos_con_loss = tf.norm(pos_cf_enc-input_enc)
+                self.pos_con_loss.update_state(pos_con_loss)
+
+
+                #Next encoding the negative examples
+                flat_neg_cf_idx = tf.reshape(neg_cf_idx_train,[-1,self.data_args["max_len"]])
+                flat_neg_cf_enc = self._encoder(flat_neg_cf_idx,attn_mask=attn_mask_train,training=True)
+                neg_cf_enc = tf.reshape(flat_neg_cf_enc,
+                                            [-1,self.model_args["num_neg_sample"],self.emb_dim]
+                )
+                #Getting the negative contrastive loss
+                neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-input_enc)
+                self.neg_con_loss.update_state(neg_con_loss)
+
+                #regularize the embedding to have small norm
+                emb_norm = (tf.norm(input_enc)+tf.norm(flat_pos_cf_enc)+tf.norm(flat_neg_cf_enc))/(3.0)
+                self.last_emb_norm.update_state(emb_norm)
+
+                #Getting the overall loss
+                total_loss = main_xentropy_loss\
+                                + self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)\
+                                + self.model_args["norm_lambda"]*emb_norm
+            
+            #Calculating the gradient
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+                 
+        else:
+            raise NotImplementedError()
+
+    def valid_step_mouli(self,dataset_batch,inv_idx):
+        '''
+        '''
+        #Getting the train dataset
+        label = dataset_batch["label"]
+        idx = dataset_batch["input_idx"]
+
+        #Taking aside a chunk of data for validation
+        valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
+        #Getting the validation data
+        label_valid = label[valid_idx:]
+        idx_valid = idx[valid_idx:]
+
+        #Attention mask for BERT based encoder
+        attn_mask_valid=None
+
+        #Skipping if we dont have enough samples
+        if(idx_valid.shape[0]==0):
+            return
+        
+        X_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
+        main_valid_prob = self.main_task_classifier(X_enc)
+        self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+
     def get_angle_between_classifiers(self,class_idx):
         '''
         A utility function that will tell us where the convergence of each of the classifier
@@ -3949,7 +4080,60 @@ def set_gpu(gpu_num):
         except RuntimeError as e:
             # Visible devices must be set before GPUs have been initialized
             print(e)
-       
+
+
+
+#===============================================================
+#===================== Assymetry Learning ======================
+#===============================================================
+
+def nbow_trainer_mouli(data_args,model_args):
+    #Creating the dataset
+    print("Creating the dataset")
+    data_handler = DataHandleTransformer(data_args)
+    if "nlp_toy2" in data_args["path"]:
+        cat_dataset = data_handler.toy_nlp_dataset_handler2()
+    
+    #Creating the classifier
+    print("Creating the model")
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+
+    #Training the model with both and main contrastive objective
+    print("Training the main+contsastive objective simultaneously!")
+    for eidx in range(model_args["epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        tbar = tqdm(range(len(cat_dataset)))
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+            #Training the main task classifier
+            classifier_main.train_step_mouli(
+                                        dataset_batch=data_batch,
+                                        inv_idx=model_args["inv_idx"]
+            )
+        
+        #Getting the validation accuracy
+        for data_batch in cat_dataset:
+            classifier_main.valid_step_mouli(
+                                        dataset_batch=data_batch,
+                                        inv_idx=model_args["inv_idx"]
+            )
+        
+        #Logging the result
+        log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\npos_closs:{:0.4f}\nneg_closs:{:0.4f}\nemb_norm:{:0.4f}"
+        print(log_format.format(
+                            eidx,
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+                            classifier_main.pos_con_loss.result(),
+                            classifier_main.neg_con_loss.result(),
+                            classifier_main.last_emb_norm.result()
+        ))
+
 
 if __name__=="__main__":
     import argparse
@@ -3989,7 +4173,15 @@ if __name__=="__main__":
     parser.add_argument('--measure_flip_pdelta',default=False,action="store_true")
     parser.add_argument('-gpu_num',dest="gpu_num",type=int,default=0)
     parser.add_argument('--valid_before_gupdate',default=False,action="store_true")
-    
+
+    #Arguments related to invariant rep learning
+    parser.add_argument('-cfactuals_bsize',dest="cfactuals_bsize",type=int,default=None)
+    parser.add_argument('-num_pos_sample',dest="num_pos_sample",type=int,default=None)
+    parser.add_argument('-num_neg_sample',dest="num_neg_sample",type=int,default=None)
+    parser.add_argument('-cont_lambda',dest="cont_lambda",type=float,default=None)
+    parser.add_argument('-norm_lambda',dest="norm_lambda",type=float,default=None)
+    parser.add_argument('-inv_idx',dest="inv_idx",type=int,default=None)
+
 
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
@@ -4104,6 +4296,7 @@ if __name__=="__main__":
     data_args["expt_meta_path"]=meta_folder
 
 
+
     #Setting the seeds
     data_args["run_num"]=args.run_num
     tf.random.set_seed(data_args["run_num"])
@@ -4111,8 +4304,8 @@ if __name__=="__main__":
     np.random.seed(data_args["run_num"])
 
 
-
-
+    #Adding the Invariance Leanring specific parameters
+    data_args["cfactuals_bsize"]=args.cfactuals_bsize
 
 
     #Defining the Model args
@@ -4160,16 +4353,25 @@ if __name__=="__main__":
     model_args["gpu_num"]=args.gpu_num
     model_args["valid_before_gupdate"]=args.valid_before_gupdate
 
+    #Adding the Asssymetry leanring model args
+    model_args["num_pos_sample"]=args.num_pos_sample
+    model_args["num_neg_sample"]=args.num_neg_sample
+    model_args["cont_lambda"]=args.cont_lambda
+    model_args["norm_lambda"]=args.norm_lambda
+    model_args["inv_idx"]=args.inv_idx
+
 
     #################################################
     #        SELECT ONE OF THE JOBS FROM BELOW      #
     #################################################
     # transformer_trainer_stage2(data_args,model_args)
     # transformer_trainer_stage2_inlp(data_args,model_args)
-    nbow_trainer_stage2(data_args,model_args)
+    # nbow_trainer_stage2(data_args,model_args)
     # run_parallel_jobs_subset_exp(data_args,model_args)
     # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
+
+    nbow_trainer_mouli(data_args,model_args)
 
 
             

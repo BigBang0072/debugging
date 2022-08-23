@@ -2120,7 +2120,7 @@ class DataHandleTransformer():
             #Padding the examples to the fixed length
             padding = [self.emb_model.key_to_index["unk"]]*(self.data_args["max_len"]-len(index_list))
             index_list = index_list + padding
-            all_index_list.append(index_list)
+            all_index_list.append(index_list[0:self.data_args["max_len"]])
         
         all_index_arr = np.array(all_index_list,np.int32)
         
