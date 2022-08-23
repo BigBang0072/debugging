@@ -1634,7 +1634,7 @@ class DataHandleTransformer():
 
         return all_cat_ds,all_topic_ds,new_all_cat_df
     
-    def toy_nlp_dataset_handler2(self,return_causal=False):
+    def toy_nlp_dataset_handler2(self,return_causal=False,return_cf=False):
         '''
         In this handler we will add multiple topics at a time into
         the text and then test the removal and the topic convergence.
@@ -1651,7 +1651,7 @@ class DataHandleTransformer():
             "eighteen","twenty","thirty","fourty","fifty","sixty","seventy","eighty",
             "ninety","hundred","thousand"
         ]
-        non_number_word = [
+        non_number_words = [
             "nice","device","try","picture","signature","trailer","harry","potter",
             "malfoy","john","switch","taste","glove","baloon", "dog", "horse",
             "switch", "watch", "sun", "cloud", "river", "town", "cow", "shadow",
@@ -1676,6 +1676,8 @@ class DataHandleTransformer():
 
         #Creating the examples
         all_example_list = []
+        all_example_cfactual_t0 = []    #List of counterfactuals wrt to topic0
+        all_example_cfactual_t1 = []    #List of counterfactuals wrt to topic1
         all_example_list_t0_flip = []
         all_example_list_t1_flip = []   #These have the flipped corresponding topic
         all_example_list_only_t0 = []   #These example have spurious feature absent
@@ -1692,42 +1694,47 @@ class DataHandleTransformer():
 
 
             #Creating the topics 1
-            tidx0 = 0
-            point_sample = np.random.uniform(0.0,1.0,1)
-            tpos_word = np.random.choice(number_words,10,replace=True).tolist()
-            tneg_word = np.random.choice(non_number_word,10,replace=True).tolist()
-            if point_sample<=self.data_args["topic_corr_list"][tidx0]:
-                pos_add_topic0 = " " +  " ".join(tpos_word)+ " "
-                neg_add_topic0 = " " +  " ".join(tneg_word)+ " "
-
-                pos_label_list.append(1)
-                neg_label_list.append(0)
-            else:
-                neg_add_topic0 = " " + " ".join(tpos_word)+ " "
-                pos_add_topic0 = " " + " ".join(tneg_word)+ " "
-
-                pos_label_list.append(0)
-                neg_label_list.append(1)
+            tidx0=0
+            pos_add_topic0, neg_add_topic0,pos_label_list,neg_label_list =self._generate_topic0_constituents(
+                                                number_words=number_words,
+                                                non_number_words=non_number_words,
+                                                pos_label_list=pos_label_list,
+                                                neg_label_list=neg_label_list,
+                                                topic0_corr=self.data_args["topic_corr_list"][tidx0],
+            )
             
-
             #Creating the topic 2
-            tidx1 = 1
-            #Taking a differnet sample for this topic
-            point_sample = np.random.uniform(0.0,1.0,1)
-            if point_sample<=self.data_args["topic_corr_list"][tidx1]:
-                pos_add_topic1 = " ".join(["fill"]*10)
-                neg_add_topic1 = " "
+            tidx1=1
+            pos_add_topic1, neg_add_topic1,pos_label_list,neg_label_list =self._generate_topic1_constituents(
+                                                pos_label_list=pos_label_list,
+                                                neg_label_list=neg_label_list,
+                                                topic1_corr=self.data_args["topic_corr_list"][tidx1]
+            )
 
-                pos_label_list.append(1)
-                neg_label_list.append(0)
-            else:
-                neg_add_topic1 = " ".join(["fill"]*10)
-                pos_add_topic1 = " "
+            #Generating the counterfactuals
+            if return_cf==True:
+                #Creating the counterfactaul for the positive example
+                pos_cfactual_list_topic0,pos_cfactual_list_topic1=self._generate_toy2_counterfactual(
+                                                    number_words=number_words,
+                                                    non_number_words=non_number_words,
+                                                    sentence_prefix=pos_example,
+                                                    add_topic0=pos_add_topic0,
+                                                    add_topic1=pos_add_topic1
+                )
 
-                pos_label_list.append(0)
-                neg_label_list.append(1)
+                #Creating the counterfactual for the negative example
+                neg_cfactual_list_topic0,neg_cfactual_list_topic1=self._generate_toy2_counterfactual(
+                                                    number_words=number_words,
+                                                    non_number_words=non_number_words,
+                                                    sentence_prefix=neg_example,
+                                                    add_topic0=neg_add_topic0,
+                                                    add_topic1=neg_add_topic1
+                )
 
-            
+                #Adding the counterfactual
+                all_example_cfactual_t0+=[pos_cfactual_list_topic0,neg_cfactual_list_topic0]
+                all_example_cfactual_t1+=[pos_cfactual_list_topic1,neg_cfactual_list_topic1]
+
             #Constructing the examples
             pos_example_main = pos_example + pos_add_topic0 + pos_add_topic1 
             neg_example_main = neg_example + neg_add_topic0 + neg_add_topic1 
@@ -1772,6 +1779,18 @@ class DataHandleTransformer():
         #Getting the input idx where topic1 is set to a fixed label =1
         all_index_arr_t1_is_1 = self._convert_text_to_widx(all_example_list_t1_is_1)
 
+        #Converting the counterfacutals to the index for topic0
+        all_index_arr_cfactual_t0=[]
+        for cfactual_list in all_example_cfactual_t0:
+            all_index_arr_cfactual_t0.append(self._convert_text_to_widx(cfactual_list))
+        all_index_arr_cfactual_t0=np.stack(all_index_arr_cfactual_t0,axis=0)
+
+        #Converting the counterfactuals to index for topic1
+        all_index_arr_cfactual_t1=[]
+        for cfactual_list in all_example_cfactual_t1:
+            all_index_arr_cfactual_t1.append(self._convert_text_to_widx(cfactual_list))
+        all_index_arr_cfactual_t1=np.stack(all_index_arr_cfactual_t1,axis=0)
+
         
         #Creating the dataset object
         all_label_arr = np.array(all_label_list,np.int32)
@@ -1805,6 +1824,8 @@ class DataHandleTransformer():
                                     #label=all_label_arr[:,self.data_args["main_topic"]+1],
                                     label=all_label_arr[:,0],
                                     input_idx = all_index_arr,
+                                    input_idx_t0_cf = all_index_arr_cfactual_t0,
+                                    input_idx_t1_cf = all_index_arr_cfactual_t1,
                                     input_idx_t0_flip = all_index_arr_t0_flip,
                                     input_idx_t1_flip = all_index_arr_t1_flip,
                                     topic_label = all_label_arr[:,1:]
@@ -1816,6 +1837,87 @@ class DataHandleTransformer():
 
         return cat_dataset
     
+    def _generate_topic0_constituents(self,number_words,non_number_words,
+                                    pos_label_list,neg_label_list,
+                                    topic0_corr):
+        '''
+        '''
+        tidx0 = 0
+        point_sample = np.random.uniform(0.0,1.0,1)
+        tpos_word = np.random.choice(number_words,10,replace=True).tolist()
+        tneg_word = np.random.choice(non_number_words,10,replace=True).tolist()
+        if point_sample<=topic0_corr:
+            pos_add_topic0 = " " +  " ".join(tpos_word)+ " "
+            neg_add_topic0 = " " +  " ".join(tneg_word)+ " "
+
+            pos_label_list.append(1)
+            neg_label_list.append(0)
+        else:
+            neg_add_topic0 = " " + " ".join(tpos_word)+ " "
+            pos_add_topic0 = " " + " ".join(tneg_word)+ " "
+
+            pos_label_list.append(0)
+            neg_label_list.append(1)
+        
+        return pos_add_topic0,neg_add_topic0,pos_label_list,neg_label_list
+    
+    def _generate_topic1_constituents(self,pos_label_list,neg_label_list,
+                                        topic1_corr):
+        '''
+        '''
+        tidx1 = 1
+        #Taking a differnet sample for this topic
+        point_sample = np.random.uniform(0.0,1.0,1)
+        if point_sample<=topic1_corr:
+            pos_add_topic1 = " ".join(["fill"]*10)
+            neg_add_topic1 = " "
+
+            pos_label_list.append(1)
+            neg_label_list.append(0)
+        else:
+            neg_add_topic1 = " ".join(["fill"]*10)
+            pos_add_topic1 = " "
+
+            pos_label_list.append(0)
+            neg_label_list.append(1)
+
+        return pos_add_topic1,neg_add_topic1,pos_label_list,neg_label_list
+
+    def _generate_toy2_counterfactual(self,number_words,non_number_words,
+                                            sentence_prefix,
+                                            add_topic0,
+                                            add_topic1,
+                                            ):
+        '''
+        Generating the counterfactuals keeping the one feature same at a time
+        '''
+        cfactual_list_topic0=[] #Here the topic0 is transfored only (pos for tpoic0 inv)
+        cfactual_list_topic1=[]
+
+
+        for cidx in range(self.data_args["cfactuals_bsize"]):
+            #Generating the counterfactual wrt to topic0
+            add_topic0_cf,_,_,_= self._generate_topic0_constituents(number_words=number_words,
+                                                non_number_words=non_number_words,
+                                                pos_label_list=[],
+                                                neg_label_list=[],
+                                                topic0_corr=0.5,#see both the variation
+            )
+            #Creating the counterfactual example
+            cfactual_list_topic0.append(sentence_prefix+add_topic0_cf+add_topic1)
+        
+
+
+            #Next creating the counterfactual wrt to the topic1
+            add_topic1_cf,_,_,_ = self._generate_topic1_constituents(
+                                                pos_label_list=[],
+                                                neg_label_list=[],
+                                                topic1_corr=0.5
+            )
+            cfactual_list_topic1.append(sentence_prefix+add_topic0+add_topic1_cf)
+        
+        return cfactual_list_topic0,cfactual_list_topic1
+
     def toy_tabular_dataset_handler2(self,):
         '''
         This function will generate the tabular data in the same firmat as the
