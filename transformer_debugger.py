@@ -1099,9 +1099,9 @@ class SimpleNBOW(keras.Model):
 
 
         #Creating the metrics for the Invariant leanrning problem
-        self.pos_con_loss = self.keras.metrics.Mean(name="pos_con_loss")
-        self.neg_con_loss = self.keras.metrics.Mean(name="neg_con_loss")
-        self.last_emb_norm = self.keras.metrics.Mean(name="last_emb_norm")
+        self.pos_con_loss = tf.keras.metrics.Mean(name="pos_con_loss")
+        self.neg_con_loss = tf.keras.metrics.Mean(name="neg_con_loss")
+        self.last_emb_norm = tf.keras.metrics.Mean(name="last_emb_norm")
 
     def get_all_head_init_weights(self,):
         '''
@@ -1971,8 +1971,8 @@ class SimpleNBOW(keras.Model):
         pos_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
         neg_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_neg_sample"]]
         #Sampling the samples
-        pos_cf_idx_train = tf.gather(pos_cf_idx_train,pos_sample_idxs,axis=0)
-        neg_cf_idx_train = tf.gather(neg_cf_idx_train,neg_sample_idxs,axis=0)
+        pos_cf_idx_train = tf.gather(pos_cf_idx_train,pos_sample_idxs,axis=1)
+        neg_cf_idx_train = tf.gather(neg_cf_idx_train,neg_sample_idxs,axis=1)
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
@@ -1994,10 +1994,10 @@ class SimpleNBOW(keras.Model):
                 flat_pos_cf_idx = tf.reshape(pos_cf_idx_train,[-1,self.data_args["max_len"]])
                 flat_pos_cf_enc = self._encoder(flat_pos_cf_idx,attn_mask=attn_mask_train,training=True)
                 pos_cf_enc = tf.reshape(flat_pos_cf_enc,
-                                            [-1,self.model_args["num_pos_sample"],self.emb_dim]
+                                            [-1,self.model_args["num_pos_sample"],self.hlayer_dim]
                 )
                 #Getting the positive contrastive loss
-                pos_con_loss = tf.norm(pos_cf_enc-input_enc)
+                pos_con_loss = tf.norm(pos_cf_enc-extd_input_enc)
                 self.pos_con_loss.update_state(pos_con_loss)
 
 
@@ -2005,10 +2005,10 @@ class SimpleNBOW(keras.Model):
                 flat_neg_cf_idx = tf.reshape(neg_cf_idx_train,[-1,self.data_args["max_len"]])
                 flat_neg_cf_enc = self._encoder(flat_neg_cf_idx,attn_mask=attn_mask_train,training=True)
                 neg_cf_enc = tf.reshape(flat_neg_cf_enc,
-                                            [-1,self.model_args["num_neg_sample"],self.emb_dim]
+                                            [-1,self.model_args["num_neg_sample"],self.hlayer_dim]
                 )
                 #Getting the negative contrastive loss
-                neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-input_enc)
+                neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-extd_input_enc)
                 self.neg_con_loss.update_state(neg_con_loss)
 
                 #regularize the embedding to have small norm
@@ -4092,7 +4092,7 @@ def nbow_trainer_mouli(data_args,model_args):
     print("Creating the dataset")
     data_handler = DataHandleTransformer(data_args)
     if "nlp_toy2" in data_args["path"]:
-        cat_dataset = data_handler.toy_nlp_dataset_handler2()
+        cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
     
     #Creating the classifier
     print("Creating the model")
@@ -4181,6 +4181,7 @@ if __name__=="__main__":
     parser.add_argument('-cont_lambda',dest="cont_lambda",type=float,default=None)
     parser.add_argument('-norm_lambda',dest="norm_lambda",type=float,default=None)
     parser.add_argument('-inv_idx',dest="inv_idx",type=int,default=None)
+    parser.add_argument('-closs_type',dest="closs_type",type=str,default=None)
 
 
     #Arguments related to the adversarial removal
@@ -4359,6 +4360,7 @@ if __name__=="__main__":
     model_args["cont_lambda"]=args.cont_lambda
     model_args["norm_lambda"]=args.norm_lambda
     model_args["inv_idx"]=args.inv_idx
+    model_args["closs_type"]=args.closs_type
 
 
     #################################################

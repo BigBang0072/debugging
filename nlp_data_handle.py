@@ -1779,17 +1779,18 @@ class DataHandleTransformer():
         #Getting the input idx where topic1 is set to a fixed label =1
         all_index_arr_t1_is_1 = self._convert_text_to_widx(all_example_list_t1_is_1)
 
-        #Converting the counterfacutals to the index for topic0
-        all_index_arr_cfactual_t0=[]
-        for cfactual_list in all_example_cfactual_t0:
-            all_index_arr_cfactual_t0.append(self._convert_text_to_widx(cfactual_list))
-        all_index_arr_cfactual_t0=np.stack(all_index_arr_cfactual_t0,axis=0)
+        if return_cf==True:
+            #Converting the counterfacutals to the index for topic0
+            all_index_arr_cfactual_t0=[]
+            for cfactual_list in all_example_cfactual_t0:
+                all_index_arr_cfactual_t0.append(self._convert_text_to_widx(cfactual_list))
+            all_index_arr_cfactual_t0=np.stack(all_index_arr_cfactual_t0,axis=0)
 
-        #Converting the counterfactuals to index for topic1
-        all_index_arr_cfactual_t1=[]
-        for cfactual_list in all_example_cfactual_t1:
-            all_index_arr_cfactual_t1.append(self._convert_text_to_widx(cfactual_list))
-        all_index_arr_cfactual_t1=np.stack(all_index_arr_cfactual_t1,axis=0)
+            #Converting the counterfactuals to index for topic1
+            all_index_arr_cfactual_t1=[]
+            for cfactual_list in all_example_cfactual_t1:
+                all_index_arr_cfactual_t1.append(self._convert_text_to_widx(cfactual_list))
+            all_index_arr_cfactual_t1=np.stack(all_index_arr_cfactual_t1,axis=0)
 
         
         #Creating the dataset object
