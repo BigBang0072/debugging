@@ -1934,7 +1934,7 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
-    def train_step_mouli(self,dataset_batch,inv_idx):
+    def train_step_mouli(self,dataset_batch,inv_idx,task):
         '''
         inv_idx         : the topic which we want our representation to be invariant of
         '''
@@ -1980,15 +1980,15 @@ class SimpleNBOW(keras.Model):
 
 
         #Now we are ready to train our model
-        if self.model_args["closs_type"]=="mse":
+        if task=="cont_rep" and self.model_args["closs_type"]=="mse":
             with tf.GradientTape() as tape:
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                 extd_input_enc = tf.expand_dims(input_enc,axis=1)
                 #Getting the main task loss
-                main_task_prob = self.get_main_task_pred_prob(input_enc)
-                main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
-                self.main_pred_xentropy.update_state(main_xentropy_loss)
+                # main_task_prob = self.get_main_task_pred_prob(input_enc)
+                # main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                # self.main_pred_xentropy.update_state(main_xentropy_loss)
 
                 #Next encoding the positive examples
                 flat_pos_cf_idx = tf.reshape(pos_cf_idx_train,[-1,self.data_args["max_len"]])
@@ -2016,8 +2016,7 @@ class SimpleNBOW(keras.Model):
                 self.last_emb_norm.update_state(emb_norm)
 
                 #Getting the overall loss
-                total_loss = main_xentropy_loss\
-                                + self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)\
+                total_loss = self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)\
                                 + self.model_args["norm_lambda"]*emb_norm
             
             #Calculating the gradient
@@ -2025,7 +2024,22 @@ class SimpleNBOW(keras.Model):
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
-                 
+        elif task=="main_head":
+            #This task will just train the head main classifier
+            with tf.GradientTape() as tape:
+                #Encoding the input first
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                extd_input_enc = tf.expand_dims(input_enc,axis=1)
+                #Getting the main task loss
+                main_task_prob = self.get_main_task_pred_prob(input_enc)
+                main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                self.main_pred_xentropy.update_state(main_xentropy_loss)
+            
+            #Training the head parameters of the main classifier
+            grads = tape.gradient(main_xentropy_loss,self.main_task_classifier.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
         else:
             raise NotImplementedError()
 
@@ -4103,17 +4117,32 @@ def nbow_trainer_mouli(data_args,model_args):
     )
 
     #Training the model with both and main contrastive objective
-    print("Training the main+contsastive objective simultaneously!")
+    print("Starting the training steps!")
     for eidx in range(model_args["epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset)))
+
+        #Training the representation to be invariant to the inv_idx topic
+        print("Training the invariant-representation contrastively")
         for bidx,data_batch in zip(tbar,cat_dataset):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
             #Training the main task classifier
             classifier_main.train_step_mouli(
                                         dataset_batch=data_batch,
-                                        inv_idx=model_args["inv_idx"]
+                                        inv_idx=model_args["inv_idx"],
+                                        task="cont_rep"
+            )
+        
+        #Testing how much the rep are predictive (no encoder training)
+        print("Training the main-head to see the predictive power of rep")
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+            #Training the main task classifier
+            classifier_main.train_step_mouli(
+                                        dataset_batch=data_batch,
+                                        inv_idx=model_args["inv_idx"],
+                                        task="main_head"
             )
         
         #Getting the validation accuracy
