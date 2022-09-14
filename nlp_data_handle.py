@@ -1634,7 +1634,7 @@ class DataHandleTransformer():
 
         return all_cat_ds,all_topic_ds,new_all_cat_df
     
-    def toy_nlp_dataset_handler2(self,return_causal=False,return_cf=False):
+    def toy_nlp_dataset_handler2(self,return_causal=False,return_cf=False,return_fulldict=False):
         '''
         In this handler we will add multiple topics at a time into
         the text and then test the removal and the topic convergence.
@@ -1820,22 +1820,31 @@ class DataHandleTransformer():
             self.data_args["topic_corr_list"][tidx1]=init_corr_value
         
 
-        cat_dataset = tf.data.Dataset.from_tensor_slices(
-                                dict(
-                                    #label=all_label_arr[:,self.data_args["main_topic"]+1],
-                                    label=all_label_arr[:,0],
-                                    input_idx = all_index_arr,
-                                    input_idx_t0_cf = all_index_arr_cfactual_t0,
-                                    input_idx_t1_cf = all_index_arr_cfactual_t1,
-                                    input_idx_t0_flip = all_index_arr_t0_flip,
-                                    input_idx_t1_flip = all_index_arr_t1_flip,
-                                    topic_label = all_label_arr[:,1:]
-                                )
-        )
+        #Creating a dataframe if needed
+        cat_dataset=None
+        data_dict = dict(
+                        #label=all_label_arr[:,self.data_args["main_topic"]+1],
+                        label=all_label_arr[:,0],
+                        input_idx = all_index_arr,
+                        input_idx_t0_cf = all_index_arr_cfactual_t0,
+                        input_idx_t1_cf = all_index_arr_cfactual_t1,
+                        input_idx_t0_flip = all_index_arr_t0_flip,
+                        input_idx_t1_flip = all_index_arr_t1_flip,
+                        topic_label = all_label_arr[:,1:]
+                    )
+        
 
-        #Batching the dataset
-        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
-
+        if return_fulldict==True:
+            #Creating the dataframe from the input instead
+            #This will be loaded in memory -> might create problem when scaling
+            cat_dataset= data_dict
+        else:
+            cat_dataset = tf.data.Dataset.from_tensor_slices(
+                                                        data_dict
+            )
+            #Batching the dataset
+            cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+        
         return cat_dataset
     
     def _generate_topic0_constituents(self,number_words,non_number_words,

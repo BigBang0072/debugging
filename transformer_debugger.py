@@ -4195,6 +4195,45 @@ def nbow_trainer_mouli(data_args,model_args):
     with open(expt_path,"w") as whandle:
         json.dump(experiment_dict,whandle,indent="\t")
 
+def nbow_treatment_effect(data_args,model_args):
+    '''
+    '''
+    #Creating the dataset
+    print("Creating the dataset")
+    data_handler = DataHandleTransformer(data_args)
+    if "nlp_toy2" in data_args["path"]:
+        cat_fulldict = data_handler.toy_nlp_dataset_handler2(return_fulldict=True)
+    
+    #Getting the X_emb which will be used as the input to TE estimator
+    X_emb = get_input_X_avgemb_for_TE(data_args,model_args,cat_fulldict)
+
+    #Getting the outcome
+    Y = cat_fulldict["label"]
+    T = cat_fulldict["topic_label"][:,model_args["treated_topic"]]
+
+    
+
+    
+
+def get_input_X_avgemb_for_TE(data_args,model_args,cat_fulldict):
+    '''
+    Here assumption is the the classifier main is initilaized with NBOW layer
+    Later we could initialize them with transformer embedding also but we will need 
+    the attention mask in those case speratately
+    '''
+    #Generating the input X (avg embedding of all the input)
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+
+    X_input_idx = cat_fulldict["input_idx"]
+    X_emb = classifier_main.pre_encoder_layer(X_input_idx,None).numpy()
+
+    return X_emb
+
+
 if __name__=="__main__":
     import argparse
     parser=argparse.ArgumentParser()
@@ -4243,6 +4282,9 @@ if __name__=="__main__":
     parser.add_argument('-inv_idx',dest="inv_idx",type=int,default=None)
     parser.add_argument('-closs_type',dest="closs_type",type=str,default=None)
 
+
+    #Argument related to TE estimation for the transformations
+    parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
 
     #Arguments related to the adversarial removal
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
