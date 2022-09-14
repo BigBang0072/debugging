@@ -2245,7 +2245,7 @@ class SimpleNBOW(keras.Model):
         for key,value in self.model_args.items():
             config[key]=value
         
-        self.config = self.get_experiment_config()
+        self.config = config
         return config
 
 
@@ -4189,7 +4189,7 @@ def nbow_trainer_mouli(data_args,model_args):
                 "metrics_tline":all_metrics_dict
     }
     #Saving the json
-    expt_num = len(glob.glob("*.json"))
+    expt_num = len(glob.glob(data_args["out_path"]+"*.json"))
     expt_path = data_args["out_path"]+"expt{}.json".format(expt_num)
     print("Dumping the config in: {}".format(expt_path))
     with open(expt_path,"w") as whandle:
