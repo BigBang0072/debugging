@@ -1104,11 +1104,13 @@ class SimpleNBOW(keras.Model):
         self.pos_con_loss_list = []
         self.neg_con_loss_list = []
         self.last_emb_norm_list = []
+        self.te_error_list = [] #The TE error for each of the topic (method2 stage2)
         for tidx in range(self.data_args["num_topics"]):
             self.pos_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_pos_con_loss".format(tidx)))
             self.neg_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_neg_con_loss".format(tidx)))
             self.last_emb_norm_list.append(tf.keras.metrics.Mean(name="topic_{}_last_emb_norm".format(tidx)))
-        
+            self.te_error_list.append(tf.keras.metrics.Mean(name="topic_{}_te_error".format(tidx)))
+
     def get_all_head_init_weights(self,):
         '''
         This will get the initialized weights which can be used later for
@@ -1169,6 +1171,7 @@ class SimpleNBOW(keras.Model):
             self.pos_con_loss_list[tidx].reset_states()
             self.neg_con_loss_list[tidx].reset_states()
             self.last_emb_norm_list[tidx].reset_states()
+            self.te_error_list[tidx].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1961,7 +1964,7 @@ class SimpleNBOW(keras.Model):
 
         #Initializing the attention mask
         attn_mask_train = None      #This will be used when using the BERT
-
+                                    #Different attention mask for cf datapoints
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
@@ -1983,7 +1986,7 @@ class SimpleNBOW(keras.Model):
                 #Now getting all the cf_inv loss 
                 for inv_tidx in tf.range(self.data_args["num_topics"]):
                     inv_tidx = int(inv_tidx.numpy())
-                    topic_cf_loss = self.get_topic_cf_loss(
+                    topic_cf_loss = self.get_topic_cf_inv_loss(
                                             input_enc=input_enc,
                                             idx_t0_cf_train=idx_t0_cf_train,
                                             idx_t1_cf_train=idx_t1_cf_train, 
@@ -1994,6 +1997,42 @@ class SimpleNBOW(keras.Model):
                     topic_cf_lambda =  1-self.model_args["t{}_ate".format(inv_tidx)]
                     total_loss+= topic_cf_lambda*topic_cf_loss     
 
+            #Calculating the gradient
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+        elif task=="stage2_te_reg" and self.model_args["teloss_type"]=="mse":
+            with tf.GradientTape() as tape:
+                total_loss = 0.0
+                #Encoding the input first
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+
+                #Getting the main-task prediction loss
+                main_task_prob = self.get_main_task_pred_prob(input_enc)
+                main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                self.main_pred_xentropy.update_state(main_xentropy_loss) 
+                total_loss += main_xentropy_loss
+
+                #Getting the topic TE loss for each topic
+                for cf_tidx in tf.range(self.data_args["num_topics"]):
+                    cf_tidx = int(cf_tidx.numpy())
+                    #Getting the topic cf
+                    idx_tidx_cf_train=None
+                    if(cf_tidx)==0:
+                        idx_tidx_cf_train=idx_t0_cf_train
+                    else:
+                        idx_tidx_cf_train=idx_t1_cf_train
+                    #Getting the loss
+                    topic_te_loss = self.get_topic_cf_pred_loss(
+                                                input_enc=input_enc,
+                                                idx_tidx_cf_train=idx_tidx_cf_train,
+                                                attn_mask_train=attn_mask_train,
+                                                cf_tidx=cf_tidx,
+                    )
+                    #Adding the topic pred loss to overall loss
+                    total_loss+=self.model_args["te_lambda"]*topic_te_loss
+        
             #Calculating the gradient
             grads = tape.gradient(total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
@@ -2039,7 +2078,7 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
 
-    def get_topic_cf_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,attn_mask_train,inv_tidx):
+    def get_topic_cf_inv_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,attn_mask_train,inv_tidx):
         '''
         '''
         pos_cf_idx_train, neg_cf_idx_train = None,None
@@ -2101,6 +2140,40 @@ class SimpleNBOW(keras.Model):
         
 
         return total_topic_loss
+    
+    def get_topic_cf_pred_loss(self,input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx):
+        '''
+        This function will enforce that the prediction of counterfactual x is 
+        in agreement with the TE.
+        '''
+        #Getting the counterfactual samples
+        #First we have to sample the positive and negative samples
+        assert self.data_args["cfactuals_bsize"]>=self.model_args["num_pos_sample"]
+        sample_idxs = tf.range(tf.shape(idx_tidx_cf_train)[1])
+        tidx_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
+        #Sampling the samples
+        tidx_cf_idx_train = tf.gather(idx_tidx_cf_train,tidx_sample_idxs,axis=1)
+
+        #Expanding the encoded input and getting the 
+        input_prob = self.get_main_task_pred_prob(input_enc)
+        extd_input_prob = tf.expand_dims(input_prob,axis=1)
+
+        #Next encoding the counterfactual sample for this indexes
+        flat_tidx_cf_idx = tf.reshape(tidx_cf_idx_train,[-1,self.data_args["max_len"]])
+        flat_tidx_cf_enc = self._encoder(flat_tidx_cf_idx,attn_mask=attn_mask_train,training=True)
+        flat_tidx_cf_prob = self.get_main_task_pred_prob(flat_tidx_cf_enc)
+        tidx_cf_prob = tf.reshape(flat_tidx_cf_prob,
+                                    [-1,self.model_args["num_pos_sample"],self.hlayer_dim]
+        )
+
+        #Next getting the TE for each of the sample
+        y1_idx=1
+        sample_te = tf.abs(extd_input_prob[:,:,y1_idx]-tidx_cf_prob[:,:,y1_idx])
+
+        te_error = tf.reduce_mean((sample_te - self.model_args["t{}_ate".format(cf_tidx)])**2)
+        self.te_error_list[cf_tidx].update_state(te_error)
+
+        return te_error
 
     def valid_step_mouli(self,dataset_batch,inv_idx):
         '''
@@ -4348,20 +4421,32 @@ def nbow_inv_stage2_trainer(data_args,model_args):
             
 
         #Logging the result
-        log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
-                        +"t0_pos_closs:{:0.4f}\nt0_neg_closs:{:0.4f}\nt0_emb_norm:{:0.4f}\n"\
-                        +"t1_pos_closs:{:0.4f}\nt1_neg_closs:{:0.4f}\nt1_emb_norm:{:0.4f}"
-        print(log_format.format(
-                            eidx,
-                            classifier_main.main_pred_xentropy.result(),
-                            classifier_main.main_valid_accuracy.result(),
-                            classifier_main.pos_con_loss_list[0].result(),
-                            classifier_main.neg_con_loss_list[0].result(),
-                            classifier_main.last_emb_norm_list[0].result(),
-                            classifier_main.pos_con_loss_list[1].result(),
-                            classifier_main.neg_con_loss_list[1].result(),
-                            classifier_main.last_emb_norm_list[1].result()
-        ))
+        if model_args["stage_mode"]=="stage2_inv_reg":
+            log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
+                            +"t0_pos_closs:{:0.4f}\nt0_neg_closs:{:0.4f}\nt0_emb_norm:{:0.4f}\n"\
+                            +"t1_pos_closs:{:0.4f}\nt1_neg_closs:{:0.4f}\nt1_emb_norm:{:0.4f}"
+            print(log_format.format(
+                                eidx,
+                                classifier_main.main_pred_xentropy.result(),
+                                classifier_main.main_valid_accuracy.result(),
+                                classifier_main.pos_con_loss_list[0].result(),
+                                classifier_main.neg_con_loss_list[0].result(),
+                                classifier_main.last_emb_norm_list[0].result(),
+                                classifier_main.pos_con_loss_list[1].result(),
+                                classifier_main.neg_con_loss_list[1].result(),
+                                classifier_main.last_emb_norm_list[1].result()
+            ))
+        elif model_args["stage_mode"]=="stage2_te_reg":
+            log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
+                            +"t0_te_closs:{:0.4f}\n"\
+                            +"t1_te_closs:{:0.4f}"
+            print(log_format.format(
+                                eidx,
+                                classifier_main.main_pred_xentropy.result(),
+                                classifier_main.main_valid_accuracy.result(),
+                                classifier_main.te_error_list[0].result(),
+                                classifier_main.te_error_list[1].result(),
+            ))
 
         #Saving all the probe metrics
         classifier_main.save_the_probe_metric_list()           
@@ -4418,7 +4503,8 @@ if __name__=="__main__":
     parser.add_argument('-t1_ate',dest="t1_ate",type=float,default=None)
     parser.add_argument('-ate_noise',dest="ate_noise",type=float,default=None)
     parser.add_argument('-stage_mode',dest="stage_mode",type=str,default=None)
-
+    parser.add_argument('-teloss_type',dest="teloss_type",type=str,default=None)
+    parser.add_argument('-te_lambda',dest="te_lambda",type=float,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -4603,6 +4689,8 @@ if __name__=="__main__":
     model_args["t0_ate"]=args.t0_ate - args.ate_noise
     model_args["t1_ate"]=args.t1_ate + args.ate_noise
     model_args["stage_mode"] = args.stage_mode
+    model_args["teloss_type"]=args.teloss_type
+    model_args["te_lambda"]=args.te_lambda
 
     #################################################
     #        SELECT ONE OF THE JOBS FROM BELOW      #
