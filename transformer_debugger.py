@@ -1109,7 +1109,6 @@ class SimpleNBOW(keras.Model):
             self.neg_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_neg_con_loss".format(tidx)))
             self.last_emb_norm_list.append(tf.keras.metrics.Mean(name="topic_{}_last_emb_norm".format(tidx)))
         
-
     def get_all_head_init_weights(self,):
         '''
         This will get the initialized weights which can be used later for
