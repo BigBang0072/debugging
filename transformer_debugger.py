@@ -1101,9 +1101,14 @@ class SimpleNBOW(keras.Model):
 
 
         #Creating the metrics for the Invariant leanrning problem
-        self.pos_con_loss = tf.keras.metrics.Mean(name="pos_con_loss")
-        self.neg_con_loss = tf.keras.metrics.Mean(name="neg_con_loss")
-        self.last_emb_norm = tf.keras.metrics.Mean(name="last_emb_norm")
+        self.pos_con_loss_list = []
+        self.neg_con_loss_list = []
+        self.last_emb_norm_list = []
+        for tidx in range(self.data_args["num_topics"]):
+            self.pos_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_pos_con_loss".format(tidx)))
+            self.neg_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_neg_con_loss".format(tidx)))
+            self.last_emb_norm_list.append(tf.keras.metrics.Mean(name="topic_{}_last_emb_norm".format(tidx)))
+        
 
     def get_all_head_init_weights(self,):
         '''
@@ -1145,11 +1150,6 @@ class SimpleNBOW(keras.Model):
         self.main_valid_accuracy.reset_states()
         self.post_proj_embedding_norm.reset_states()
 
-        #Resetting the Invariant learning metrics
-        self.pos_con_loss.reset_states()
-        self.neg_con_loss.reset_states()
-        self.last_emb_norm.reset_states()
-
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
             self.topic_pred_xentropy_list[tidx].reset_states()
@@ -1164,6 +1164,12 @@ class SimpleNBOW(keras.Model):
             #Resetting the metrics for the pdelta subgroups
             for subgroup in self.topic_flip_main_prob_delta_ldict[tidx].keys():
                     self.topic_flip_main_prob_delta_ldict[tidx][subgroup].reset_states()
+            
+
+            #Resetting the Invariant learning metrics
+            self.pos_con_loss[tidx].reset_states()
+            self.neg_con_loss[tidx].reset_states()
+            self.last_emb_norm[tidx].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1954,78 +1960,61 @@ class SimpleNBOW(keras.Model):
         idx_t0_cf_train = idx_t0_cf[0:valid_idx]
         idx_t1_cf_train = idx_t1_cf[0:valid_idx]
 
-        pos_cf_idx_train, neg_cf_idx_train = None,None
-        #Assigning the positive and negative samples
-        if inv_idx==0:
-            pos_cf_idx_train = idx_t0_cf_train 
-            neg_cf_idx_train = idx_t1_cf_train
-        else:
-            pos_cf_idx_train = idx_t1_cf_train 
-            neg_cf_idx_train = idx_t0_cf_train
-        
         #Initializing the attention mask
-        attn_mask_train = None      #This will be used when using the NBOW
+        attn_mask_train = None      #This will be used when using the BERT
 
-        #First we have to sample the positive and negative samples
-        assert self.data_args["cfactuals_bsize"]>=self.model_args["num_pos_sample"]
-        assert self.data_args["cfactuals_bsize"]>=self.model_args["num_neg_sample"]
-        sample_idxs = tf.range(tf.shape(pos_cf_idx_train)[1])
-        pos_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
-        neg_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_neg_sample"]]
-        #Sampling the samples
-        pos_cf_idx_train = tf.gather(pos_cf_idx_train,pos_sample_idxs,axis=1)
-        neg_cf_idx_train = tf.gather(neg_cf_idx_train,neg_sample_idxs,axis=1)
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 
 
-
         #Now we are ready to train our model
-        if task=="cont_rep" and self.model_args["closs_type"]=="mse":
+        if task=="stage2_inv_reg" and self.model_args["closs_type"]=="mse":
             with tf.GradientTape() as tape:
-                #Encoding the input first
-                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
-                extd_input_enc = tf.expand_dims(input_enc,axis=1)
-                #Getting the main task loss
-                # main_task_prob = self.get_main_task_pred_prob(input_enc)
-                # main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
-                # self.main_pred_xentropy.update_state(main_xentropy_loss)
+                total_loss = 0.0
 
-                #Next encoding the positive examples
-                flat_pos_cf_idx = tf.reshape(pos_cf_idx_train,[-1,self.data_args["max_len"]])
-                flat_pos_cf_enc = self._encoder(flat_pos_cf_idx,attn_mask=attn_mask_train,training=True)
-                pos_cf_enc = tf.reshape(flat_pos_cf_enc,
-                                            [-1,self.model_args["num_pos_sample"],self.hlayer_dim]
+                #Getting the main-task prediction loss
+                main_task_prob = self.get_main_task_pred_prob(input_enc)
+                main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                self.main_pred_xentropy.update_state(main_xentropy_loss) 
+                total_loss += main_xentropy_loss
+
+                #Now getting all the cf_inv loss 
+                for inv_tidx in tf.range(self.data_args["num_topics"]):
+                    inv_tidx = int(inv_tidx.numpy())
+                    topic_cf_loss = self.get_topic_cf_loss(
+                                            idx_train=idx_train,
+                                            idx_t0_cf_train=idx_t0_cf_train,
+                                            idx_t1_cf_train=idx_t1_cf_train, 
+                                            attn_mask_train=attn_mask_train,
+                                            inv_tidx=inv_tidx        
+                    )
+                    #Adding the loss to the overall loss
+                    topic_cf_lambda =  1-self.model_args["t{}_ate".format(inv_tidx)]
+                    total_loss+= topic_cf_lambda*topic_cf_loss     
+
+            #Calculating the gradient
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                zip(grads,self.trainable_weights)
+            )
+        elif task=="cont_rep" and self.model_args["closs_type"]=="mse":
+            with tf.Gradient() as tape:
+                #Getting the counterfactual loss for a particaular topic
+                total_loss = self.get_topic_cf_loss(
+                                            idx_train=idx_train,
+                                            idx_t0_cf_train=idx_t0_cf_train,
+                                            idx_t1_cf_train=idx_t1_cf_train, 
+                                            attn_mask_train=attn_mask_train,
+                                            inv_tidx=inv_idx
                 )
-                #Getting the positive contrastive loss
-                pos_con_loss = tf.norm(pos_cf_enc-extd_input_enc)
-                self.pos_con_loss.update_state(pos_con_loss)
-
-
-                #Next encoding the negative examples
-                flat_neg_cf_idx = tf.reshape(neg_cf_idx_train,[-1,self.data_args["max_len"]])
-                flat_neg_cf_enc = self._encoder(flat_neg_cf_idx,attn_mask=attn_mask_train,training=True)
-                neg_cf_enc = tf.reshape(flat_neg_cf_enc,
-                                            [-1,self.model_args["num_neg_sample"],self.hlayer_dim]
-                )
-                #Getting the negative contrastive loss
-                neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-extd_input_enc)
-                self.neg_con_loss.update_state(neg_con_loss)
-
-                #regularize the embedding to have small norm
-                emb_norm = (tf.norm(input_enc)+tf.norm(flat_pos_cf_enc)+tf.norm(flat_neg_cf_enc))/(3.0)
-                self.last_emb_norm.update_state(emb_norm)
-
-                #Getting the overall loss
-                total_loss = self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)\
-                                + self.model_args["norm_lambda"]*emb_norm
             
             #Calculating the gradient
             grads = tape.gradient(total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
+
         elif task=="main_head":
             #This task will just train the head main classifier
             with tf.GradientTape() as tape:
@@ -2045,6 +2034,69 @@ class SimpleNBOW(keras.Model):
             )
         else:
             raise NotImplementedError()
+
+    def get_topic_cf_loss(self,idx_train,idx_t0_cf_train,idx_t1_cf_train,attn_mask_train,inv_tidx):
+        '''
+        '''
+        pos_cf_idx_train, neg_cf_idx_train = None,None
+        #Assigning the positive and negative samples
+        if inv_tidx==0:
+            pos_cf_idx_train = idx_t0_cf_train 
+            neg_cf_idx_train = idx_t1_cf_train
+        else:
+            pos_cf_idx_train = idx_t1_cf_train 
+            neg_cf_idx_train = idx_t0_cf_train
+        
+        #First we have to sample the positive and negative samples
+        assert self.data_args["cfactuals_bsize"]>=self.model_args["num_pos_sample"]
+        assert self.data_args["cfactuals_bsize"]>=self.model_args["num_neg_sample"]
+        sample_idxs = tf.range(tf.shape(pos_cf_idx_train)[1])
+        pos_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
+        neg_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_neg_sample"]]
+        #Sampling the samples
+        pos_cf_idx_train = tf.gather(pos_cf_idx_train,pos_sample_idxs,axis=1)
+        neg_cf_idx_train = tf.gather(neg_cf_idx_train,neg_sample_idxs,axis=1)
+
+
+        #Encoding the input first
+        input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+        extd_input_enc = tf.expand_dims(input_enc,axis=1)
+        #Getting the main task loss
+        # main_task_prob = self.get_main_task_pred_prob(input_enc)
+        # main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+        # self.main_pred_xentropy.update_state(main_xentropy_loss)
+
+        #Next encoding the positive examples
+        flat_pos_cf_idx = tf.reshape(pos_cf_idx_train,[-1,self.data_args["max_len"]])
+        flat_pos_cf_enc = self._encoder(flat_pos_cf_idx,attn_mask=attn_mask_train,training=True)
+        pos_cf_enc = tf.reshape(flat_pos_cf_enc,
+                                    [-1,self.model_args["num_pos_sample"],self.hlayer_dim]
+        )
+        #Getting the positive contrastive loss
+        pos_con_loss = tf.norm(pos_cf_enc-extd_input_enc)
+        self.pos_con_loss_list[inv_tidx].update_state(pos_con_loss)
+
+
+        #Next encoding the negative examples
+        flat_neg_cf_idx = tf.reshape(neg_cf_idx_train,[-1,self.data_args["max_len"]])
+        flat_neg_cf_enc = self._encoder(flat_neg_cf_idx,attn_mask=attn_mask_train,training=True)
+        neg_cf_enc = tf.reshape(flat_neg_cf_enc,
+                                    [-1,self.model_args["num_neg_sample"],self.hlayer_dim]
+        )
+        #Getting the negative contrastive loss
+        neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-extd_input_enc)
+        self.neg_con_loss_list[inv_tidx].update_state(neg_con_loss)
+
+        #regularize the embedding to have small norm
+        emb_norm = (tf.norm(input_enc)+tf.norm(flat_pos_cf_enc)+tf.norm(flat_neg_cf_enc))/(3.0)
+        self.last_emb_norm_list[inv_tidx].update_state(emb_norm)
+
+        #Getting the overall loss
+        total_topic_loss = self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)\
+                        + self.model_args["norm_lambda"]*emb_norm
+        
+
+        return total_topic_loss
 
     def valid_step_mouli(self,dataset_batch,inv_idx):
         '''
@@ -2207,11 +2259,11 @@ class SimpleNBOW(keras.Model):
         '''
         '''
         #Getting the classifier information
-        init_conv_angle = self.get_angle_between_classifiers(class_idx=0)
+        # init_conv_angle = self.get_angle_between_classifiers(class_idx=0)
         #Getting the initial classifier accuracy
         init_classifier_acc = self.get_all_classifier_accuracy()
         self.probe_metric_list.append(dict(
-                    conv_angle_dict = init_conv_angle,
+                    # conv_angle_dict = init_conv_angle,
                     classifier_acc_dict = init_classifier_acc
         ))
         #Dumping the first set of metrics we have
@@ -2228,7 +2280,7 @@ class SimpleNBOW(keras.Model):
         self.config = self.get_experiment_config()
 
         #Saving the config
-        config_path = "{}/config.json".format(data_args["expt_meta_path"])
+        config_path = "{}/config.json".format(self.data_args["expt_meta_path"])
         print("Dumping the config in: {}".format(config_path))
         with open(config_path,"w") as whandle:
             json.dump(self.config,whandle,indent="\t")
@@ -4205,17 +4257,17 @@ def nbow_treatment_effect(data_args,model_args):
         cat_fulldict = data_handler.toy_nlp_dataset_handler2(return_fulldict=True)
     
     #Getting the X_emb which will be used as the input to TE estimator
-    X_emb = get_input_X_avgemb_for_TE(data_args,model_args,cat_fulldict)
+    X_emb = get_input_X_avgemb_for_TE(data_args,model_args,data_handler,cat_fulldict)
 
     #Getting the outcome
     Y = cat_fulldict["label"]
     T = cat_fulldict["topic_label"][:,model_args["treated_topic"]]
 
-    
 
-    
+    #Creating the Linear Estimator first
+    raise NotImplementedError   
 
-def get_input_X_avgemb_for_TE(data_args,model_args,cat_fulldict):
+def get_input_X_avgemb_for_TE(data_args,model_args,data_handler,cat_fulldict):
     '''
     Here assumption is the the classifier main is initilaized with NBOW layer
     Later we could initialize them with transformer embedding also but we will need 
@@ -4232,6 +4284,78 @@ def get_input_X_avgemb_for_TE(data_args,model_args,cat_fulldict):
     X_emb = classifier_main.pre_encoder_layer(X_input_idx,None).numpy()
 
     return X_emb
+
+
+def nbow_inv_stage2_trainer(data_args,model_args):
+    '''
+    Given we have the treatment effect for all the topic we will impose the invariance when learning
+    the model with different criteria
+    '''
+    print("Creating the dataset")
+    data_handler = DataHandleTransformer(data_args)
+    if "nlp_toy2" in data_args["path"]:
+        cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
+    
+    #Creating the classifier
+    print("Creating the model")
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+
+    #Getting a dummy projection matrix to use the previous stage 2 validators
+    P_Identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+
+    #Training the model with both and main contrastive objective
+    print("Starting the training steps!")
+    for eidx in range(model_args["epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        tbar = tqdm(range(len(cat_dataset)))
+
+
+        #Training the full stage2 together 
+        print("Training the Stage2-full with: \t{}".format(model_args["stage2_mode"]))
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+            #Training the full classifier
+            classifier_main.train_step_mouli(
+                                            dataset_batch=data_batch,
+                                            inv_idx=None,
+                                            task="stage2_inv_reg"
+            )
+
+
+        #Next getting the validation accraucy and the relavant metrics
+        for data_batch in cat_dataset:
+            #Getting the accuracy metrics  (the topic classifier is not trained so dont consider numbers)
+            classifier_main.valid_step_stage2(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],#wrt to the topic which is spurious
+            )
+            #Getting the pdelta metrics
+            classifier_main.valid_step_stage2_flip_topic(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],
+            )
+            
+
+        #Logging the result
+        log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\npos_closs:{:0.4f}\nneg_closs:{:0.4f}\nemb_norm:{:0.4f}"
+        print(log_format.format(
+                            eidx,
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+                            classifier_main.pos_con_loss.result(),
+                            classifier_main.neg_con_loss.result(),
+                            classifier_main.last_emb_norm.result()
+        ))
+
+        #Saving all the probe metrics
+        classifier_main.save_the_probe_metric_list()           
 
 
 if __name__=="__main__":
@@ -4281,6 +4405,9 @@ if __name__=="__main__":
     parser.add_argument('-norm_lambda',dest="norm_lambda",type=float,default=None)
     parser.add_argument('-inv_idx',dest="inv_idx",type=int,default=None)
     parser.add_argument('-closs_type',dest="closs_type",type=str,default=None)
+    parser.add_argument('-t0_ate',dest="t0_ate",type=float,default=None)
+    parser.add_argument('-t1_ate',dest="t1_ate",type=float,default=None)
+    parser.add_argument('-ate_noise',dest="ate_noise",type=float,default=None)
 
 
     #Argument related to TE estimation for the transformations
@@ -4463,6 +4590,8 @@ if __name__=="__main__":
     model_args["norm_lambda"]=args.norm_lambda
     model_args["inv_idx"]=args.inv_idx
     model_args["closs_type"]=args.closs_type
+    model_args["t0_ate"]=args.t0_ate - args.ate_noise
+    model_args["t1_ate"]=args.t1_ate + args.ate_noise
 
 
     #################################################
@@ -4475,7 +4604,12 @@ if __name__=="__main__":
     # transformer_trainer(data_args,model_args)
     # load_and_analyze_transformer(data_args,model_args)
 
-    nbow_trainer_mouli(data_args,model_args)
+
+    #################################################
+    #                   CAD JOBS                    #
+    #################################################
+    # nbow_trainer_mouli(data_args,model_args)
+    nbow_inv_stage2_trainer(data_args,model_args)
 
 
             

@@ -1826,12 +1826,14 @@ class DataHandleTransformer():
                         #label=all_label_arr[:,self.data_args["main_topic"]+1],
                         label=all_label_arr[:,0],
                         input_idx = all_index_arr,
-                        input_idx_t0_cf = all_index_arr_cfactual_t0,
-                        input_idx_t1_cf = all_index_arr_cfactual_t1,
                         input_idx_t0_flip = all_index_arr_t0_flip,
                         input_idx_t1_flip = all_index_arr_t1_flip,
                         topic_label = all_label_arr[:,1:]
                     )
+        #Adding the counterfactual data if needed
+        if return_cf==True:
+            data_dict["input_idx_t0_cf"] = all_index_arr_cfactual_t0
+            data_dict["input_idx_t1_cf"] = all_index_arr_cfactual_t1
         
 
         if return_fulldict==True:
