@@ -1167,9 +1167,9 @@ class SimpleNBOW(keras.Model):
             
 
             #Resetting the Invariant learning metrics
-            self.pos_con_loss[tidx].reset_states()
-            self.neg_con_loss[tidx].reset_states()
-            self.last_emb_norm[tidx].reset_states()
+            self.pos_con_loss_list[tidx].reset_states()
+            self.neg_con_loss_list[tidx].reset_states()
+            self.last_emb_norm_list[tidx].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -1972,6 +1972,8 @@ class SimpleNBOW(keras.Model):
         if task=="stage2_inv_reg" and self.model_args["closs_type"]=="mse":
             with tf.GradientTape() as tape:
                 total_loss = 0.0
+                #Encoding the input first
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
 
                 #Getting the main-task prediction loss
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
@@ -1983,7 +1985,7 @@ class SimpleNBOW(keras.Model):
                 for inv_tidx in tf.range(self.data_args["num_topics"]):
                     inv_tidx = int(inv_tidx.numpy())
                     topic_cf_loss = self.get_topic_cf_loss(
-                                            idx_train=idx_train,
+                                            input_enc=input_enc,
                                             idx_t0_cf_train=idx_t0_cf_train,
                                             idx_t1_cf_train=idx_t1_cf_train, 
                                             attn_mask_train=attn_mask_train,
@@ -2000,9 +2002,12 @@ class SimpleNBOW(keras.Model):
             )
         elif task=="cont_rep" and self.model_args["closs_type"]=="mse":
             with tf.Gradient() as tape:
+                #Encoding the input first
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+
                 #Getting the counterfactual loss for a particaular topic
                 total_loss = self.get_topic_cf_loss(
-                                            idx_train=idx_train,
+                                            input_enc=input_enc,
                                             idx_t0_cf_train=idx_t0_cf_train,
                                             idx_t1_cf_train=idx_t1_cf_train, 
                                             attn_mask_train=attn_mask_train,
@@ -2035,7 +2040,7 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
 
-    def get_topic_cf_loss(self,idx_train,idx_t0_cf_train,idx_t1_cf_train,attn_mask_train,inv_tidx):
+    def get_topic_cf_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,attn_mask_train,inv_tidx):
         '''
         '''
         pos_cf_idx_train, neg_cf_idx_train = None,None
@@ -2059,7 +2064,7 @@ class SimpleNBOW(keras.Model):
 
 
         #Encoding the input first
-        input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+        # input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
         extd_input_enc = tf.expand_dims(input_enc,axis=1)
         #Getting the main task loss
         # main_task_prob = self.get_main_task_pred_prob(input_enc)
@@ -4316,14 +4321,14 @@ def nbow_inv_stage2_trainer(data_args,model_args):
 
 
         #Training the full stage2 together 
-        print("Training the Stage2-full with: \t{}".format(model_args["stage2_mode"]))
+        print("Training the Stage2-full with: \t{}".format(model_args["stage_mode"]))
         for bidx,data_batch in zip(tbar,cat_dataset):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
             #Training the full classifier
             classifier_main.train_step_mouli(
                                             dataset_batch=data_batch,
                                             inv_idx=None,
-                                            task="stage2_inv_reg"
+                                            task=model_args["stage_mode"]
             )
 
 
@@ -4344,14 +4349,19 @@ def nbow_inv_stage2_trainer(data_args,model_args):
             
 
         #Logging the result
-        log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\npos_closs:{:0.4f}\nneg_closs:{:0.4f}\nemb_norm:{:0.4f}"
+        log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
+                        +"t0_pos_closs:{:0.4f}\nt0_neg_closs:{:0.4f}\nt0_emb_norm:{:0.4f}\n"\
+                        +"t1_pos_closs:{:0.4f}\nt1_neg_closs:{:0.4f}\nt1_emb_norm:{:0.4f}"
         print(log_format.format(
                             eidx,
                             classifier_main.main_pred_xentropy.result(),
                             classifier_main.main_valid_accuracy.result(),
-                            classifier_main.pos_con_loss.result(),
-                            classifier_main.neg_con_loss.result(),
-                            classifier_main.last_emb_norm.result()
+                            classifier_main.pos_con_loss_list[0].result(),
+                            classifier_main.neg_con_loss_list[0].result(),
+                            classifier_main.last_emb_norm_list[0].result(),
+                            classifier_main.pos_con_loss_list[1].result(),
+                            classifier_main.neg_con_loss_list[1].result(),
+                            classifier_main.last_emb_norm_list[1].result()
         ))
 
         #Saving all the probe metrics
@@ -4408,6 +4418,7 @@ if __name__=="__main__":
     parser.add_argument('-t0_ate',dest="t0_ate",type=float,default=None)
     parser.add_argument('-t1_ate',dest="t1_ate",type=float,default=None)
     parser.add_argument('-ate_noise',dest="ate_noise",type=float,default=None)
+    parser.add_argument('-stage_mode',dest="stage_mode",type=str,default=None)
 
 
     #Argument related to TE estimation for the transformations
@@ -4592,7 +4603,7 @@ if __name__=="__main__":
     model_args["closs_type"]=args.closs_type
     model_args["t0_ate"]=args.t0_ate - args.ate_noise
     model_args["t1_ate"]=args.t1_ate + args.ate_noise
-
+    model_args["stage_mode"] = args.stage_mode
 
     #################################################
     #        SELECT ONE OF THE JOBS FROM BELOW      #
