@@ -2281,6 +2281,7 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}_pos_con_loss".format(tidx)]=float(self.pos_con_loss_list[tidx].result().numpy())
             classifier_accuracy["topic{}_neg_con_loss".format(tidx)]=float(self.neg_con_loss_list[tidx].result().numpy())
             classifier_accuracy["topic{}_last_emb_norm".format(tidx)]=float(self.last_emb_norm_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_te_loss".format(tidx)]=float(self.te_error_list[tidx].result().numpy())
         print("Clasifier Accuracy:")
         mypp(classifier_accuracy)
 
