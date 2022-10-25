@@ -2258,6 +2258,10 @@ class SimpleNBOW(keras.Model):
         classifier_accuracy = {}
         classifier_accuracy["main"]=float(self.main_valid_accuracy.result().numpy())
         classifier_accuracy["pp_emb_norm"]=float(self.post_proj_embedding_norm.result().numpy())
+        
+        #Adding the stage2 metrics for main classifier
+        classifier_accuracy["main_xent"]=float(self.main_pred_xentropy.result().numpy())
+        
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
@@ -2272,6 +2276,11 @@ class SimpleNBOW(keras.Model):
                 classifier_accuracy["topic{}_flip_main_pdelta_{}".format(tidx,subgroup)]=float(
                                         self.topic_flip_main_prob_delta_ldict[tidx][subgroup].result().numpy()
                 )
+            
+            #Adding the training metrics of contrastive loss stage2
+            classifier_accuracy["topic{}_pos_con_loss".format(tidx)]=float(self.pos_con_loss_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_neg_con_loss".format(tidx)]=float(self.neg_con_loss_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_last_emb_norm".format(tidx)]=float(self.last_emb_norm_list[tidx].result().numpy())
         print("Clasifier Accuracy:")
         mypp(classifier_accuracy)
 

@@ -46,7 +46,7 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         probe_metric_list = probe_metric_list[epoch:epoch+1]#[-10:-9]
     
     for idx in range(len(probe_metric_list)):
-        pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
+#         pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
         pdict["acc:main"].append(probe_metric_list[idx]["classifier_acc_dict"]["main"])
         if "pp_emb_norm" in probe_metric_list[idx]["classifier_acc_dict"]:
             pdict["pp_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["pp_emb_norm"])
@@ -69,8 +69,8 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
 
 
         if "topic1" in probe_metric_list[idx]["classifier_acc_dict"]:
-            pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
-            pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
+#             pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
+#             pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
 
             pdict["acc:topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1"])
             pdict["topic1_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main"])
