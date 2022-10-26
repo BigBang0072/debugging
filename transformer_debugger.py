@@ -2063,7 +2063,6 @@ class SimpleNBOW(keras.Model):
             with tf.GradientTape() as tape:
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
-                extd_input_enc = tf.expand_dims(input_enc,axis=1)
                 #Getting the main task loss
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
                 main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
@@ -2074,6 +2073,21 @@ class SimpleNBOW(keras.Model):
             grads = tape.gradient(main_xentropy_loss,main_head_params)
             self.optimizer.apply_gradients(
                         zip(grads,main_head_params)
+            )
+        elif task=="main":
+            #This will train simple ERM model without any regularization to see the baseline
+            with tf.GradientTape() as tape:
+                #Encoding the input first
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Getting the main task loss
+                main_task_prob = self.get_main_task_pred_prob(input_enc)
+                main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                self.main_pred_xentropy.update_state(main_xentropy_loss)
+            
+            #Training the head parameters of the main classifier
+            grads = tape.gradient(main_xentropy_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                        zip(grads,self.trainable_weights)
             )
         else:
             raise NotImplementedError()
@@ -2163,7 +2177,7 @@ class SimpleNBOW(keras.Model):
         flat_tidx_cf_enc = self._encoder(flat_tidx_cf_idx,attn_mask=attn_mask_train,training=True)
         flat_tidx_cf_prob = self.get_main_task_pred_prob(flat_tidx_cf_enc)
         tidx_cf_prob = tf.reshape(flat_tidx_cf_prob,
-                                    [-1,self.model_args["num_pos_sample"],self.hlayer_dim]
+                                    [-1,self.model_args["num_pos_sample"],2]
         )
 
         #Next getting the TE for each of the sample
