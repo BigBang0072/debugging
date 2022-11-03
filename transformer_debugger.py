@@ -4710,8 +4710,9 @@ if __name__=="__main__":
     model_args["norm_lambda"]=args.norm_lambda
     model_args["inv_idx"]=args.inv_idx
     model_args["closs_type"]=args.closs_type
-    model_args["t0_ate"]=args.t0_ate - args.ate_noise
-    model_args["t1_ate"]=args.t1_ate + args.ate_noise
+    if args.ate_noise is not None:
+        model_args["t0_ate"]=args.t0_ate - args.ate_noise
+        model_args["t1_ate"]=args.t1_ate + args.ate_noise
     model_args["stage_mode"] = args.stage_mode
     model_args["teloss_type"]=args.teloss_type
     model_args["te_lambda"]=args.te_lambda
