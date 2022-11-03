@@ -1105,6 +1105,7 @@ class SimpleNBOW(keras.Model):
         self.neg_con_loss_list = []
         self.last_emb_norm_list = []
         self.te_error_list = [] #The TE error for each of the topic (method2 stage2)
+        self.embedding_norm = keras.metrics.Mean(name="emb_norm")
         for tidx in range(self.data_args["num_topics"]):
             self.pos_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_pos_con_loss".format(tidx)))
             self.neg_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_neg_con_loss".format(tidx)))
@@ -1150,6 +1151,7 @@ class SimpleNBOW(keras.Model):
         self.main_pred_xentropy.reset_states()
         self.main_valid_accuracy.reset_states()
         self.post_proj_embedding_norm.reset_states()
+        self.embedding_norm.reset_states()
 
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
@@ -2079,6 +2081,10 @@ class SimpleNBOW(keras.Model):
             with tf.GradientTape() as tape:
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Tracking the embedding norm (this will increase as per nagarajan paper)
+                emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
+                self.embedding_norm.update_state(emb_norm)
+
                 #Getting the main task loss
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
                 main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
@@ -2276,6 +2282,9 @@ class SimpleNBOW(keras.Model):
         #Adding the stage2 metrics for main classifier
         classifier_accuracy["main_xent"]=float(self.main_pred_xentropy.result().numpy())
         
+        #Getting the embedding norm
+        classifier_accuracy["emb_norm"]=float(self.embedding_norm.result().numpy())
+
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
