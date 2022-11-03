@@ -1978,6 +1978,9 @@ class SimpleNBOW(keras.Model):
                 total_loss = 0.0
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Tracking the embedding norm (this will increase as per nagarajan paper)
+                emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
+                self.embedding_norm.update_state(emb_norm)
 
                 #Getting the main-task prediction loss
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
@@ -2009,6 +2012,9 @@ class SimpleNBOW(keras.Model):
                 total_loss = 0.0
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Tracking the embedding norm (this will increase as per nagarajan paper)
+                emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
+                self.embedding_norm.update_state(emb_norm)
 
                 #Getting the main-task prediction loss
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
@@ -2155,7 +2161,7 @@ class SimpleNBOW(keras.Model):
         self.last_emb_norm_list[inv_tidx].update_state(emb_norm)
 
         #Getting the overall loss
-        total_topic_loss = self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)\
+        total_topic_loss = self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)/(emb_norm)\
                         + self.model_args["norm_lambda"]*emb_norm
         
 
