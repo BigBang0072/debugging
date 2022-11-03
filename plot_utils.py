@@ -66,6 +66,12 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
 
         pdict["main_smin_topic0"].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic0"])
         pdict["topic0_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_smin_main"])
+        
+        
+        if "topic0_pos_con_loss" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["topic0_pos_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_pos_con_loss"])
+            pdict["topic0_neg_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_neg_con_loss"])
+            pdict["topic0_last_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_last_emb_norm"])
 
 
         if "topic1" in probe_metric_list[idx]["classifier_acc_dict"]:
@@ -97,6 +103,12 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         if "topic1_flip_main_logpdelta" in probe_metric_list[idx]["classifier_acc_dict"]:
             pdict["topic0_logpdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_flip_main_logpdelta"])
             pdict["topic1_logpdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_logpdelta"])
+            
+        if "topic1_pos_con_loss" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["topic1_pos_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_pos_con_loss"])
+            pdict["topic1_neg_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_neg_con_loss"])
+            pdict["topic1_last_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_last_emb_norm"])
+        
     return pdict
 
 #Collecting multiple runs of experiment
