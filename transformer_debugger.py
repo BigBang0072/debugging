@@ -1688,9 +1688,9 @@ class SimpleNBOW(keras.Model):
         # self.reset_all_metrics() this leads to empty metrci at end. Why?
 
         #Getting the dataset splits for train and valid       
-        label = dataset_batch["label"]
+        label = dataset_batch["label_denoise"]
         idx = dataset_batch["input_idx"]
-        topic_label = dataset_batch["topic_label"]
+        topic_label = dataset_batch["topic_label_denoise"]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
@@ -1742,6 +1742,7 @@ class SimpleNBOW(keras.Model):
                                                         label_valid[smin_mask],
                                                         main_valid_prob[smin_mask]
             )
+#             pdb.set_trace()
 
             #Getting the topic validation accuracy
             topic_valid_prob = self.topic_task_classifier_list[cidx](X_proj)
@@ -2142,18 +2143,30 @@ class SimpleNBOW(keras.Model):
                                     [-1,self.model_args["num_pos_sample"],self.hlayer_dim]
         )
         #Getting the positive contrastive loss
-        pos_con_loss = tf.norm(pos_cf_enc-extd_input_enc)
+        #Getting the similarity using mse
+#         pos_con_loss = tf.norm(pos_cf_enc-extd_input_enc)
+        #Getting the similarity using the cosine sim
+        cosine_loss = tf.keras.losses.CosineSimilarity(axis=-1)
+        pos_con_loss = cosine_loss(pos_cf_enc,extd_input_enc)
+        
+        
         self.pos_con_loss_list[inv_tidx].update_state(pos_con_loss)
 
 
+        
+        
         #Next encoding the negative examples
         flat_neg_cf_idx = tf.reshape(neg_cf_idx_train,[-1,self.data_args["max_len"]])
         flat_neg_cf_enc = self._encoder(flat_neg_cf_idx,attn_mask=attn_mask_train,training=True)
         neg_cf_enc = tf.reshape(flat_neg_cf_enc,
                                     [-1,self.model_args["num_neg_sample"],self.hlayer_dim]
         )
-        #Getting the negative contrastive loss
-        neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-extd_input_enc)
+        #Getting the negative contrastive loss using mse
+#         neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-extd_input_enc)
+        #Getting the dissimilarity using cosine rule
+        cosine_loss = tf.keras.losses.CosineSimilarity(axis=-1)
+        neg_con_loss = (-1.0)*cosine_loss(neg_cf_enc,extd_input_enc)
+        
         self.neg_con_loss_list[inv_tidx].update_state(neg_con_loss)
 
         #regularize the embedding to have small norm
@@ -2161,8 +2174,8 @@ class SimpleNBOW(keras.Model):
         self.last_emb_norm_list[inv_tidx].update_state(emb_norm)
 
         #Getting the overall loss
-        total_topic_loss = self.model_args["cont_lambda"]*(pos_cf_enc+neg_con_loss)/(emb_norm)\
-                        + self.model_args["norm_lambda"]*emb_norm
+        total_topic_loss = self.model_args["cont_lambda"]*(pos_cf_enc)#+neg_con_loss)\
+#                         + 0.0#self.model_args["norm_lambda"]*emb_norm
         
 
         return total_topic_loss
@@ -2312,7 +2325,7 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}_last_emb_norm".format(tidx)]=float(self.last_emb_norm_list[tidx].result().numpy())
             classifier_accuracy["topic{}_te_loss".format(tidx)]=float(self.te_error_list[tidx].result().numpy())
         print("Clasifier Accuracy:")
-        mypp(classifier_accuracy)
+#         mypp(classifier_accuracy)
 
         return classifier_accuracy
     
@@ -4442,7 +4455,8 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                                             task=model_args["stage_mode"]
             )
 
-
+        
+#         print(data_args["debug_tidx"])
         #Next getting the validation accraucy and the relavant metrics
         for data_batch in cat_dataset:
             #Getting the accuracy metrics  (the topic classifier is not trained so dont consider numbers)
@@ -4463,7 +4477,9 @@ def nbow_inv_stage2_trainer(data_args,model_args):
         if model_args["stage_mode"]=="stage2_inv_reg":
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
                             +"t0_pos_closs:{:0.4f}\nt0_neg_closs:{:0.4f}\nt0_emb_norm:{:0.4f}\n"\
-                            +"t1_pos_closs:{:0.4f}\nt1_neg_closs:{:0.4f}\nt1_emb_norm:{:0.4f}"
+                            +"t1_pos_closs:{:0.4f}\nt1_neg_closs:{:0.4f}\nt1_emb_norm:{:0.4f}\n"\
+                            +"emb_norm:{:0.4f}\n"\
+                            +"Acc(Smin):{:0.3f}\n"
             print(log_format.format(
                                 eidx,
                                 classifier_main.main_pred_xentropy.result(),
@@ -4473,7 +4489,9 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                                 classifier_main.last_emb_norm_list[0].result(),
                                 classifier_main.pos_con_loss_list[1].result(),
                                 classifier_main.neg_con_loss_list[1].result(),
-                                classifier_main.last_emb_norm_list[1].result()
+                                classifier_main.last_emb_norm_list[1].result(),
+                                classifier_main.embedding_norm.result(),
+                                classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result()
             ))
         elif model_args["stage_mode"]=="stage2_te_reg":
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
@@ -4485,6 +4503,17 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                                 classifier_main.main_valid_accuracy.result(),
                                 classifier_main.te_error_list[0].result(),
                                 classifier_main.te_error_list[1].result(),
+            ))
+        elif model_args["stage_mode"]=="main":
+            log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
+                        +"Acc(Smin):{:0.3f}\n"\
+                        +"pdelta:{:0.3f}"
+            print(log_format.format(
+                                eidx,
+                                classifier_main.main_pred_xentropy.result(),
+                                classifier_main.main_valid_accuracy.result(),
+                                classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                                classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result()
             ))
 
         #Saving all the probe metrics
@@ -4501,6 +4530,7 @@ if __name__=="__main__":
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int,default=None)
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float,default=0.0)
     parser.add_argument('-lr',dest="lr",type=float)
+    parser.add_argument('-batch_size',dest="batch_size",type=int,default=None)
 
     parser.add_argument('-path',dest="path",type=str)
     parser.add_argument('-out_path',dest="out_path",type=str,default=".")
@@ -4612,12 +4642,13 @@ if __name__=="__main__":
     data_args["max_len"]=200
     data_args["num_sample"]=args.num_samples
     data_args["num_topic_samples"]=args.num_topic_samples
-    if args.transformer=="bert-base-uncased" or args.transformer=="roberta-base":
+    
+    if args.batch_size!=None:
+        data_args["batch_size"]=args.batch_size
+    elif args.transformer=="bert-base-uncased" or args.transformer=="roberta-base":
         data_args["batch_size"]=32
     elif args.transformer=="bert-large-uncased" or args.transformer=="roberta-large":
         data_args["batch_size"]=8
-    else:
-        data_args["batch_size"]=32
     
     data_args["shuffle_size"]=data_args["batch_size"]*3
     if "amazon" in data_args["path"]:

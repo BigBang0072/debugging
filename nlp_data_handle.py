@@ -1798,6 +1798,7 @@ class DataHandleTransformer():
         self._print_label_distribution(all_label_arr)
         #Shuffling the dataser (no need right now they are balanced)
         #Adding noise to the labels to have non-fully predictive causal features
+        all_label_arr_nonoise = all_label_arr.copy() 
         all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
         
 
@@ -1824,11 +1825,13 @@ class DataHandleTransformer():
         cat_dataset=None
         data_dict = dict(
                         #label=all_label_arr[:,self.data_args["main_topic"]+1],
-                        label=all_label_arr[:,0],
+                        label=all_label_arr[:,0],#topic_idx+1 for correct 
+                        label_denoise = all_label_arr_nonoise[:,0],
                         input_idx = all_index_arr,
                         input_idx_t0_flip = all_index_arr_t0_flip,
                         input_idx_t1_flip = all_index_arr_t1_flip,
-                        topic_label = all_label_arr[:,1:]
+                        topic_label = all_label_arr[:,1:],
+                        topic_label_denoise = all_label_arr_nonoise[:,1:],
                     )
         #Adding the counterfactual data if needed
         if return_cf==True:
@@ -1845,6 +1848,7 @@ class DataHandleTransformer():
                                                         data_dict
             )
             #Batching the dataset
+            print(self.data_args["batch_size"])
             cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
         
         return cat_dataset
