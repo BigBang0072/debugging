@@ -50,6 +50,8 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         pdict["acc:main"].append(probe_metric_list[idx]["classifier_acc_dict"]["main"])
         if "pp_emb_norm" in probe_metric_list[idx]["classifier_acc_dict"]:
             pdict["pp_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["pp_emb_norm"])
+        if "emb_norm" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["emb_norm"])
         
 
         pdict["acc:topic0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0"])
