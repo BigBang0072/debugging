@@ -1742,7 +1742,7 @@ class SimpleNBOW(keras.Model):
                                                         label_valid[smin_mask],
                                                         main_valid_prob[smin_mask]
             )
-#             pdb.set_trace()
+            # pdb.set_trace()
 
             #Getting the topic validation accuracy
             topic_valid_prob = self.topic_task_classifier_list[cidx](X_proj)
@@ -1974,9 +1974,9 @@ class SimpleNBOW(keras.Model):
 
 
         #Now we are ready to train our model
-        if task=="stage2_inv_reg" and self.model_args["closs_type"]=="mse":
+        if "stage2_inv_reg" in task and self.model_args["closs_type"]=="mse":
             with tf.GradientTape() as tape:
-                total_loss = 0.0
+                topic_loss = 0.0
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
                 #Tracking the embedding norm (this will increase as per nagarajan paper)
@@ -1987,7 +1987,7 @@ class SimpleNBOW(keras.Model):
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
                 main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
                 self.main_pred_xentropy.update_state(main_xentropy_loss) 
-                total_loss += main_xentropy_loss
+                # total_loss += main_xentropy_loss
 
                 #Now getting all the cf_inv loss 
                 for inv_tidx in tf.range(self.data_args["num_topics"]):
@@ -2001,13 +2001,20 @@ class SimpleNBOW(keras.Model):
                     )
                     #Adding the loss to the overall loss
                     topic_cf_lambda =  1-self.model_args["t{}_ate".format(inv_tidx)]
-                    total_loss+= topic_cf_lambda*topic_cf_loss     
+                    topic_loss+= topic_cf_lambda*topic_cf_loss     
 
             #Calculating the gradient
-            grads = tape.gradient(total_loss,self.trainable_weights)
-            self.optimizer.apply_gradients(
-                zip(grads,self.trainable_weights)
-            )
+            if "no_main" in task:
+                grads = tape.gradient(topic_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
+            else:
+                total_loss = main_xentropy_loss + topic_loss
+                grads = tape.gradient(total_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+                )
         elif task=="stage2_te_reg" and self.model_args["teloss_type"]=="mse":
             with tf.GradientTape() as tape:
                 total_loss = 0.0
@@ -2066,12 +2073,15 @@ class SimpleNBOW(keras.Model):
             self.optimizer.apply_gradients(
                 zip(grads,self.trainable_weights)
             )
-
         elif task=="main_head":
             #This task will just train the head main classifier
             with tf.GradientTape() as tape:
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Tracking the embedding norm (this will increase as per nagarajan paper)
+                emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
+                self.embedding_norm.update_state(emb_norm)
+
                 #Getting the main task loss
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
                 main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
@@ -2144,7 +2154,7 @@ class SimpleNBOW(keras.Model):
         )
         #Getting the positive contrastive loss
         #Getting the similarity using mse
-#         pos_con_loss = tf.norm(pos_cf_enc-extd_input_enc)
+        # pos_con_loss = tf.norm(pos_cf_enc-extd_input_enc)
         #Getting the similarity using the cosine sim
         cosine_loss = tf.keras.losses.CosineSimilarity(axis=-1)
         pos_con_loss = cosine_loss(pos_cf_enc,extd_input_enc)
@@ -2162,20 +2172,29 @@ class SimpleNBOW(keras.Model):
                                     [-1,self.model_args["num_neg_sample"],self.hlayer_dim]
         )
         #Getting the negative contrastive loss using mse
-#         neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-extd_input_enc)
+        # neg_con_loss = (-1.0)*tf.norm(neg_cf_enc-extd_input_enc)
         #Getting the dissimilarity using cosine rule
         cosine_loss = tf.keras.losses.CosineSimilarity(axis=-1)
         neg_con_loss = (-1.0)*cosine_loss(neg_cf_enc,extd_input_enc)
         
         self.neg_con_loss_list[inv_tidx].update_state(neg_con_loss)
 
+
+
+
+
         #regularize the embedding to have small norm
         emb_norm = (tf.norm(input_enc)+tf.norm(flat_pos_cf_enc)+tf.norm(flat_neg_cf_enc))/(3.0)
         self.last_emb_norm_list[inv_tidx].update_state(emb_norm)
 
+
+
+
+
+
         #Getting the overall loss
-        total_topic_loss = self.model_args["cont_lambda"]*(pos_cf_enc)#+neg_con_loss)\
-#                         + 0.0#self.model_args["norm_lambda"]*emb_norm
+        total_topic_loss = self.model_args["cont_lambda"]*(pos_con_loss)#+neg_con_loss)
+                        # + 0.0#self.model_args["norm_lambda"]*emb_norm
         
 
         return total_topic_loss
@@ -2325,7 +2344,7 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}_last_emb_norm".format(tidx)]=float(self.last_emb_norm_list[tidx].result().numpy())
             classifier_accuracy["topic{}_te_loss".format(tidx)]=float(self.te_error_list[tidx].result().numpy())
         print("Clasifier Accuracy:")
-#         mypp(classifier_accuracy)
+        # mypp(classifier_accuracy)
 
         return classifier_accuracy
     
@@ -4449,14 +4468,34 @@ def nbow_inv_stage2_trainer(data_args,model_args):
         for bidx,data_batch in zip(tbar,cat_dataset):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
             #Training the full classifier
-            classifier_main.train_step_mouli(
-                                            dataset_batch=data_batch,
-                                            inv_idx=None,
-                                            task=model_args["stage_mode"]
-            )
+            if "no_main" in model_args["stage_mode"]:
+                # We will train the representaion using the topic loss 
+                # (will main specific information stay? --> this will care for later)
+                # maybe for now we will need the neg contrastive loss also (to differentiate be the topic)
+
+                #Train the representaiton using the topic specific removal
+                classifier_main.train_step_mouli(
+                                                dataset_batch=data_batch,
+                                                inv_idx=None,
+                                                task=model_args["stage_mode"]
+                )
+
+                #Next training the main head to see the main task accuracy progress
+                classifier_main.train_step_mouli(
+                                                dataset_batch=data_batch,
+                                                inv_idx=None,
+                                                task="main_head",
+                )
+
+            else:
+                classifier_main.train_step_mouli(
+                                                dataset_batch=data_batch,
+                                                inv_idx=None,
+                                                task=model_args["stage_mode"]
+                )
 
         
-#         print(data_args["debug_tidx"])
+        # print(data_args["debug_tidx"])
         #Next getting the validation accraucy and the relavant metrics
         for data_batch in cat_dataset:
             #Getting the accuracy metrics  (the topic classifier is not trained so dont consider numbers)
@@ -4756,9 +4795,13 @@ if __name__=="__main__":
     model_args["norm_lambda"]=args.norm_lambda
     model_args["inv_idx"]=args.inv_idx
     model_args["closs_type"]=args.closs_type
-    if args.ate_noise is not None:
+    if args.ate_noise is not None and (args.debug_tidx==1):
         model_args["t0_ate"]=args.t0_ate - args.ate_noise
         model_args["t1_ate"]=args.t1_ate + args.ate_noise
+    elif args.ate_noise is not None:
+        model_args["t0_ate"]=args.t0_ate + args.ate_noise
+        model_args["t1_ate"]=args.t1_ate - args.ate_noise
+    #TODO: Add support for the thresholding experiment where we clip the lower treatment effect
     model_args["stage_mode"] = args.stage_mode
     model_args["teloss_type"]=args.teloss_type
     model_args["te_lambda"]=args.te_lambda

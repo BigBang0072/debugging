@@ -1848,7 +1848,7 @@ class DataHandleTransformer():
                                                         data_dict
             )
             #Batching the dataset
-            print(self.data_args["batch_size"])
+            # print(self.data_args["batch_size"])
             cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
         
         return cat_dataset
