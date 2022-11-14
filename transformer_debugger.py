@@ -4948,9 +4948,9 @@ if __name__=="__main__":
     parser.add_argument('-te_lambda',dest="te_lambda",type=float,default=None)
 
     #Arguments related to Stage1 using Riesz representer
-    parser.add_argument('-num_postalpha_layer',dest="num_postalpha_layer",type=float,default=None)
-    parser.add_argument('-rr_lambda',dest="rr_lambda",dtype=float,default=None)
-    parser.add_argument('-tmle_lambda',dest="tmle_lambda",dtype=float,default=None)
+    parser.add_argument('-num_postalpha_layer',dest="num_postalpha_layer",type=int,default=None)
+    parser.add_argument('-rr_lambda',dest="rr_lambda",type=float,default=None)
+    parser.add_argument('-tmle_lambda',dest="tmle_lambda",type=float,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
