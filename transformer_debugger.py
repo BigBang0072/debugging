@@ -1112,6 +1112,53 @@ class SimpleNBOW(keras.Model):
             self.last_emb_norm_list.append(tf.keras.metrics.Mean(name="topic_{}_last_emb_norm".format(tidx)))
             self.te_error_list.append(tf.keras.metrics.Mean(name="topic_{}_te_error".format(tidx)))
 
+        
+        #Creating the classifier for Stage1 Invariant Leanring using Riesz Representer
+        self.regularization_loss = keras.metrics.Mean(name="regularization_loss")
+
+        #Adding RR Specific things
+        #Adding the dense layer for alpha prediction
+        self.alpha_layer = layers.Dense(
+                            1,
+                            activation=None,#since the TE could take any value (could keep 0-1 but)
+                            kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
+        )
+        #Adding the loss term for RR
+        self.rr_loss = keras.metrics.Mean(name="rr_loss")
+
+
+
+        #Getting the regression loss specific things
+        #Getting the hidden layer for post learning
+        self.riesz_postalpha_layer_list=[]
+        for _ in range(self.model_args["num_postalpha_layer"]):
+            self.riesz_postalpha_layer_list.append(
+                     layers.Dense(
+                            self.hlayer_dim,
+                            activation="relu",
+                            kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
+            ))
+        #Getting the last layer for regression
+        self.riesz_regression_layer = layers.Dense(
+                            1,
+                            activation=None,#since the TE could take any value (could keep 0-1 but)
+                            kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
+        )
+        #Getting the regression loss metric
+        self.reg_loss = keras.metrics.Mean(name="reg_loss")
+
+
+        #Initializing the tmle specific params
+        self.riesz_epsilon = tf.Variable(initial_value=1.0,trainable=True)
+        self.tmle_loss = keras.metrics.Mean(name="tmle_loss")
+
+        #Initializing the TE specific trackers
+        self.te_train = keras.metrics.Mean(name="te_train")
+        self.te_corrected_train = keras.metrics.Mean(name="te_corrected_train")
+
+        self.te_valid = keras.metrics.Mean(name="te_valid")
+        self.te_corrected_valid = keras.metrics.Mean(name="te_corrected_valid")
+
     def get_all_head_init_weights(self,):
         '''
         This will get the initialized weights which can be used later for
@@ -1152,6 +1199,16 @@ class SimpleNBOW(keras.Model):
         self.main_valid_accuracy.reset_states()
         self.post_proj_embedding_norm.reset_states()
         self.embedding_norm.reset_states()
+
+        #Resetting the Invariant learning specific metrics
+        self.rr_loss.reset_states()
+        self.reg_loss.reset_states()
+        self.tmle_loss.reset_states()
+        self.regularization_loss.reset_states()
+        self.te_valid.reset_states()
+        self.te_train.reset_states()
+        self.te_corrected_valid.reset_states()
+        self.te_corrected_train.reset_states()
 
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
@@ -1947,12 +2004,13 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
-    def train_step_mouli(self,dataset_batch,inv_idx,task):
+    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None):
         '''
         inv_idx         : the topic which we want our representation to be invariant of
         '''
         #Getting the train dataset
         label = dataset_batch["label"]
+        all_topic_label = dataset_batch["topic_label"]
         idx = dataset_batch["input_idx"]
         idx_t0_cf = dataset_batch["input_idx_t0_cf"]
         idx_t1_cf = dataset_batch["input_idx_t1_cf"]
@@ -1961,6 +2019,7 @@ class SimpleNBOW(keras.Model):
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
         label_train = label[0:valid_idx]
+        all_topic_label_train = all_topic_label[0:valid_idx]
         idx_train = idx[0:valid_idx]
         idx_t0_cf_train = idx_t0_cf[0:valid_idx]
         idx_t1_cf_train = idx_t1_cf[0:valid_idx]
@@ -1974,7 +2033,58 @@ class SimpleNBOW(keras.Model):
 
 
         #Now we are ready to train our model
-        if "stage2_inv_reg" in task and self.model_args["closs_type"]=="mse":
+        if task=="stage1_riesz":
+            with tf.GradientTape() as tape:
+                #Getting the encoding of the Z to the latent representation
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Tracking the embedding norm (this will increase as per nagarajan paper)
+                emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
+                self.embedding_norm.update_state(emb_norm)
+
+                #Next getting the RR loss 
+                rr_loss,input_alpha = self.get_riesz_RR_loss(
+                                            input_enc=input_enc,
+                                            idx_t0_cf_train=idx_t0_cf_train,
+                                            idx_t1_cf_train=idx_t1_cf_train, 
+                                            all_topic_label_train=all_topic_label_train,
+                                            attn_mask_train=None,
+                                            tidx=te_tidx,
+                )
+                #Getting the regression loss
+                reg_loss,gval = self.get_riesz_regression_loss(input_enc,label)
+
+                #Finally getting the tmle loss
+                tmle_loss = self.get_riesz_tmle_loss(label,gval,input_alpha)
+
+                #Getting the regularization loss
+                regularization_loss = tf.math.add_n(self.losses)
+                self.regularization_loss.update_state(regularization_loss)
+
+
+                total_loss = reg_loss + self.model_args["rr_lambda"]*rr_loss \
+                                      + self.model_args["tmle_lambda"]*tmle_loss\
+                                      + self.model_args["l2_lambd"]*regularization_loss
+            #Running the optimizer
+            grads = tape.gradient(total_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                    zip(grads,self.trainable_weights)
+            )
+
+            #Getting the TE for the training data
+            #Getting the treatment effect
+            te,te_corrected = self.get_riesz_treatment_effect(
+                                                input_enc=input_enc,
+                                                idx_t0_cf=idx_t0_cf_train,
+                                                idx_t1_cf=idx_t1_cf_train,
+                                                all_topic_label=all_topic_label_train, 
+                                                tidx=te_tidx,
+                                                attn_mask_valid=None,
+            )
+            #Logging the TE
+            self.te_train.update_state(te)
+            self.te_corrected_train.update_state(te_corrected)
+
+        elif "stage2_inv_reg" in task and self.model_args["closs_type"]=="mse":
             with tf.GradientTape() as tape:
                 topic_loss = 0.0
                 #Encoding the input first
@@ -2001,7 +2111,10 @@ class SimpleNBOW(keras.Model):
                     )
                     #Adding the loss to the overall loss
                     topic_cf_lambda =  1-self.model_args["t{}_ate".format(inv_tidx)]
-                    topic_loss+= topic_cf_lambda*topic_cf_loss     
+                    topic_loss+= topic_cf_lambda*topic_cf_loss   
+
+                    #Getting the total loss inside the tape
+                    total_loss = main_xentropy_loss + topic_loss  
 
             #Calculating the gradient
             if "no_main" in task:
@@ -2010,7 +2123,6 @@ class SimpleNBOW(keras.Model):
                     zip(grads,self.trainable_weights)
                 )
             else:
-                total_loss = main_xentropy_loss + topic_loss
                 grads = tape.gradient(total_loss,self.trainable_weights)
                 self.optimizer.apply_gradients(
                     zip(grads,self.trainable_weights)
@@ -2114,8 +2226,77 @@ class SimpleNBOW(keras.Model):
             )
         else:
             raise NotImplementedError()
+    
+    def get_riesz_RR_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,all_topic_label_train,attn_mask_train,tidx):
+        '''
+        '''
+        #Getting the counterfactual data
+        topic_cf_idx_train = None
+        topic_label_train = tf.expand_dims(all_topic_label_train[:,tidx],axis=-1)
+        if tidx==0:
+            #We will only take one counterfactual for each example now
+            topic_cf_idx_train = idx_t0_cf_train
+        else:
+            topic_cf_idx_train = idx_t1_cf_train
+        
+        #Sampling a random example from the whole cf set
+        sample_idxs = tf.range(tf.shape(topic_cf_idx_train)[1])
+        cf_sample_idxs = tf.random.shuffle(sample_idxs)[0]
+        topic_cf_idx_train = topic_cf_idx_train[:,cf_sample_idxs,:] 
+        
+        #Next we are ready to generate the encoding of the counterfactual
+        topic_cf_enc = self._encoder(topic_cf_idx_train,attn_mask=attn_mask_train,training=True)
 
-    def get_topic_cf_inv_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,attn_mask_train,inv_tidx):
+        #Now we have to pass both the input and cf_input to get the alpha
+        input_alpha = self.alpha_layer(input_enc)
+        topic_cf_alpha = self.alpha_layer(topic_cf_enc)
+
+        #Now getting the riesz loss
+        RR_loss = tf.square(input_alpha) - 2*(
+                                                    topic_label_train*(input_alpha-topic_cf_alpha)
+                                                + (1-topic_label_train)*(topic_cf_alpha-input_alpha) 
+                                            )
+        RR_loss = tf.reduce_mean(RR_loss)
+        #Logging the loss
+        self.rr_loss.update_state(RR_loss)
+
+        return RR_loss,input_alpha
+    
+    def get_riesz_regression_loss(self,input_enc,label):
+        '''
+        '''
+        label = tf.expand_dims(label,axis=-1)#making the last dimension 1 to mathch dims with pred
+        #Passing the input through the additional layer
+        gval = self.pass_with_post_alpha_layer(input_enc)
+
+        #Next getting the regression loss
+        reg_loss = tf.reduce_mean(tf.square((gval-label)))
+        #Logging the loss
+        self.reg_loss.update_state(reg_loss)
+
+        return reg_loss,gval
+    
+    def pass_with_post_alpha_layer(self,input_enc):
+        '''
+        '''
+        for hlayer in self.riesz_postalpha_layer_list:
+            input_enc = hlayer(input_enc)
+        
+        #Finally passing though the last layer for regression
+        output_enc = self.riesz_regression_layer(input_enc)
+        
+        return output_enc
+    
+    def get_riesz_tmle_loss(self,label,gval,input_alpha):
+        '''
+        '''
+        #Getting the loss
+        tmle_loss = tf.reduce_mean(tf.square(label - gval - self.riesz_epsilon*input_alpha))
+        self.tmle_loss.update_state(tmle_loss)
+
+        return tmle_loss
+
+    def get_topic_cf_inv_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,topic_label_train,attn_mask_train,inv_tidx):
         '''
         '''
         pos_cf_idx_train, neg_cf_idx_train = None,None
@@ -2233,18 +2414,24 @@ class SimpleNBOW(keras.Model):
 
         return te_error
 
-    def valid_step_mouli(self,dataset_batch,inv_idx):
+    def valid_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None):
         '''
         '''
         #Getting the train dataset
         label = dataset_batch["label"]
+        all_topic_label = dataset_batch["topic_label"]
         idx = dataset_batch["input_idx"]
+        idx_t0_cf = dataset_batch["input_idx_t0_cf"]
+        idx_t1_cf = dataset_batch["input_idx_t1_cf"]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
         #Getting the validation data
         label_valid = label[valid_idx:]
+        all_topic_label_valid = all_topic_label[valid_idx:]
         idx_valid = idx[valid_idx:]
+        idx_t0_cf_valid = idx_t0_cf[valid_idx:]
+        idx_t1_cf_valid = idx_t1_cf[valid_idx:]
 
         #Attention mask for BERT based encoder
         attn_mask_valid=None
@@ -2253,9 +2440,67 @@ class SimpleNBOW(keras.Model):
         if(idx_valid.shape[0]==0):
             return
         
-        X_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
-        main_valid_prob = self.main_task_classifier(X_enc)
-        self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+        # X_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
+        # main_valid_prob = self.main_task_classifier(X_enc)
+        # self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
+
+        if task=="stage1_riesz":
+            #Now we need to get the encoding of input
+            input_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
+            
+            #Getting the treatment effect
+            te,te_corrected = self.get_riesz_treatment_effect(
+                                                input_enc=input_enc,
+                                                idx_t0_cf=idx_t0_cf_valid,
+                                                idx_t1_cf=idx_t1_cf_valid,
+                                                all_topic_label=all_topic_label_valid, 
+                                                tidx=te_tidx,
+                                                attn_mask_valid=None,
+            )
+            #Logging the TE
+            self.te_valid.update_state(te)
+            self.te_corrected_valid.update_state(te_corrected)          
+        else:
+            raise NotImplementedError()
+    
+    def get_riesz_treatment_effect(self,input_enc,idx_t0_cf,idx_t1_cf,all_topic_label,tidx,attn_mask_valid):
+        topic_cf_idx = None
+        topic_label = tf.expand_dims(all_topic_label[:,tidx],axis=-1)
+        if tidx==0:
+            #We will only take one counterfactual for each example now
+            topic_cf_idx = idx_t0_cf
+        else:
+            topic_cf_idx = idx_t1_cf
+        
+        #Sampling a random example from the whole cf set
+        sample_idxs = tf.range(tf.shape(topic_cf_idx)[1])
+        cf_sample_idxs = tf.random.shuffle(sample_idxs)[0]
+        topic_cf_idx = topic_cf_idx[:,cf_sample_idxs,:]
+
+        #Next getting the counterfactual encoding
+        topic_cf_enc = self._encoder(topic_cf_idx,attn_mask=attn_mask_valid,training=False)
+
+        #Now we have to pass both the input and cf_input to get the alpha
+        input_alpha = self.alpha_layer(input_enc)
+        topic_cf_alpha = self.alpha_layer(topic_cf_enc)
+
+        #Next we will get the gval for both of them
+        input_gval = self.pass_with_post_alpha_layer(input_enc)
+        topic_cf_gval = self.pass_with_post_alpha_layer(topic_cf_enc)
+
+        #Next calculating the TE without correction
+        te = tf.reduce_mean( 
+                                (topic_label)*(input_gval-topic_cf_gval)\
+                            +  (1-topic_label)*(topic_cf_gval-input_gval)
+        )
+
+        #Getting the corrected TE
+        te_corrected = tf.reduce_mean(
+                (topic_label)*( (input_gval-topic_cf_gval) + self.riesz_epsilon*(input_alpha-topic_cf_alpha))\
+            +  (1-topic_label)*((topic_cf_gval-input_gval) + self.riesz_epsilon*(topic_cf_alpha-input_alpha))
+        )
+
+        return te,te_corrected
 
     def get_angle_between_classifiers(self,class_idx):
         '''
@@ -2322,6 +2567,16 @@ class SimpleNBOW(keras.Model):
         
         #Getting the embedding norm
         classifier_accuracy["emb_norm"]=float(self.embedding_norm.result().numpy())
+
+        #Getting the stage1 invariant learning riesz 
+        classifier_accuracy["reg_loss"]  = float(self.reg_loss.result().numpy())
+        classifier_accuracy["rr_loss"]   = float(self.rr_loss.result().numpy())
+        classifier_accuracy["tmle_loss"] = float(self.tmle_loss.result().numpy())
+        classifier_accuracy["l2_loss"]   = float(self.regularization_loss.result().numpy())
+        classifier_accuracy["te_train"]  = float(self.te_train.result().numpy())
+        classifier_accuracy["te_corr_train"]  = float(self.te_corrected_train.result().numpy())
+        classifier_accuracy["te_valid"]  = float(self.te_valid.result().numpy())
+        classifier_accuracy["te_corr_valid"]  = float(self.te_corrected_valid.result().numpy())
 
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
@@ -4434,6 +4689,84 @@ def get_input_X_avgemb_for_TE(data_args,model_args,data_handler,cat_fulldict):
     return X_emb
 
 
+def nbow_riesznet_stage1_trainer(data_args,model_args):
+    '''
+    We will implement the Riesz net paper --> I am not sure how will any observational method
+    will be able to distnguish between the equally correlated case. 
+
+    But forest mehtods were able to give the signal in no noise case for all level of correlation.
+    But didn't it meant that the spuiously correlated topic were lower correlated than the causal
+    topic.
+    '''
+    print("Creating the dataset")
+    data_handler = DataHandleTransformer(data_args)
+    if "nlp_toy2" in data_args["path"]:
+        cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
+    
+    #Creating the classifier
+    print("Creating the model")
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+
+    #Getting a dummy projection matrix to use the previous stage 2 validators
+    P_Identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+
+    #Running the training loop
+    print("Starting the training steps!")
+    for eidx in range(model_args["epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        tbar = tqdm(range(len(cat_dataset)))
+
+        #Training the full stage1
+        print("Training the Stage1 with: \t{}".format(model_args["stage_mode"]))
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+
+            #Training the riesz representer
+            classifier_main.train_step_mouli(
+                                            dataset_batch=data_batch,
+                                            task=model_args["stage_mode"],
+                                            te_tidx=model_args["debug_tidx"]
+            )
+        
+        #Now we have to measure the tretment effect of the topic in question
+        for data_batch in cat_dataset:
+            classifier_main.valid_step_mouli( 
+                                            dataset=data_batch,
+                                            task=model_args["stage_mode"],
+                                            te_tidx=model_args["debug_tidx"]
+            )
+        
+        #Logging the results
+        log_format = "epoch:\t\t{:}\nreg_loss:\t\t{:0.3f}\n"\
+                            +"rr_loss:\t\t{:0.3f}\n"\
+                            +"tmle_loss:\t\t{:0.3f}\n"\
+                            +"l2_loss:\t\t{:0.3f}\n"\
+                            +"emb_norm:\t\t{:0.3f}"\
+                            +"te_train:\t\t{:0.3f}"\
+                            +"te_corr_train:\t\t{:0.3f}"\
+                            +"te_valid:\t\t{:0.3f}"\
+                            +"te_corr_valid:\t\t{:0.3f}"
+        print(log_format.format(
+                            eidx,
+                            classifier_main.reg_loss.result(),
+                            classifier_main.rr_loss.result(),
+                            classifier_main.tmle_loss.result(),
+                            classifier_main.regularization_loss.result(),
+                            classifier_main.embedding_norm.result(),
+                            classifier_main.te_train.result(),
+                            classifier_main.te_corrected_train.result(),
+                            classifier_main.te_valid.result(),
+                            classifier_main.te_corrected_valid.result()
+        ))
+
+        #Saving all the probe metrics
+        classifier_main.save_the_probe_metric_list()  
+
 def nbow_inv_stage2_trainer(data_args,model_args):
     '''
     Given we have the treatment effect for all the topic we will impose the invariance when learning
@@ -4613,6 +4946,11 @@ if __name__=="__main__":
     parser.add_argument('-stage_mode',dest="stage_mode",type=str,default=None)
     parser.add_argument('-teloss_type',dest="teloss_type",type=str,default=None)
     parser.add_argument('-te_lambda',dest="te_lambda",type=float,default=None)
+
+    #Arguments related to Stage1 using Riesz representer
+    parser.add_argument('-num_postalpha_layer',dest="num_postalpha_layer",type=float,default=None)
+    parser.add_argument('-rr_lambda',dest="rr_lambda",dtype=float,default=None)
+    parser.add_argument('-tmle_lambda',dest="tmle_lambda",dtype=float,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -4805,6 +5143,12 @@ if __name__=="__main__":
     model_args["stage_mode"] = args.stage_mode
     model_args["teloss_type"]=args.teloss_type
     model_args["te_lambda"]=args.te_lambda
+
+    model_args["num_postalpha_layer"]=args.num_postalpha_layer
+    model_args["rr_lambda"]=args.rr_lambda
+    model_args["tmle_lambda"]=args.tmle_lambda
+
+
 
     #################################################
     #        SELECT ONE OF THE JOBS FROM BELOW      #

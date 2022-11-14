@@ -1719,7 +1719,8 @@ class DataHandleTransformer():
                                                     non_number_words=non_number_words,
                                                     sentence_prefix=pos_example,
                                                     add_topic0=pos_add_topic0,
-                                                    add_topic1=pos_add_topic1
+                                                    add_topic1=pos_add_topic1,
+                                                    label_list=pos_label_list,
                 )
 
                 #Creating the counterfactual for the negative example
@@ -1728,7 +1729,8 @@ class DataHandleTransformer():
                                                     non_number_words=non_number_words,
                                                     sentence_prefix=neg_example,
                                                     add_topic0=neg_add_topic0,
-                                                    add_topic1=neg_add_topic1
+                                                    add_topic1=neg_add_topic1,
+                                                    label_list=neg_label_list,
                 )
 
                 #Adding the counterfactual
@@ -1877,6 +1879,22 @@ class DataHandleTransformer():
         
         return pos_add_topic0,neg_add_topic0,pos_label_list,neg_label_list
     
+    def _generate_topic0_cf_constituents(self,number_words,non_number_words,
+                                        curr_topic0_label):
+        '''
+        '''      
+        if curr_topic0_label==1:#this is positive class
+            #Then we will have to send back the opposite class for this topic (neg)
+            tneg_word = np.random.choice(non_number_words,10,replace=True).tolist()
+            neg_add_topic0 = " " +  " ".join(tneg_word)+ " "
+
+            return neg_add_topic0
+        else:
+            tpos_word = np.random.choice(number_words,10,replace=True).tolist()
+            pos_add_topic0 = " " +  " ".join(tpos_word)+ " "
+
+            return pos_add_topic0
+        
     def _generate_topic1_constituents(self,pos_label_list,neg_label_list,
                                         topic1_corr):
         '''
@@ -1898,11 +1916,24 @@ class DataHandleTransformer():
             neg_label_list.append(1)
 
         return pos_add_topic1,neg_add_topic1,pos_label_list,neg_label_list
+    
+    def _generate_topic1_cf_constituents(self,curr_topic1_label):
+        '''
+        '''
+        if curr_topic1_label==1:
+            neg_add_topic1 = " "
+
+            return neg_add_topic1
+        else:
+            pos_add_topic1 = " ".join(["fill"]*10)
+
+            return pos_add_topic1
 
     def _generate_toy2_counterfactual(self,number_words,non_number_words,
                                             sentence_prefix,
                                             add_topic0,
                                             add_topic1,
+                                            label_list,
                                             ):
         '''
         Generating the counterfactuals keeping the one feature same at a time
@@ -1910,14 +1941,22 @@ class DataHandleTransformer():
         cfactual_list_topic0=[] #Here the topic0 is transfored only (pos for tpoic0 inv)
         cfactual_list_topic1=[]
 
+        topic0_label_idx=1
+        topic1_label_idx=2
+
 
         for cidx in range(self.data_args["cfactuals_bsize"]):
             #Generating the counterfactual wrt to topic0
-            add_topic0_cf,_,_,_= self._generate_topic0_constituents(number_words=number_words,
+            # add_topic0_cf,_,_,_= self._generate_topic0_constituents(number_words=number_words,
+            #                                     non_number_words=non_number_words,
+            #                                     pos_label_list=[],
+            #                                     neg_label_list=[],
+            #                                     topic0_corr=0.5,#see both the variation
+            # )
+            #Generating using the opposite class of the topic method
+            add_topic0_cf = self._generate_topic0_cf_constituents(number_words=number_words,
                                                 non_number_words=non_number_words,
-                                                pos_label_list=[],
-                                                neg_label_list=[],
-                                                topic0_corr=0.5,#see both the variation
+                                                curr_topic0_label=label_list[topic0_label_idx],#label of topic0
             )
             #Creating the counterfactual example
             cfactual_list_topic0.append(sentence_prefix+add_topic0_cf+add_topic1)
@@ -1925,11 +1964,16 @@ class DataHandleTransformer():
 
 
             #Next creating the counterfactual wrt to the topic1
-            add_topic1_cf,_,_,_ = self._generate_topic1_constituents(
-                                                pos_label_list=[],
-                                                neg_label_list=[],
-                                                topic1_corr=0.5
+            # add_topic1_cf,_,_,_ = self._generate_topic1_constituents(
+            #                                     pos_label_list=[],
+            #                                     neg_label_list=[],
+            #                                     topic1_corr=0.5
+            # )
+            #Generating cf using the opposite class of the topic method
+            add_topic1_cf = self._generate_topic1_cf_constituents(
+                                                curr_topic1_label=label_list[topic1_label_idx],#label of topic1
             )
+            #Creating the counterfactual example
             cfactual_list_topic1.append(sentence_prefix+add_topic0+add_topic1_cf)
         
         return cfactual_list_topic0,cfactual_list_topic1
