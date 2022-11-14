@@ -24,7 +24,7 @@ do
             do
                 for l2_lambda in 1
                 do
-                    for pvalt0 in 0.99 0.9 0.8 0.7 0.6 0.5
+                    for pvalt0 in 0.5
                     do
                         for pvalt1 in 0.9
                         do

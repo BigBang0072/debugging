@@ -2232,7 +2232,7 @@ class SimpleNBOW(keras.Model):
         '''
         #Getting the counterfactual data
         topic_cf_idx_train = None
-        topic_label_train = tf.expand_dims(all_topic_label_train[:,tidx],axis=-1)
+        topic_label_train = tf.cast(tf.expand_dims(all_topic_label_train[:,tidx],axis=-1),tf.float32)
         if tidx==0:
             #We will only take one counterfactual for each example now
             topic_cf_idx_train = idx_t0_cf_train
@@ -2265,7 +2265,7 @@ class SimpleNBOW(keras.Model):
     def get_riesz_regression_loss(self,input_enc,label):
         '''
         '''
-        label = tf.expand_dims(label,axis=-1)#making the last dimension 1 to mathch dims with pred
+        label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
         #Passing the input through the additional layer
         gval = self.pass_with_post_alpha_layer(input_enc)
 
@@ -2290,6 +2290,7 @@ class SimpleNBOW(keras.Model):
     def get_riesz_tmle_loss(self,label,gval,input_alpha):
         '''
         '''
+        label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
         #Getting the loss
         tmle_loss = tf.reduce_mean(tf.square(label - gval - self.riesz_epsilon*input_alpha))
         self.tmle_loss.update_state(tmle_loss)
@@ -2465,7 +2466,7 @@ class SimpleNBOW(keras.Model):
     
     def get_riesz_treatment_effect(self,input_enc,idx_t0_cf,idx_t1_cf,all_topic_label,tidx,attn_mask_valid):
         topic_cf_idx = None
-        topic_label = tf.expand_dims(all_topic_label[:,tidx],axis=-1)
+        topic_label = tf.cast(tf.expand_dims(all_topic_label[:,tidx],axis=-1),tf.float32)
         if tidx==0:
             #We will only take one counterfactual for each example now
             topic_cf_idx = idx_t0_cf
