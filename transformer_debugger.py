@@ -2051,10 +2051,10 @@ class SimpleNBOW(keras.Model):
                                             tidx=te_tidx,
                 )
                 #Getting the regression loss
-                reg_loss,gval = self.get_riesz_regression_loss(input_enc,label)
+                reg_loss,gval = self.get_riesz_regression_loss(input_enc,label_train)
 
                 #Finally getting the tmle loss
-                tmle_loss = self.get_riesz_tmle_loss(label,gval,input_alpha)
+                tmle_loss = self.get_riesz_tmle_loss(label_train,gval,input_alpha)
 
                 #Getting the regularization loss
                 regularization_loss = tf.math.add_n(self.losses)
@@ -4731,15 +4731,15 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
             classifier_main.train_step_mouli(
                                             dataset_batch=data_batch,
                                             task=model_args["stage_mode"],
-                                            te_tidx=model_args["debug_tidx"]
+                                            te_tidx=data_args["debug_tidx"]
             )
         
         #Now we have to measure the tretment effect of the topic in question
         for data_batch in cat_dataset:
             classifier_main.valid_step_mouli( 
-                                            dataset=data_batch,
+                                            dataset_batch=data_batch,
                                             task=model_args["stage_mode"],
-                                            te_tidx=model_args["debug_tidx"]
+                                            te_tidx=data_args["debug_tidx"]
             )
         
         #Logging the results
@@ -4747,11 +4747,11 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                             +"rr_loss:\t\t{:0.3f}\n"\
                             +"tmle_loss:\t\t{:0.3f}\n"\
                             +"l2_loss:\t\t{:0.3f}\n"\
-                            +"emb_norm:\t\t{:0.3f}"\
-                            +"te_train:\t\t{:0.3f}"\
-                            +"te_corr_train:\t\t{:0.3f}"\
-                            +"te_valid:\t\t{:0.3f}"\
-                            +"te_corr_valid:\t\t{:0.3f}"
+                            +"emb_norm:\t\t{:0.3f}\n"\
+                            +"te_train:\t\t{:0.3f}\n"\
+                            +"te_corr_train:\t\t{:0.3f}\n"\
+                            +"te_valid:\t\t{:0.3f}\n"\
+                            +"te_corr_valid:\t\t{:0.3f}\n"
         print(log_format.format(
                             eidx,
                             classifier_main.reg_loss.result(),
@@ -5166,7 +5166,8 @@ if __name__=="__main__":
     #                   CAD JOBS                    #
     #################################################
     # nbow_trainer_mouli(data_args,model_args)
-    nbow_inv_stage2_trainer(data_args,model_args)
+    # nbow_inv_stage2_trainer(data_args,model_args)
+    nbow_riesznet_stage1_trainer(data_args,model_args)
 
 
             
