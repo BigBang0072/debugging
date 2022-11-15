@@ -46,7 +46,7 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         probe_metric_list = probe_metric_list[epoch:epoch+1]#[-10:-9]
     
     for idx in range(len(probe_metric_list)):
-#         pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
+        # pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
         pdict["acc:main"].append(probe_metric_list[idx]["classifier_acc_dict"]["main"])
         if "pp_emb_norm" in probe_metric_list[idx]["classifier_acc_dict"]:
             pdict["pp_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["pp_emb_norm"])
@@ -74,11 +74,21 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
             pdict["topic0_pos_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_pos_con_loss"])
             pdict["topic0_neg_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_neg_con_loss"])
             pdict["topic0_last_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_last_emb_norm"])
-
+        
+        #Adding the result from Stage1 CAD riesz
+        if "rr_loss" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["rr_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["rr_loss"])
+            pdict["reg_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["reg_loss"])
+            pdict["tmle_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["tmle_loss"])
+            pdict["l2_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["l2_loss"])
+            pdict["te_train"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_train"])
+            pdict["te_corr_train"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_corr_train"])
+            pdict["te_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_valid"])
+            pdict["te_corr_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_corr_valid"])
 
         if "topic1" in probe_metric_list[idx]["classifier_acc_dict"]:
-#             pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
-#             pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
+            # pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
+            # pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
 
             pdict["acc:topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1"])
             pdict["topic1_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main"])
