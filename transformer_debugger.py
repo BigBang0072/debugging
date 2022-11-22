@@ -2184,7 +2184,7 @@ class SimpleNBOW(keras.Model):
                                                 idx_topic_cf_train_dict=idx_topic_cf_train_dict,
                                                 attn_mask_train=attn_mask_train,
                     )
-                    total_loss+=total_te_hinge_loss
+                    total_loss+=self.model_args["te_lambda"]*total_te_hinge_loss
                 else:
                     raise NotImplementedError()
         

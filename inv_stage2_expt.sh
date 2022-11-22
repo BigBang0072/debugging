@@ -219,7 +219,7 @@ teloss_type="mse"
 stage_mode="stage2_te_reg_weak"
 
 
-for te_lambda in 1  10 30 50 100 200
+for te_lambda in 10 30 50 100 200
 do
     for sample in 1000
     do
