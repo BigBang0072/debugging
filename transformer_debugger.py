@@ -10,6 +10,7 @@ from tensorflow._api.v2 import data
 import scipy
 from scipy.spatial import distance
 import random
+from collections import defaultdict
 
 import tensorflow as tf
 from tensorflow import keras
@@ -1105,6 +1106,7 @@ class SimpleNBOW(keras.Model):
         self.neg_con_loss_list = []
         self.last_emb_norm_list = []
         self.te_error_list = [] #The TE error for each of the topic (method2 stage2)
+        self.cross_te_error_list=defaultdict(dict) #cross te for each parir of topic: weaker Method2-stage2
         self.embedding_norm = keras.metrics.Mean(name="emb_norm")
         for tidx in range(self.data_args["num_topics"]):
             self.pos_con_loss_list.append(tf.keras.metrics.Mean(name="topic_{}_pos_con_loss".format(tidx)))
@@ -1112,6 +1114,10 @@ class SimpleNBOW(keras.Model):
             self.last_emb_norm_list.append(tf.keras.metrics.Mean(name="topic_{}_last_emb_norm".format(tidx)))
             self.te_error_list.append(tf.keras.metrics.Mean(name="topic_{}_te_error".format(tidx)))
 
+            #Adding the TE error metric for cross topic
+            if tidx<(self.data_args["num_topics"]-1):
+                for tidx2 in range(tidx+1,self.data_args["num_topics"]):
+                    self.cross_te_error_list[tidx][tidx2]=tf.keras.metrics.Mean(name="cross_topic_{}_{}_te_error".format(tidx,tidx2))
         
         #Creating the classifier for Stage1 Invariant Leanring using Riesz Representer
         self.regularization_loss = keras.metrics.Mean(name="regularization_loss")
@@ -1234,6 +1240,10 @@ class SimpleNBOW(keras.Model):
             self.neg_con_loss_list[tidx].reset_states()
             self.last_emb_norm_list[tidx].reset_states()
             self.te_error_list[tidx].reset_states()
+
+            if tidx<(self.data_args["num_topics"]-1):
+                for tidx2 in range(tidx+1,self.data_args["num_topics"]):
+                    self.cross_te_error_list[tidx][tidx2].reset_states()
 
     def get_nbow_avg_layer(self,):
         '''
@@ -2129,7 +2139,7 @@ class SimpleNBOW(keras.Model):
                 self.optimizer.apply_gradients(
                     zip(grads,self.trainable_weights)
                 )
-        elif task=="stage2_te_reg" and self.model_args["teloss_type"]=="mse":
+        elif "stage2_te_reg" in task and self.model_args["teloss_type"]=="mse":
             with tf.GradientTape() as tape:
                 total_loss = 0.0
                 #Encoding the input first
@@ -2145,23 +2155,38 @@ class SimpleNBOW(keras.Model):
                 total_loss += main_xentropy_loss
 
                 #Getting the topic TE loss for each topic
-                for cf_tidx in tf.range(self.data_args["num_topics"]):
-                    cf_tidx = int(cf_tidx.numpy())
-                    #Getting the topic cf
-                    idx_tidx_cf_train=None
-                    if(cf_tidx)==0:
-                        idx_tidx_cf_train=idx_t0_cf_train
-                    else:
-                        idx_tidx_cf_train=idx_t1_cf_train
-                    #Getting the loss
-                    topic_te_loss = self.get_topic_cf_pred_loss(
+                if "strong" in task:
+                    for cf_tidx in tf.range(self.data_args["num_topics"]):
+                        cf_tidx = int(cf_tidx.numpy())
+                        #Getting the topic cf
+                        idx_tidx_cf_train=None
+                        if(cf_tidx)==0:
+                            idx_tidx_cf_train=idx_t0_cf_train
+                        else:
+                            idx_tidx_cf_train=idx_t1_cf_train
+                        #Getting the loss
+                        topic_te_loss = self.get_topic_cf_pred_loss_strict(
+                                                    input_enc=input_enc,
+                                                    idx_tidx_cf_train=idx_tidx_cf_train,
+                                                    attn_mask_train=attn_mask_train,
+                                                    cf_tidx=cf_tidx,
+                        )
+                        #Adding the topic pred loss to overall loss
+                        total_loss+=self.model_args["te_lambda"]*topic_te_loss
+                elif "weak" in task:
+                    idx_topic_cf_train_dict={}
+                    idx_topic_cf_train_dict["idx_t0_cf_train"]=idx_t0_cf_train
+                    idx_topic_cf_train_dict["idx_t1_cf_train"]=idx_t1_cf_train
+                    
+                    #Getting the cross TE ranking loss
+                    total_te_hinge_loss = self.get_topic_cf_pred_loss_weak(
                                                 input_enc=input_enc,
-                                                idx_tidx_cf_train=idx_tidx_cf_train,
+                                                idx_topic_cf_train_dict=idx_topic_cf_train_dict,
                                                 attn_mask_train=attn_mask_train,
-                                                cf_tidx=cf_tidx,
                     )
-                    #Adding the topic pred loss to overall loss
-                    total_loss+=self.model_args["te_lambda"]*topic_te_loss
+                    total_loss+=total_te_hinge_loss
+                else:
+                    raise NotImplementedError()
         
             #Calculating the gradient
             grads = tape.gradient(total_loss,self.trainable_weights)
@@ -2383,7 +2408,67 @@ class SimpleNBOW(keras.Model):
 
         return total_topic_loss
     
-    def get_topic_cf_pred_loss(self,input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx):
+    def get_topic_cf_pred_loss_strict(self,input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx):
+        '''
+        This function will enforce that the prediction of counterfactual x is 
+        in agreement with the TE.
+        '''
+        #Getting the cf pred delta for this topic
+        sample_te = self.get_topic_cf_pred_delta(input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx)
+
+        #Getting the TE error
+        te_error = tf.reduce_mean((sample_te - self.model_args["t{}_ate".format(cf_tidx)])**2)
+        self.te_error_list[cf_tidx].update_state(te_error)
+
+        return te_error
+    
+    def get_topic_cf_pred_loss_weak(self,input_enc,idx_topic_cf_train_dict,attn_mask_train):
+        '''
+        '''
+        total_te_hinge_loss=0.0
+        #Getting the sample TE for each of the topic
+        for cf_tidx1 in tf.range(self.data_args["num_topics"]-1):
+            cf_tidx1 = int(cf_tidx1.numpy())
+            for cf_tidx2 in tf.range(cf_tidx1+1,self.data_args["num_topics"]):
+                cf_tidx2 = int(cf_tidx2.numpy())
+
+                #Getting the pred_te for the first topic
+                sample_te_tidx1 = self.get_topic_cf_pred_delta(input_enc,
+                                            idx_topic_cf_train_dict["idx_t{}_cf_train".format(cf_tidx1)],
+                                            attn_mask_train,
+                                            cf_tidx1
+                )
+                #Getting the TE value for this topic
+                t1_ate = self.model_args["t{}_ate".format(cf_tidx1)]
+
+
+
+                #Getting the pred_te for the second topic
+                sample_te_tidx2 = self.get_topic_cf_pred_delta(input_enc,
+                                            idx_topic_cf_train_dict["idx_t{}_cf_train".format(cf_tidx2)],
+                                            attn_mask_train,
+                                            cf_tidx2
+                )
+                #Getting the TE for the second topic
+                t2_ate = self.model_args["t{}_ate".format(cf_tidx2)]
+
+
+                #Getting the prediction loss
+                if t1_ate>=t2_ate:
+                    #We will try to keep the t2_ate lower from the pred
+                    te_hinge_loss = tf.reduce_mean(tf.maximum(sample_te_tidx2-sample_te_tidx1,0.0))
+                else:
+                    te_hinge_loss = tf.reduce_mean(tf.maximum(sample_te_tidx1-sample_te_tidx2,0.0))
+                
+                #Adding to the loss
+                total_te_hinge_loss+=te_hinge_loss
+
+                #Updating the metric
+                self.cross_te_error_list[cf_tidx1][cf_tidx2].update_state(te_hinge_loss)
+
+        return total_te_hinge_loss
+    
+    def get_topic_cf_pred_delta(self,input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx):
         '''
         This function will enforce that the prediction of counterfactual x is 
         in agreement with the TE.
@@ -2391,8 +2476,9 @@ class SimpleNBOW(keras.Model):
         #Getting the counterfactual samples
         #First we have to sample the positive and negative samples
         assert self.data_args["cfactuals_bsize"]>=self.model_args["num_pos_sample"]
-        sample_idxs = tf.range(tf.shape(idx_tidx_cf_train)[1])
-        tidx_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
+        tidx_sample_idxs = tf.range(tf.shape(idx_tidx_cf_train)[1])[0:self.model_args["num_pos_sample"]]
+        #We might need the TE for the same sample so dont shuffle
+        # tidx_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
         #Sampling the samples
         tidx_cf_idx_train = tf.gather(idx_tidx_cf_train,tidx_sample_idxs,axis=1)
 
@@ -2409,13 +2495,10 @@ class SimpleNBOW(keras.Model):
         )
 
         #Next getting the TE for each of the sample
-        y1_idx=1
+        y1_idx=1 #the logit idx for y1 prediction
         sample_te = tf.abs(extd_input_prob[:,:,y1_idx]-tidx_cf_prob[:,:,y1_idx])
 
-        te_error = tf.reduce_mean((sample_te - self.model_args["t{}_ate".format(cf_tidx)])**2)
-        self.te_error_list[cf_tidx].update_state(te_error)
-
-        return te_error
+        return sample_te
 
     def valid_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None):
         '''
@@ -2602,6 +2685,13 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}_neg_con_loss".format(tidx)]=float(self.neg_con_loss_list[tidx].result().numpy())
             classifier_accuracy["topic{}_last_emb_norm".format(tidx)]=float(self.last_emb_norm_list[tidx].result().numpy())
             classifier_accuracy["topic{}_te_loss".format(tidx)]=float(self.te_error_list[tidx].result().numpy())
+
+
+            #Adding the cross TE loss for stage 2
+            if tidx<(self.data_args["num_topics"]-1):
+                for tidx2 in range(tidx+1,self.data_args["num_topics"]):
+                    classifier_accuracy["t{}_t{}_te_loss".format(tidx,tidx2)]=float(self.cross_te_error_list[tidx][tidx2].result().numpy())
+
         print("Clasifier Accuracy:")
         # mypp(classifier_accuracy)
 
@@ -4869,16 +4959,18 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                                 classifier_main.embedding_norm.result(),
                                 classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result()
             ))
-        elif model_args["stage_mode"]=="stage2_te_reg":
+        elif "stage2_te_reg" in model_args["stage_mode"]:
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
                             +"t0_te_closs:{:0.4f}\n"\
-                            +"t1_te_closs:{:0.4f}"
+                            +"t1_te_closs:{:0.4f}\n"\
+                            +"t0t1_te_closs:{:0.4f}"
             print(log_format.format(
                                 eidx,
                                 classifier_main.main_pred_xentropy.result(),
                                 classifier_main.main_valid_accuracy.result(),
                                 classifier_main.te_error_list[0].result(),
                                 classifier_main.te_error_list[1].result(),
+                                classifier_main.cross_te_error_list[0][1].result()
             ))
         elif model_args["stage_mode"]=="main":
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
