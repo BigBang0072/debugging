@@ -2456,9 +2456,15 @@ class SimpleNBOW(keras.Model):
                 #Getting the prediction loss
                 if t1_ate>=t2_ate:
                     #We will try to keep the t2_ate lower from the pred
-                    te_hinge_loss = tf.reduce_mean(tf.maximum(sample_te_tidx2-sample_te_tidx1,0.0))
+                    te_hinge_loss = tf.reduce_mean(tf.maximum(
+                                                    sample_te_tidx2-sample_te_tidx1+self.model_args["hinge_width"],
+                                                    0.0)
+                    )
                 else:
-                    te_hinge_loss = tf.reduce_mean(tf.maximum(sample_te_tidx1-sample_te_tidx2,0.0))
+                    te_hinge_loss = tf.reduce_mean(tf.maximum(
+                                                    sample_te_tidx1-sample_te_tidx2+self.model_args["hinge_width"],
+                                                    0.0)
+                    )
                 
                 #Adding to the loss
                 total_te_hinge_loss+=te_hinge_loss
@@ -5042,6 +5048,7 @@ if __name__=="__main__":
     parser.add_argument('-stage_mode',dest="stage_mode",type=str,default=None)
     parser.add_argument('-teloss_type',dest="teloss_type",type=str,default=None)
     parser.add_argument('-te_lambda',dest="te_lambda",type=float,default=None)
+    parser.add_argument('-hinge_width',dest="hinge_width",type=float,default=None)
 
     #Arguments related to Stage1 using Riesz representer
     parser.add_argument('-num_postalpha_layer',dest="num_postalpha_layer",type=int,default=None)
@@ -5245,6 +5252,7 @@ if __name__=="__main__":
     model_args["num_postalpha_layer"]=args.num_postalpha_layer
     model_args["rr_lambda"]=args.rr_lambda
     model_args["tmle_lambda"]=args.tmle_lambda
+    model_args["hinge_width"]=args.hinge_width
 
 
 
