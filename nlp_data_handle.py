@@ -1855,6 +1855,91 @@ class DataHandleTransformer():
         
         return cat_dataset
     
+    def toy_nlp_dataset_handler3(self,sp_topic_pval,return_causal=False,return_cf=False,return_fulldict=False):
+        '''
+        This function will generate the third version of the toy data handle
+        which will have a particular causal graph to generate data:
+           w  --> Y (confounder observed)
+           tm --> Y (causal topic/treatment)
+
+           w  --> ts (spurious topic/treatment)
+        '''
+        #Generating the confounder topic model
+        confounder_topic_pos = ["good"]
+        confounder_topic_neg = ["bad"]
+
+        #Generating the causal topic model
+        causal_topic_pos = ["very"]
+        causal_topic_neg = ["not"]
+
+        #Generating the spurious topic model
+        spurious_topic_pos = ["comedy"]
+        spurious_topic_neg = ["horror"]
+
+        #Generating the topic labels 
+        tm_conf_topic_label = np.array([
+                        [0,0],
+                        [0,1],
+                        [1,0],
+                        [1,1]
+        ]*(self.data_args["num_sample"]//4))
+        assert self.data_args["num_sample"]%4==0
+
+        #Generating the spurious topic labels
+        sp_topic_pval = sp_topic_pval
+        #Flipping the label for sp_pval fraction of point
+        num_leave  = int(sp_topic_pval*self.data_args["num_sample"])
+        num_flip = self.data_args["num_sample"]-num_leave 
+        flip_mask = np.array([1]*num_flip + [0]*num_leave)
+        #Creating the spurious topic label
+        sp_topic_label = (tm_conf_topic_label[:,1]+1*flip_mask)%2
+
+        #Generating the main task labels
+        #Getting the CPD of the Y=0 given topic causal and confounder
+        y_cpd_tm_conf = defaultdict(dict)
+        y_cpd_tm_conf[0][0]= 0.9
+        y_cpd_tm_conf[0][1]= 0.4
+        y_cpd_tm_conf[1][0]= 0.6
+        y_cpd_tm_conf[1][1]= 0.1
+
+        #Generating the Y label
+        y_label = []
+        for yidx in range(self.data_args["num_sample"]):
+            point_sample = np.random.uniform(0.0,1.0,1)
+            tm   = tm_conf_topic_label[yidx,0]
+            conf = tm_conf_topic_label[yidx,1]
+
+            if point_sample<y_cpd_tm_conf[tm][conf]:
+                y_label.append(0)
+            else:
+                y_label.append(1)
+        y_label = np.array(y_label)
+
+        causal_label=tm_conf_topic_label[:,0]
+        confounder_label=tm_conf_topic_label[:,1]
+        spurious_label=sp_topic_label
+        
+        #Creating the label array
+        all_label_arr = np.stack([
+                            y_label,
+                            causal_label,
+                            confounder_label,
+                            spurious_label,
+                        ],axis=1)
+
+        #Lets first measure the correlation between the topics
+        self._print_label_correlation(all_label_arr)
+
+        label_dict = dict(
+                        topic_label=all_label_arr[:,1:],
+                        causal=tm_conf_topic_label[:,0],
+                        confounder=tm_conf_topic_label[:,1],
+                        spurious=sp_topic_label,
+                        y = y_label
+        )
+
+        return label_dict
+    
     def _generate_topic0_constituents(self,number_words,non_number_words,
                                     pos_label_list,neg_label_list,
                                     topic0_corr):
@@ -2147,6 +2232,14 @@ class DataHandleTransformer():
             #Flipping the label
             all_label_arr[flip_idx,tidx] = np.logical_not(all_label_arr[flip_idx,tidx]==1)
         
+        #Printing the label correlation
+        self._print_label_correlation(all_label_arr)
+
+        return all_label_arr
+    
+    def _print_label_correlation(self,all_label_arr):
+        '''
+        '''
         #Calculating the topic correlation
         print("\n\n#############################################")
         print("Printing the label correlation")
@@ -2157,8 +2250,8 @@ class DataHandleTransformer():
                 #Calcuating the correlation bw iidx and jidx
                 corr = np.sum(all_label_arr[:,iidx]==all_label_arr[:,jidx])/(1.0*all_label_arr.shape[0])
                 print("iidx:{}\tjidx:{}\tcorr:{:0.2f}".format(iidx,jidx,corr))
-        
-        return all_label_arr
+
+        return 
     
     def _convert_text_to_widx(self,text_example_list):
         '''
