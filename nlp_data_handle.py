@@ -1927,8 +1927,11 @@ class DataHandleTransformer():
                             spurious_label,
                         ],axis=1)
 
+        #Adding noise to the labels
+        self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
+
         #Lets first measure the correlation between the topics
-        self._print_label_correlation(all_label_arr)
+        label_corr_dict = self._print_label_correlation(all_label_arr)
 
         label_dict = dict(
                         topic_label=all_label_arr[:,1:],
@@ -1938,7 +1941,7 @@ class DataHandleTransformer():
                         y = y_label
         )
 
-        return label_dict
+        return label_dict,label_corr_dict
     
     def _generate_topic0_constituents(self,number_words,non_number_words,
                                     pos_label_list,neg_label_list,
@@ -2244,14 +2247,16 @@ class DataHandleTransformer():
         print("\n\n#############################################")
         print("Printing the label correlation")
         print("#############################################")
+        label_corr_dict = defaultdict(dict)
         for iidx in range(all_label_arr.shape[-1]):
             #Getting the correlation with next topics
             for jidx in range(iidx+1,all_label_arr.shape[-1]):
                 #Calcuating the correlation bw iidx and jidx
                 corr = np.sum(all_label_arr[:,iidx]==all_label_arr[:,jidx])/(1.0*all_label_arr.shape[0])
                 print("iidx:{}\tjidx:{}\tcorr:{:0.2f}".format(iidx,jidx,corr))
+                label_corr_dict[iidx][jidx]=corr
 
-        return 
+        return label_corr_dict
     
     def _convert_text_to_widx(self,text_example_list):
         '''
