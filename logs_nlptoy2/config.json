@@ -1,0 +1,22 @@
+{
+	"run_num": 1,
+	"emb_path": "glove-wiki-gigaword-100",
+	"num_sample": 1000,
+	"noise_ratio": 0.0,
+	"main_model_mode": "non_causal",
+	"transformer_name": "bert-base-uncased",
+	"max_len": 50,
+	"num_topics": 2,
+	"expt_meta_path": "logs_nlptoy2",
+	"dtype": "toynlp2",
+	"train_emb": false,
+	"normalize_emb": true,
+	"num_hidden_layer": 0,
+	"bert_as_encoder": false,
+	"loss_type": "x_entropy",
+	"l2_lambd": 0.0,
+	"removal_mode": null,
+	"lr": 0.005,
+	"treated_topic": 0,
+	"stage_mode": "stage1_econml"
+}

@@ -975,7 +975,7 @@ class SimpleNBOW(keras.Model):
         self.probe_metric_list=[]
 
         #Now initilaizing some of the layers for encoder
-        if self.data_args["dtype"]=="toynlp2":
+        if self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3":
             self.pre_encoder_layer = self.get_nbow_avg_layer()
         elif self.data_args["dtype"]=="toytabular2":
             self.pre_encoder_layer = self.get_dummy_linear_layer()
@@ -994,14 +994,14 @@ class SimpleNBOW(keras.Model):
         self.hidden_layer_list = []
         self.dropout_layer_list = []
         if self.model_args["num_hidden_layer"]!=0:
-            if self.data_args["dtype"]=="toynlp2":
+            if self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3":
                 self.hlayer_dim = 50
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
         else:
             if self.model_args["bert_as_encoder"]==True:
                 self.hlayer_dim = self.model_args["bemb_dim"]
-            elif self.data_args["dtype"]=="toynlp2":
+            elif self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3":
                 self.hlayer_dim = self.emb_dim
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
@@ -4802,6 +4802,11 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
     data_handler = DataHandleTransformer(data_args)
     if "nlp_toy2" in data_args["path"]:
         cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
+    elif "nlp_toy3" in data_args["path"]:
+        print("Creating the TOY-STORY3")
+        cat_dataset = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+    else:
+        raise NotImplementedError()
     
     #Creating the classifier
     print("Creating the model")
@@ -5054,6 +5059,7 @@ if __name__=="__main__":
     parser.add_argument('-num_postalpha_layer',dest="num_postalpha_layer",type=int,default=None)
     parser.add_argument('-rr_lambda',dest="rr_lambda",type=float,default=None)
     parser.add_argument('-tmle_lambda',dest="tmle_lambda",type=float,default=None)
+    parser.add_argument('-sp_topic_pval',dest="sp_topic_pval",type=float,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5142,6 +5148,10 @@ if __name__=="__main__":
         data_args["inv_dims"]=args.inv_dims
         data_args["sp_dims"]=args.inv_dims
         data_args["tab_sigma_ubound"]=args.tab_sigma_ubound
+    elif "nlp_toy3" in data_args["path"]:
+        data_args["noise_ratio"]=args.noise_ratio
+        data_args["main_topic"]=args.main_topic
+        data_args["dtype"]=args.dtype
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]
     elif "multinli" in data_args["path"] or "twitter" in data_args["path"]:
@@ -5164,6 +5174,7 @@ if __name__=="__main__":
     data_args["save_emb"]=args.save_emb
     data_args["neg1_flip_method"]=args.neg1_flip_method
     data_args["main_model_mode"]=args.main_model_mode
+    data_args["sp_topic_pval"]=args.sp_topic_pval
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])
@@ -5271,8 +5282,8 @@ if __name__=="__main__":
     #                   CAD JOBS                    #
     #################################################
     # nbow_trainer_mouli(data_args,model_args)
-    nbow_inv_stage2_trainer(data_args,model_args)
-    # nbow_riesznet_stage1_trainer(data_args,model_args)
+    # nbow_inv_stage2_trainer(data_args,model_args)
+    nbow_riesznet_stage1_trainer(data_args,model_args)
 
 
             

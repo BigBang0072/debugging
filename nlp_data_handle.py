@@ -1855,7 +1855,7 @@ class DataHandleTransformer():
         
         return cat_dataset
     
-    def toy_nlp_dataset_handler3(self,sp_topic_pval,return_causal=False,return_cf=False,return_fulldict=False):
+    def toy_nlp_dataset_handler3(self,return_causal=False,return_cf=False,return_fulldict=False):
         '''
         This function will generate the third version of the toy data handle
         which will have a particular causal graph to generate data:
@@ -1874,7 +1874,8 @@ class DataHandleTransformer():
         assert self.data_args["num_sample"]%4==0
 
         #Generating the spurious topic labels
-        sp_topic_pval = sp_topic_pval
+        sp_topic_pval = self.data_args["sp_topic_pval"]
+
         #Flipping the label for sp_pval fraction of point
         num_leave  = int(sp_topic_pval*self.data_args["num_sample"])
         num_flip = self.data_args["num_sample"]-num_leave 
@@ -1930,14 +1931,34 @@ class DataHandleTransformer():
         )
 
         #Creating the corresponding NLP example for this DAG
-        all_example_widx_dict = None
+        print("Creating the dataset")
         all_example_widx_dict = self._create_nlp_dataset3_from_labels(label_dict)
 
-        return label_dict,label_corr_dict,all_example_widx_dict
+        #Creating the dataframe
+        data_dict = dict(
+                        label=y_label,
+                        input_idx = all_example_widx_dict["all_example_widx_list"],
+                        topic_label = all_label_arr[:,[1,3]]
+        )
+        #Adding the counterfactual if required
+        if return_cf==True:
+            data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_causal_widx_list"]
+            data_dict["input_idx_t1_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
+
+
+        cat_dataset=None
+        if return_fulldict==True:
+            cat_dataset=data_dict
+        else:
+            cat_dataset = tf.data.Dataset.from_tensor_slices(data_dict)
+            cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset
     
     def _create_nlp_dataset3_from_labels(self,label_dict):
         '''
         '''
+        print("Loading the embedding!")
         #Loading the gensim embedidng model
         self._load_full_gensim_word_embedding()
 
@@ -1960,6 +1981,10 @@ class DataHandleTransformer():
                             "confound":[],
                             "spurious":[]
         }#Contains the fragment of sentence without treated topic
+        all_example_cf_dict = {
+                            "causal":[],
+                            "spurious":[],
+        }#This will contain the counterfactual example wrt to the topic
         for eidx in range(self.data_args["num_sample"]):
             causal_label   = label_dict["causal"][eidx]
             confound_label = label_dict["confounder"][eidx]
@@ -1967,56 +1992,93 @@ class DataHandleTransformer():
 
             sentence = None
             causal_fragment = None 
-            confound_fragment = None 
+            confound_fragment = None
+
+            #Getting the cf_fragment for each one
+            causal_cf_fragment = None 
+            confound_cf_fragment = None  
 
             if causal_label==0 and confound_label==0:
                 sentence = " very bad "
                 causal_fragment = " very "
+                causal_cf_fragment = " not "
+
                 confound_fragment = " bad "
+                confound_cf_fragment = " good "
             elif causal_label==0 and confound_label==1:
                 sentence = " not bad "
+
                 causal_fragment = " not "
+                causal_cf_fragment = " very "
+
                 confound_fragment = " bad "
+                confound_cf_fragment = " good "
             elif causal_label==1 and confound_label==0:
                 sentence = " not good "
+
                 causal_fragment = " not "
+                causal_cf_fragment = " very "
+
                 confound_fragment = " good "
+                confound_cf_fragment = " bad "
             elif causal_label==1 and confound_label==1:
                 sentence = " very good "
+
                 causal_fragment = " very "
+                causal_cf_fragment = " not "
+
                 confound_fragment = " good "
+                confound_cf_fragment = " bad "
             else:
                 raise NotImplementedError()
 
 
             # Next adding the spurious tokens
             spurious_fragment = None 
+            spurious_cf_fragment = None
+            
             if spurious_label==0:
                 sentence += " horror "
+
                 spurious_fragment = " horror "
+                spurious_cf_fragment = " romance "
             else:
                 sentence += " romance "
+
                 spurious_fragment = " romance "
+                spurious_cf_fragment = " horror "
 
 
             #Adding the sentence to our keeper
             all_example_sentence_list.append(sentence)
+
+            #Getting the no treatment example
             all_example_notreat_dict["causal"].append(confound_fragment+spurious_fragment)
             all_example_notreat_dict["confound"].append(causal_fragment+spurious_fragment)
             all_example_notreat_dict["spurious"].append(causal_fragment+confound_fragment)
-        
+
+            #Getting the counterfactual examples
+            all_example_cf_dict["causal"].append(causal_cf_fragment+confound_fragment+spurious_fragment)
+            all_example_cf_dict["spurious"].append(causal_fragment+confound_fragment+spurious_cf_fragment)
+
         #Next we will have to conver all the sentence to thier widx 
         all_example_widx_list = self._convert_text_to_widx(all_example_sentence_list)
+        #Converting the notreat sentence to widx
         all_example_notreat_causal_widx_list = self._convert_text_to_widx(all_example_notreat_dict["causal"])
         all_example_notreat_confound_widx_list = self._convert_text_to_widx(all_example_notreat_dict["confound"])
         all_example_notreat_spurious_widx_list = self._convert_text_to_widx(all_example_notreat_dict["spurious"])
+        #Converting the cf sentence to widx
+        all_example_cf_causal_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["causal"]),axis=-1)
+        all_example_cf_spurious_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["spurious"]),axis=-1)
 
 
         all_example_widx_dict = dict(
                         all_example_widx_list = all_example_widx_list,
                         all_example_notreat_causal_widx_list = all_example_notreat_causal_widx_list,
                         all_example_notreat_confound_widx_list = all_example_notreat_confound_widx_list,
-                        all_example_notreat_spurious_widx_list = all_example_notreat_spurious_widx_list
+                        all_example_notreat_spurious_widx_list = all_example_notreat_spurious_widx_list,
+                        all_example_cf_causal_widx_list = all_example_cf_causal_widx_list,
+                        all_example_cf_spurious_widx_list = all_example_cf_spurious_widx_list,
         )
 
         return all_example_widx_dict
