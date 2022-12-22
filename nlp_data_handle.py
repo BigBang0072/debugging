@@ -1864,18 +1864,6 @@ class DataHandleTransformer():
 
            w  --> ts (spurious topic/treatment)
         '''
-        #Generating the confounder topic model
-        confounder_topic_pos = ["good"]
-        confounder_topic_neg = ["bad"]
-
-        #Generating the causal topic model
-        causal_topic_pos = ["very"]
-        causal_topic_neg = ["not"]
-
-        #Generating the spurious topic model
-        spurious_topic_pos = ["comedy"]
-        spurious_topic_neg = ["horror"]
-
         #Generating the topic labels 
         tm_conf_topic_label = np.array([
                         [0,0],
@@ -1941,7 +1929,97 @@ class DataHandleTransformer():
                         y = y_label
         )
 
-        return label_dict,label_corr_dict
+        #Creating the corresponding NLP example for this DAG
+        all_example_widx_dict = None
+        all_example_widx_dict = self._create_nlp_dataset3_from_labels(label_dict)
+
+        return label_dict,label_corr_dict,all_example_widx_dict
+    
+    def _create_nlp_dataset3_from_labels(self,label_dict):
+        '''
+        '''
+        #Loading the gensim embedidng model
+        self._load_full_gensim_word_embedding()
+
+        #Generating the confounder topic model
+        confounder_topic_pos = ["good"]
+        confounder_topic_neg = ["bad"]
+
+        #Generating the causal topic model
+        causal_topic_pos = ["very"]
+        causal_topic_neg = ["not"]
+
+        #Generating the spurious topic model
+        spurious_topic_pos = ["comedy"]
+        spurious_topic_neg = ["horror"]
+
+        #Creating the sentences keepers
+        all_example_sentence_list=[]
+        all_example_notreat_dict={
+                            "causal":[],
+                            "confound":[],
+                            "spurious":[]
+        }#Contains the fragment of sentence without treated topic
+        for eidx in range(self.data_args["num_sample"]):
+            causal_label   = label_dict["causal"][eidx]
+            confound_label = label_dict["confounder"][eidx]
+            spurious_label = label_dict["spurious"][eidx]
+
+            sentence = None
+            causal_fragment = None 
+            confound_fragment = None 
+
+            if causal_label==0 and confound_label==0:
+                sentence = " very bad "
+                causal_fragment = " very "
+                confound_fragment = " bad "
+            elif causal_label==0 and confound_label==1:
+                sentence = " not bad "
+                causal_fragment = " not "
+                confound_fragment = " bad "
+            elif causal_label==1 and confound_label==0:
+                sentence = " not good "
+                causal_fragment = " not "
+                confound_fragment = " good "
+            elif causal_label==1 and confound_label==1:
+                sentence = " very good "
+                causal_fragment = " very "
+                confound_fragment = " good "
+            else:
+                raise NotImplementedError()
+
+
+            # Next adding the spurious tokens
+            spurious_fragment = None 
+            if spurious_label==0:
+                sentence += " horror "
+                spurious_fragment = " horror "
+            else:
+                sentence += " romance "
+                spurious_fragment = " romance "
+
+
+            #Adding the sentence to our keeper
+            all_example_sentence_list.append(sentence)
+            all_example_notreat_dict["causal"].append(confound_fragment+spurious_fragment)
+            all_example_notreat_dict["confound"].append(causal_fragment+spurious_fragment)
+            all_example_notreat_dict["spurious"].append(causal_fragment+confound_fragment)
+        
+        #Next we will have to conver all the sentence to thier widx 
+        all_example_widx_list = self._convert_text_to_widx(all_example_sentence_list)
+        all_example_notreat_causal_widx_list = self._convert_text_to_widx(all_example_notreat_dict["causal"])
+        all_example_notreat_confound_widx_list = self._convert_text_to_widx(all_example_notreat_dict["confound"])
+        all_example_notreat_spurious_widx_list = self._convert_text_to_widx(all_example_notreat_dict["spurious"])
+
+
+        all_example_widx_dict = dict(
+                        all_example_widx_list = all_example_widx_list,
+                        all_example_notreat_causal_widx_list = all_example_notreat_causal_widx_list,
+                        all_example_notreat_confound_widx_list = all_example_notreat_confound_widx_list,
+                        all_example_notreat_spurious_widx_list = all_example_notreat_spurious_widx_list
+        )
+
+        return all_example_widx_dict
     
     def _generate_topic0_constituents(self,number_words,non_number_words,
                                     pos_label_list,neg_label_list,
