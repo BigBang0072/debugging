@@ -2093,6 +2093,7 @@ class SimpleNBOW(keras.Model):
                                                 tidx=te_tidx,
                                                 attn_mask_valid=None,
             )
+            # pdb.set_trace()
             #Logging the TE
             self.te_train.update_state(te)
             self.te_corrected_train.update_state(te_corrected)
@@ -2286,6 +2287,8 @@ class SimpleNBOW(keras.Model):
         RR_loss = tf.reduce_mean(RR_loss)
         #Logging the loss
         self.rr_loss.update_state(RR_loss)
+
+        # pdb.set_trace()
 
         return RR_loss,input_alpha
     

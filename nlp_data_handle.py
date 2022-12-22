@@ -2068,8 +2068,8 @@ class DataHandleTransformer():
         all_example_notreat_confound_widx_list = self._convert_text_to_widx(all_example_notreat_dict["confound"])
         all_example_notreat_spurious_widx_list = self._convert_text_to_widx(all_example_notreat_dict["spurious"])
         #Converting the cf sentence to widx
-        all_example_cf_causal_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["causal"]),axis=-1)
-        all_example_cf_spurious_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["spurious"]),axis=-1)
+        all_example_cf_causal_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["causal"]),axis=1)
+        all_example_cf_spurious_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["spurious"]),axis=1)
 
 
         all_example_widx_dict = dict(
