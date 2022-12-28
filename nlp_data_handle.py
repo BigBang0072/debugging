@@ -1948,7 +1948,8 @@ class DataHandleTransformer():
 
         cat_dataset=None
         if return_fulldict==True:
-            cat_dataset=data_dict
+            # cat_dataset=data_dict
+            cat_dataset = (label_dict,label_corr_dict,all_example_widx_dict)
         else:
             cat_dataset = tf.data.Dataset.from_tensor_slices(data_dict)
             cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
@@ -1998,34 +1999,35 @@ class DataHandleTransformer():
             causal_cf_fragment = None 
             confound_cf_fragment = None  
 
+            #Dont keep the semantic meaning. Use explicit word for causal  fragment
             if causal_label==0 and confound_label==0:
-                sentence = " very bad "
-                causal_fragment = " very "
-                causal_cf_fragment = " not "
+                sentence = " one bad "
+                causal_fragment = " one "
+                causal_cf_fragment = " none "
 
                 confound_fragment = " bad "
                 confound_cf_fragment = " good "
             elif causal_label==0 and confound_label==1:
-                sentence = " not bad "
+                sentence = " one good "
 
-                causal_fragment = " not "
-                causal_cf_fragment = " very "
-
-                confound_fragment = " bad "
-                confound_cf_fragment = " good "
-            elif causal_label==1 and confound_label==0:
-                sentence = " not good "
-
-                causal_fragment = " not "
-                causal_cf_fragment = " very "
+                causal_fragment = " one "
+                causal_cf_fragment = " none "
 
                 confound_fragment = " good "
                 confound_cf_fragment = " bad "
-            elif causal_label==1 and confound_label==1:
-                sentence = " very good "
+            elif causal_label==1 and confound_label==0:
+                sentence = " none bad "
 
-                causal_fragment = " very "
-                causal_cf_fragment = " not "
+                causal_fragment = " none "
+                causal_cf_fragment = " one "
+
+                confound_fragment = " bad "
+                confound_cf_fragment = " good "
+            elif causal_label==1 and confound_label==1:
+                sentence = " none good "
+
+                causal_fragment = " none "
+                causal_cf_fragment = " one "
 
                 confound_fragment = " good "
                 confound_cf_fragment = " bad "

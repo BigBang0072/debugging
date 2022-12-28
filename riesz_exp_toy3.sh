@@ -6,8 +6,8 @@ mkdir logs
 
 run_num=1
 mainepoch=12
-hlayer=0
-num_postalpha_layer=0
+hlayer=1
+num_postalpha_layer=1
 main_mode="non_causal"
 cbsize=1
 stage_mode="stage1_riesz"
@@ -24,7 +24,7 @@ do
     do
         for rr_lambda in 1
         do
-            for tmle_lambda in 10
+            for tmle_lambda in 1
             do
                 for l2_lambda in 1
                 do
