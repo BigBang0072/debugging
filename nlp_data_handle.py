@@ -1964,16 +1964,34 @@ class DataHandleTransformer():
         self._load_full_gensim_word_embedding()
 
         #Generating the confounder topic model
-        confounder_topic_pos = ["good"]
-        confounder_topic_neg = ["bad"]
+        confound_topic_pos = [
+                "good","best","awesome","teriffic","mighty","gigantic",
+                "tremendous", "mega", "colossal",
+        ]
+        confound_topic_neg = [
+                "bad", "inferior", "substandard", "inadequate", "rotten",
+                "pathetic", "faulty", "defective",
+        ]
 
         #Generating the causal topic model
-        causal_topic_pos = ["very"]
-        causal_topic_neg = ["not"]
+        causal_topic_pos = [
+                "rose","jasmine","tulip","lotus","daisy","sunflower","flower",
+                "marigold","dahlia","orchid"
+        ]
+        causal_topic_neg = [
+                "apple","mango","tomato","cherry","pear","fruit",
+                "banana", "pear", "grapes"
+        ]
 
         #Generating the spurious topic model
-        spurious_topic_pos = ["comedy"]
-        spurious_topic_neg = ["horror"]
+        spurious_topic_pos = [
+                "comedy","romance","fantasy","sports","epic","animated",
+                "adventure","science"
+        ]
+        spurious_topic_neg = [
+                "horror","gore","crime","thriller","mystery","gangster",
+                "drama","dark"
+        ]
 
         #Creating the sentences keepers
         all_example_sentence_list=[]
@@ -1999,60 +2017,51 @@ class DataHandleTransformer():
             causal_cf_fragment = None 
             confound_cf_fragment = None  
 
+            #Getting one word from each list
+            num_words_per_topic = 1
+            causal_pos_frag = " " + " ".join(np.random.choice(causal_topic_pos,num_words_per_topic,replace=True).tolist()) + " "
+            causal_neg_frag = " " + " ".join(np.random.choice(causal_topic_neg,num_words_per_topic,replace=True).tolist()) + " "
+
+            confound_pos_frag = " " + " ".join(np.random.choice(confound_topic_pos,num_words_per_topic,replace=True).tolist()) + " "
+            confound_neg_frag = " " + " ".join(np.random.choice(confound_topic_neg,num_words_per_topic,replace=True).tolist()) + " "
+
+            spurious_pos_frag = " " + " ".join(np.random.choice(spurious_topic_pos,num_words_per_topic,replace=True).tolist()) + " "
+            spurious_neg_frag = " " + " ".join(np.random.choice(spurious_topic_neg,num_words_per_topic,replace=True).tolist()) + " "
+
             #Dont keep the semantic meaning. Use explicit word for causal  fragment
-            if causal_label==0 and confound_label==0:
-                sentence = " one bad "
-                causal_fragment = " one "
-                causal_cf_fragment = " none "
-
-                confound_fragment = " bad "
-                confound_cf_fragment = " good "
-            elif causal_label==0 and confound_label==1:
-                sentence = " one good "
-
-                causal_fragment = " one "
-                causal_cf_fragment = " none "
-
-                confound_fragment = " good "
-                confound_cf_fragment = " bad "
-            elif causal_label==1 and confound_label==0:
-                sentence = " none bad "
-
-                causal_fragment = " none "
-                causal_cf_fragment = " one "
-
-                confound_fragment = " bad "
-                confound_cf_fragment = " good "
-            elif causal_label==1 and confound_label==1:
-                sentence = " none good "
-
-                causal_fragment = " none "
-                causal_cf_fragment = " one "
-
-                confound_fragment = " good "
-                confound_cf_fragment = " bad "
+            causal_fragment = None
+            causal_cf_fragment = None 
+            if causal_label==0:
+                causal_fragment = causal_neg_frag
+                causal_cf_fragment = causal_pos_frag
             else:
-                raise NotImplementedError()
+                causal_fragment = causal_pos_frag
+                causal_cf_fragment = causal_neg_frag
+            
+
+            confound_fragment = None 
+            confound_cf_fragment = None 
+            if spurious_label==0:
+                confound_fragment = confound_neg_frag
+                confound_cf_fragment = confound_pos_frag
+            else:
+                confound_fragment = confound_pos_frag
+                confound_cf_fragment = confound_neg_frag
 
 
             # Next adding the spurious tokens
             spurious_fragment = None 
             spurious_cf_fragment = None
-            
             if spurious_label==0:
-                sentence += " horror "
-
-                spurious_fragment = " horror "
-                spurious_cf_fragment = " romance "
+                spurious_fragment = spurious_neg_frag
+                spurious_cf_fragment = spurious_pos_frag
             else:
-                sentence += " romance "
-
-                spurious_fragment = " romance "
-                spurious_cf_fragment = " horror "
+                spurious_fragment = spurious_pos_frag
+                spurious_cf_fragment = spurious_neg_frag
 
 
             #Adding the sentence to our keeper
-            all_example_sentence_list.append(sentence)
+            all_example_sentence_list.append(causal_fragment+confound_fragment+spurious_fragment)
 
             #Getting the no treatment example
             all_example_notreat_dict["causal"].append(confound_fragment+spurious_fragment)
