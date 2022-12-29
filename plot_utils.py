@@ -46,6 +46,12 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         probe_metric_list = probe_metric_list[epoch:epoch+1]#[-10:-9]
     
     for idx in range(len(probe_metric_list)):
+        #Loading the correlaion dict if available
+        if "label_corr_dict" in probe_metric_list[idx]:
+            pdict["y-tcausal"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["1"])
+            pdict["y-tconfound"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["2"])
+            pdict["y-tspurious"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["3"])
+
         # pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
         pdict["acc:main"].append(probe_metric_list[idx]["classifier_acc_dict"]["main"])
         if "pp_emb_norm" in probe_metric_list[idx]["classifier_acc_dict"]:
