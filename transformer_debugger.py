@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -2770,7 +2770,8 @@ class SimpleNBOW(keras.Model):
         init_classifier_acc = self.get_all_classifier_accuracy()
         self.probe_metric_list.append(dict(
                     # conv_angle_dict = init_conv_angle,
-                    classifier_acc_dict = init_classifier_acc
+                    classifier_acc_dict = init_classifier_acc,
+                    label_corr_dict = self.label_corr_dict,
         ))
         #Dumping the first set of metrics we have
         probe_metric_path = "{}/probe_metric_list.json".format(data_args["expt_meta_path"])
@@ -4801,19 +4802,23 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
     But didn't it meant that the spuiously correlated topic were lower correlated than the causal
     topic.
     '''
+    label_corr_dict=None
     print("Creating the dataset")
     data_handler = DataHandleTransformer(data_args)
     if "nlp_toy2" in data_args["path"]:
         cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
     elif "nlp_toy3" in data_args["path"]:
         print("Creating the TOY-STORY3")
-        cat_dataset = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+        cat_dataset,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
     else:
         raise NotImplementedError()
     
     #Creating the classifier
     print("Creating the model")
     classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Adding the label correlation dict to the classifier
+    classifier_main.label_corr_dict = label_corr_dict
+
     #Now we will compile the model
     classifier_main.compile(
         keras.optimizers.Adam(learning_rate=model_args["lr"])

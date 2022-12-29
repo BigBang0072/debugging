@@ -1954,7 +1954,7 @@ class DataHandleTransformer():
             cat_dataset = tf.data.Dataset.from_tensor_slices(data_dict)
             cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
-        return cat_dataset
+        return cat_dataset,label_corr_dict
     
     def _create_nlp_dataset3_from_labels(self,label_dict):
         '''
@@ -1992,6 +1992,18 @@ class DataHandleTransformer():
                 "horror","gore","crime","thriller","mystery","gangster",
                 "drama","dark"
         ]
+
+        #How many words do we allow here per topic
+        num_words_in_topic = 1
+
+        causal_topic_pos = causal_topic_pos[0:num_words_in_topic]
+        causal_topic_neg = causal_topic_neg[0:num_words_in_topic]
+
+        confound_topic_pos = confound_topic_pos[0:num_words_in_topic]
+        confound_topic_neg = confound_topic_neg[0:num_words_in_topic]
+
+        spurious_topic_pos = spurious_topic_pos[0:num_words_in_topic]
+        spurious_topic_neg = spurious_topic_neg[0:num_words_in_topic]
 
         #Creating the sentences keepers
         all_example_sentence_list=[]

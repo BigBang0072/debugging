@@ -9,7 +9,7 @@ mainepoch=12
 hlayer=0
 num_postalpha_layer=0
 main_mode="non_causal"
-cbsize=20
+cbsize=1
 stage_mode="stage1_riesz"
 noise=0.0
 
