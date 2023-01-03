@@ -1163,9 +1163,11 @@ class SimpleNBOW(keras.Model):
             #Initializing the TE specific trackers
             self.te_train = keras.metrics.Mean(name="te_train")
             self.te_corrected_train = keras.metrics.Mean(name="te_corrected_train")
+            self.te_dr_train = keras.metrics.Mean(name="te_dr_train")
 
             self.te_valid = keras.metrics.Mean(name="te_valid")
             self.te_corrected_valid = keras.metrics.Mean(name="te_corrected_valid")
+            self.te_dr_valid = keras.metrics.Mean(name="te_dr_valid")
 
     def get_all_head_init_weights(self,):
         '''
@@ -1218,6 +1220,8 @@ class SimpleNBOW(keras.Model):
             self.te_train.reset_states()
             self.te_corrected_valid.reset_states()
             self.te_corrected_train.reset_states()
+            self.te_dr_valid.reset_states()
+            self.te_dr_train.reset_states()
 
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
@@ -2064,7 +2068,12 @@ class SimpleNBOW(keras.Model):
                                             tidx=te_tidx,
                 )
                 #Getting the regression loss
-                reg_loss,gval = self.get_riesz_regression_loss(input_enc,label_train)
+                reg_loss,gval = self.get_riesz_regression_loss(
+                                            input_enc=input_enc,
+                                            label=label_train,
+                                            all_topic_label_train=all_topic_label_train,
+                                            tidx=te_tidx
+                )
 
                 #Finally getting the tmle loss
                 tmle_loss = self.get_riesz_tmle_loss(label_train,gval,input_alpha)
@@ -2085,10 +2094,11 @@ class SimpleNBOW(keras.Model):
 
             #Getting the TE for the training data
             #Getting the treatment effect
-            te,te_corrected = self.get_riesz_treatment_effect(
+            te,te_corrected,te_dr = self.get_riesz_treatment_effect(
                                                 input_enc=input_enc,
                                                 idx_t0_cf=idx_t0_cf_train,
                                                 idx_t1_cf=idx_t1_cf_train,
+                                                label=label_train,
                                                 all_topic_label=all_topic_label_train, 
                                                 tidx=te_tidx,
                                                 attn_mask_valid=None,
@@ -2097,6 +2107,8 @@ class SimpleNBOW(keras.Model):
             #Logging the TE
             self.te_train.update_state(te)
             self.te_corrected_train.update_state(te_corrected)
+            self.te_dr_train.update_state(te_dr)
+
         elif "stage2_inv_reg" in task and self.model_args["closs_type"]=="mse":
             with tf.GradientTape() as tape:
                 topic_loss = 0.0
@@ -2275,9 +2287,13 @@ class SimpleNBOW(keras.Model):
         #Next we are ready to generate the encoding of the counterfactual
         topic_cf_enc = self._encoder(topic_cf_idx_train,attn_mask=attn_mask_train,training=True)
 
-        #Now we have to pass both the input and cf_input to get the alpha
-        input_alpha = self.alpha_layer(input_enc)
-        topic_cf_alpha = self.alpha_layer(topic_cf_enc)
+        #Adding the treatment lable explicitely to the encoded vector
+        input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
+        topic_cf_Z = tf.concat([(1-topic_label_train),topic_cf_enc],axis=-1)
+
+        #Now we have to pass both the input and cf_input along with treatment explicitely to get the alpha
+        input_alpha = self.alpha_layer(input_Z)
+        topic_cf_alpha = self.alpha_layer(topic_cf_Z)
 
         #Now getting the riesz loss
         RR_loss = tf.square(input_alpha) - 2*(
@@ -2292,12 +2308,18 @@ class SimpleNBOW(keras.Model):
 
         return RR_loss,input_alpha
     
-    def get_riesz_regression_loss(self,input_enc,label):
+    def get_riesz_regression_loss(self,input_enc,label,all_topic_label_train,tidx):
         '''
         '''
+        #This is the main label not the topic label
         label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
+        
+        #Adding the treatment lable explicitely to the encoded vector
+        topic_label_train = tf.cast(tf.expand_dims(all_topic_label_train[:,tidx],axis=-1),tf.float32)
+        input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
+
         #Passing the input through the additional layer
-        gval = self.pass_with_post_alpha_layer(input_enc)
+        gval = self.pass_with_post_alpha_layer(input_Z)
 
         #Next getting the regression loss
         reg_loss = tf.reduce_mean(tf.square((gval-label)))
@@ -2544,23 +2566,32 @@ class SimpleNBOW(keras.Model):
             input_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
             
             #Getting the treatment effect
-            te,te_corrected = self.get_riesz_treatment_effect(
+            te,te_corrected,te_dr = self.get_riesz_treatment_effect(
                                                 input_enc=input_enc,
                                                 idx_t0_cf=idx_t0_cf_valid,
                                                 idx_t1_cf=idx_t1_cf_valid,
+                                                label=label_valid,
                                                 all_topic_label=all_topic_label_valid, 
                                                 tidx=te_tidx,
                                                 attn_mask_valid=None,
             )
             #Logging the TE
             self.te_valid.update_state(te)
-            self.te_corrected_valid.update_state(te_corrected)          
+            self.te_corrected_valid.update_state(te_corrected)
+            self.te_dr_valid.update_state(te_dr)          
         else:
             raise NotImplementedError()
     
-    def get_riesz_treatment_effect(self,input_enc,idx_t0_cf,idx_t1_cf,all_topic_label,tidx,attn_mask_valid):
+    def get_riesz_treatment_effect(self,input_enc,idx_t0_cf,idx_t1_cf,label,all_topic_label,tidx,attn_mask_valid):
+        '''
+        '''
+        #This is the main label not the topic label
+        label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
+        
+        
         topic_cf_idx = None
         topic_label = tf.cast(tf.expand_dims(all_topic_label[:,tidx],axis=-1),tf.float32)
+
         if tidx==0:
             #We will only take one counterfactual for each example now
             topic_cf_idx = idx_t0_cf
@@ -2575,13 +2606,17 @@ class SimpleNBOW(keras.Model):
         #Next getting the counterfactual encoding
         topic_cf_enc = self._encoder(topic_cf_idx,attn_mask=attn_mask_valid,training=False)
 
+        #Adding the treatment lable explicitely to the encoded vector
+        input_Z = tf.concat([topic_label,input_enc],axis=-1)
+        topic_cf_Z = tf.concat([(1-topic_label),topic_cf_enc],axis=-1)
+
         #Now we have to pass both the input and cf_input to get the alpha
-        input_alpha = self.alpha_layer(input_enc)
-        topic_cf_alpha = self.alpha_layer(topic_cf_enc)
+        input_alpha = self.alpha_layer(input_Z)
+        topic_cf_alpha = self.alpha_layer(topic_cf_Z)
 
         #Next we will get the gval for both of them
-        input_gval = self.pass_with_post_alpha_layer(input_enc)
-        topic_cf_gval = self.pass_with_post_alpha_layer(topic_cf_enc)
+        input_gval = self.pass_with_post_alpha_layer(input_Z)
+        topic_cf_gval = self.pass_with_post_alpha_layer(topic_cf_Z)
 
         #Next calculating the TE without correction
         te = tf.reduce_mean( 
@@ -2595,7 +2630,13 @@ class SimpleNBOW(keras.Model):
             +  (1-topic_label)*((topic_cf_gval-input_gval) + self.riesz_epsilon*(topic_cf_alpha-input_alpha))
         )
 
-        return te,te_corrected
+        #Getting the doubly robust estimate of the TE
+        te_dr = tf.reduce_mean(
+                (topic_label)*( (input_gval-topic_cf_gval) + input_alpha*(label - input_gval) ) \
+            +  (1-topic_label)*( (topic_cf_gval-input_gval) + input_alpha*(label - input_gval) )
+        )
+
+        return te,te_corrected,te_dr
 
     def get_angle_between_classifiers(self,class_idx):
         '''
@@ -4862,8 +4903,11 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                             +"emb_norm:\t\t{:0.3f}\n"\
                             +"te_train:\t\t{:0.3f}\n"\
                             +"te_corr_train:\t\t{:0.3f}\n"\
+                            +"te_dr_train:\t\t{:0.3f}\n"\
                             +"te_valid:\t\t{:0.3f}\n"\
-                            +"te_corr_valid:\t\t{:0.3f}\n"
+                            +"te_corr_valid:\t\t{:0.3f}\n"\
+                            +"te_dr_valid:\t\t{:0.3f}\n"
+                            
         print(log_format.format(
                             eidx,
                             classifier_main.reg_loss.result(),
@@ -4873,8 +4917,10 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                             classifier_main.embedding_norm.result(),
                             classifier_main.te_train.result(),
                             classifier_main.te_corrected_train.result(),
+                            classifier_main.te_dr_train.result(),
                             classifier_main.te_valid.result(),
-                            classifier_main.te_corrected_valid.result()
+                            classifier_main.te_corrected_valid.result(),
+                            classifier_main.te_dr_valid.result(),
         ))
 
         #Saving all the probe metrics
