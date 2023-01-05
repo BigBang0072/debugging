@@ -994,7 +994,9 @@ class SimpleNBOW(keras.Model):
         self.hidden_layer_list = []
         self.dropout_layer_list = []
         if self.model_args["num_hidden_layer"]!=0:
-            if self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3":
+            if self.data_args["dtype"]=="toynlp2":
+                self.hlayer_dim = 50
+            elif self.data_args["dtype"]=="toynlp3":
                 self.hlayer_dim = 50
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
@@ -1169,6 +1171,17 @@ class SimpleNBOW(keras.Model):
             self.te_corrected_valid = keras.metrics.Mean(name="te_corrected_valid")
             self.te_dr_valid = keras.metrics.Mean(name="te_dr_valid")
 
+
+            self.alpha_val_dict=defaultdict(dict)
+            for tidx in range(self.data_args["num_topics"]):
+                #Asuming that T and X are binary
+                for ttidx in range(2):
+                    for xidx in range(2):
+                        #For toy3 dataset x=tcf
+                        self.alpha_val_dict["t{}{}".format(tidx,ttidx)]["tcf{}".format(xidx)]=keras.metrics.Mean(name="alpha_t{}{}_tcf{}".format(tidx,ttidx,xidx))
+
+            # Next set of params
+
     def get_all_head_init_weights(self,):
         '''
         This will get the initialized weights which can be used later for
@@ -1222,6 +1235,15 @@ class SimpleNBOW(keras.Model):
             self.te_corrected_train.reset_states()
             self.te_dr_valid.reset_states()
             self.te_dr_train.reset_states()
+
+            #Resettingt the metrics to track alpha
+            for tidx in range(self.data_args["num_topics"]):
+                #Asuming that T and X are binary
+                for ttidx in range(2):
+                    for xidx in range(2):
+                        self.alpha_val_dict["t{}{}".format(tidx,ttidx)]["tcf{}".format(xidx)].reset_states()
+
+            #Other riesz params reset
 
         #Ressting the topic related metrics
         for tidx in range(self.data_args["num_topics"]):
@@ -1405,8 +1427,12 @@ class SimpleNBOW(keras.Model):
         This function will be responsible to encode the input to the 
         latent space for all the paths.
         '''
-        #Get average embedding
-        Xproj = self.pre_encoder_layer(X_input,attn_mask)
+        if self.data_args["return_label_dataset"]==False:
+            #Get average embedding
+            Xproj = self.pre_encoder_layer(X_input,attn_mask)
+        else:
+            Xproj = X_input
+        
         #Passing through the hidden layer
         for hlayer,dlayer in zip(self.hidden_layer_list,self.dropout_layer_list):
             #Passing through the hidden layer
@@ -2028,6 +2054,7 @@ class SimpleNBOW(keras.Model):
         #Getting the train dataset
         label = dataset_batch["label"]
         all_topic_label = dataset_batch["topic_label"]
+        tcf_label = dataset_batch["tcf_label"]
         idx = dataset_batch["input_idx"]
         idx_t0_cf = dataset_batch["input_idx_t0_cf"]
         idx_t1_cf = dataset_batch["input_idx_t1_cf"]
@@ -2037,6 +2064,7 @@ class SimpleNBOW(keras.Model):
 
         label_train = label[0:valid_idx]
         all_topic_label_train = all_topic_label[0:valid_idx]
+        tcf_label_train = tcf_label[0:valid_idx]
         idx_train = idx[0:valid_idx]
         idx_t0_cf_train = idx_t0_cf[0:valid_idx]
         idx_t1_cf_train = idx_t1_cf[0:valid_idx]
@@ -2067,6 +2095,14 @@ class SimpleNBOW(keras.Model):
                                             attn_mask_train=None,
                                             tidx=te_tidx,
                 )
+                #Tracking the input alpha for each subgroup
+                self.track_group_wise_alpha(
+                                    input_alpha=input_alpha,
+                                    all_topic_label=all_topic_label_train,
+                                    tcf_label=tcf_label_train,
+                                    tidx=te_tidx,
+                )
+
                 #Getting the regression loss
                 reg_loss,gval = self.get_riesz_regression_loss(
                                             input_enc=input_enc,
@@ -2083,7 +2119,8 @@ class SimpleNBOW(keras.Model):
                 self.regularization_loss.update_state(regularization_loss)
 
 
-                total_loss = reg_loss + self.model_args["rr_lambda"]*rr_loss \
+                total_loss = self.model_args["reg_lambda"]*reg_loss \
+                                      + self.model_args["rr_lambda"]*rr_loss \
                                       + self.model_args["tmle_lambda"]*tmle_loss\
                                       + self.model_args["l2_lambd"]*regularization_loss
             #Running the optimizer
@@ -2267,6 +2304,32 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
     
+    def track_group_wise_alpha(self,input_alpha,all_topic_label,tcf_label,tidx):
+        '''
+        '''
+        #Getting the subgroups for the current treatment topic tidx
+        for ttidx in range(2):
+            for tcfidx in range(2):
+                #Getting this subgroup mask
+                mask = tf.math.logical_and(
+                                        all_topic_label[:,tidx]==ttidx,
+                                        tcf_label==tcfidx
+                )
+
+
+                #Getting the alpha in this subgroup
+                group_alpha = input_alpha[mask]
+                if group_alpha.shape[0]==0:
+                    continue 
+                
+                #Tracking the average
+                self.alpha_val_dict["t{}{}".format(tidx,ttidx)]["tcf{}".format(tcfidx)].update_state(
+                                                tf.reduce_mean(group_alpha)
+                )
+
+                # pdb.set_trace()
+        return 
+
     def get_riesz_RR_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,all_topic_label_train,attn_mask_train,tidx):
         '''
         '''
@@ -2712,8 +2775,10 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["l2_loss"]   = float(self.regularization_loss.result().numpy())
             classifier_accuracy["te_train"]  = float(self.te_train.result().numpy())
             classifier_accuracy["te_corr_train"]  = float(self.te_corrected_train.result().numpy())
+            classifier_accuracy["te_dr_train"]  = float(self.te_dr_train.result().numpy())
             classifier_accuracy["te_valid"]  = float(self.te_valid.result().numpy())
             classifier_accuracy["te_corr_valid"]  = float(self.te_corrected_valid.result().numpy())
+            classifier_accuracy["te_dr_valid"]  = float(self.te_dr_valid.result().numpy())
 
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
@@ -2742,7 +2807,7 @@ class SimpleNBOW(keras.Model):
                 for tidx2 in range(tidx+1,self.data_args["num_topics"]):
                     classifier_accuracy["t{}_t{}_te_loss".format(tidx,tidx2)]=float(self.cross_te_error_list[tidx][tidx2].result().numpy())
 
-        print("Clasifier Accuracy:")
+        print("Classifier Accuracy:")
         # mypp(classifier_accuracy)
 
         return classifier_accuracy
@@ -4923,6 +4988,20 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                             classifier_main.te_dr_valid.result(),
         ))
 
+
+        #Printing the alpha for each subgroup
+        print("\nalpha for each subgroup:")
+        for ttidx in range(2):
+            for tcfidx in range(2):
+                treatment_key = "t{}{}".format(data_args["debug_tidx"],ttidx)
+                tcf_key = "tcf{}".format(tcfidx)
+
+                print("alpha:{}-{} = {}".format(
+                            treatment_key,
+                            tcf_key,
+                            classifier_main.alpha_val_dict[treatment_key][tcf_key].result()
+                ))
+
         #Saving all the probe metrics
         classifier_main.save_the_probe_metric_list()  
 
@@ -5113,7 +5192,9 @@ if __name__=="__main__":
     parser.add_argument('-num_postalpha_layer',dest="num_postalpha_layer",type=int,default=None)
     parser.add_argument('-rr_lambda',dest="rr_lambda",type=float,default=None)
     parser.add_argument('-tmle_lambda',dest="tmle_lambda",type=float,default=None)
+    parser.add_argument('-reg_lambda',dest="reg_lambda",type=float,default=None)
     parser.add_argument('-sp_topic_pval',dest="sp_topic_pval",type=float,default=None)
+    parser.add_argument('--return_label_dataset',default=False,action="store_true")
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5229,6 +5310,7 @@ if __name__=="__main__":
     data_args["neg1_flip_method"]=args.neg1_flip_method
     data_args["main_model_mode"]=args.main_model_mode
     data_args["sp_topic_pval"]=args.sp_topic_pval
+    data_args["return_label_dataset"]=args.return_label_dataset
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])
@@ -5317,6 +5399,7 @@ if __name__=="__main__":
     model_args["num_postalpha_layer"]=args.num_postalpha_layer
     model_args["rr_lambda"]=args.rr_lambda
     model_args["tmle_lambda"]=args.tmle_lambda
+    model_args["reg_lambda"]=args.reg_lambda
     model_args["hinge_width"]=args.hinge_width
 
 

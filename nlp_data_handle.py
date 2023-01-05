@@ -1938,7 +1938,8 @@ class DataHandleTransformer():
         data_dict = dict(
                         label=y_label,
                         input_idx = all_example_widx_dict["all_example_widx_list"],
-                        topic_label = all_label_arr[:,[1,3]]
+                        topic_label = all_label_arr[:,[1,3]],
+                        tcf_label = all_label_arr[:,2]
         )
         #Adding the counterfactual if required
         if return_cf==True:
@@ -1946,10 +1947,27 @@ class DataHandleTransformer():
             data_dict["input_idx_t1_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
 
 
+        if self.data_args["return_label_dataset"]==True:
+            #Creating the dataframe with only the labels based covariates instead of words
+            data_dict["input_idx"] = all_label_arr[:,1:].astype("float32")
+            #Creating the t0 counterfactual by flipping the t0 label
+            t0_cf_X_arr = np.stack(
+                            [(all_label_arr[:,1]+1)%2,all_label_arr[:,2],all_label_arr[:,3]],
+                            axis=-1,
+            )
+            data_dict["input_idx_t0_cf"] = np.expand_dims(t0_cf_X_arr,axis=1).astype("float32")
+            #Creating the t2 counterfactual by flipping the t2 label
+            t1_cf_X_arr = np.stack(
+                            [all_label_arr[:,1],all_label_arr[:,2],(all_label_arr[:,3]+1)%2],
+                            axis=-1,
+            )
+            data_dict["input_idx_t1_cf"] = np.expand_dims(t1_cf_X_arr,axis=1).astype("float32")
+
         cat_dataset=None
         if return_fulldict==True:
             # cat_dataset=data_dict
             cat_dataset = (label_dict,label_corr_dict,all_example_widx_dict)
+            return cat_dataset
         else:
             cat_dataset = tf.data.Dataset.from_tensor_slices(data_dict)
             cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
@@ -2084,6 +2102,7 @@ class DataHandleTransformer():
             all_example_cf_dict["causal"].append(causal_cf_fragment+confound_fragment+spurious_fragment)
             all_example_cf_dict["spurious"].append(causal_fragment+confound_fragment+spurious_cf_fragment)
 
+        # pdb.set_trace()
         #Next we will have to conver all the sentence to thier widx 
         all_example_widx_list = self._convert_text_to_widx(all_example_sentence_list)
         #Converting the notreat sentence to widx
