@@ -89,8 +89,10 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
             pdict["l2_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["l2_loss"])
             pdict["te_train"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_train"])
             pdict["te_corr_train"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_corr_train"])
+            pdict["te_dr_train"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_dr_train"])
             pdict["te_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_valid"])
             pdict["te_corr_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_corr_valid"])
+            pdict["te_dr_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_dr_valid"])
 
         if "topic1" in probe_metric_list[idx]["classifier_acc_dict"]:
             # pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
