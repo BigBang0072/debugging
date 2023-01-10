@@ -3161,6 +3161,45 @@ def perform_null_space_removal_nbow(cat_dataset,classifier_main,optimal_vacc_mai
                                                 classifier_main.topic_pred_xentropy_list[tidx].result(),
                                                 classifier_main.topic_valid_accuracy_list[tidx].result()
                     ))
+        
+        #Training the main task classifier head if needed (as Shauli said)
+        if model_args["inlp_train_main_head"]==True:
+            print("Training the main heal only for the INLP removal. Dont use for Amnesic Pobing")
+            #Training the synthetic first
+            if model_args["bert_as_encoder"]==False:
+                tbar = tqdm(range(model_args["topic_epochs"]))
+                for eidx in tbar:
+                    for data_batch in cat_dataset:
+                        classifier_main.train_step_stage2(
+                                            dataset_batch=data_batch,
+                                            task="inlp_main",
+                                            P_matrix=P_W,
+                                            cidx=None,
+                        )
+                    
+                    #We will not validate. Anyway in next step we validate the classifier
+
+                    #Updating the description of the tqdm
+                    tbar.set_postfix_str("main_celoss:{:0.4f}".format(
+                                                classifier_main.main_pred_xentropy.result(),
+                    ))
+            else:
+                for tepoch in range(model_args["topic_epochs"]):
+                    bbar = tqdm(range(len(cat_dataset)))
+                    #Training the model 
+                    for bidx,data_batch in zip(bbar,cat_dataset):
+                        bbar.set_postfix_str("bsize:{},  bidx:{}".format(len(cat_dataset),bidx))
+                        classifier_main.train_step_stage2(
+                                            dataset_batch=data_batch,
+                                            task="inlp_main",
+                                            P_matrix=P_W,
+                                            cidx=None,
+                        )
+                    
+                    #We dont validate for main. It will done in next step anyway
+                    print("main_celoss:{:0.4f}".format(
+                                                classifier_main.main_pred_xentropy.result(),
+                    ))
 
         #Getting the classifiers angle (after this step of training)
         classifier_main.reset_all_metrics()
@@ -3989,6 +4028,7 @@ if __name__=="__main__":
     parser.add_argument('--measure_flip_pdelta',default=False,action="store_true")
     parser.add_argument('-gpu_num',dest="gpu_num",type=int,default=0)
     parser.add_argument('--valid_before_gupdate',default=False,action="store_true")
+    parser.add_argument('--inlp_train_main_head',default=False,action="store_true")
     
 
     #Arguments related to the adversarial removal
@@ -4159,6 +4199,7 @@ if __name__=="__main__":
     model_args["measure_flip_pdelta"]=args.measure_flip_pdelta
     model_args["gpu_num"]=args.gpu_num
     model_args["valid_before_gupdate"]=args.valid_before_gupdate
+    model_args["inlp_train_main_head"]=args.inlp_train_main_head
 
 
     #################################################
