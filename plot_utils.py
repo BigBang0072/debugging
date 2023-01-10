@@ -94,6 +94,20 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
             pdict["te_corr_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_corr_valid"])
             pdict["te_dr_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_dr_valid"])
 
+            #Adding the alpha from the riesz estimators
+            if "alpha:t10-tcf0" in probe_metric_list[idx]["classifier_acc_dict"]:
+                pdict["alpha:tdtidx0-tcf0"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t10-tcf0"])
+                pdict["alpha:tdtidx0-tcf1"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t10-tcf1"])
+                pdict["alpha:tdtidx1-tcf0"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t11-tcf0"])
+                pdict["alpha:tdtidx1-tcf1"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t11-tcf1"])
+
+            if "alpha:t00-tcf0" in probe_metric_list[idx]["classifier_acc_dict"]:
+                pdict["alpha:tdtidx0-tcf0"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t00-tcf0"])
+                pdict["alpha:tdtidx0-tcf1"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t00-tcf1"])
+                pdict["alpha:tdtidx1-tcf0"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t01-tcf0"])
+                pdict["alpha:tdtidx1-tcf1"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t01-tcf1"])
+
+
         if "topic1" in probe_metric_list[idx]["classifier_acc_dict"]:
             # pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
             # pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
