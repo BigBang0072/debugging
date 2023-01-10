@@ -1279,12 +1279,15 @@ class SimpleNBOW(keras.Model):
         class NBOWAvgLayer(keras.layers.Layer):
             '''
             '''
-            def __init__(self,embedding_layer,embedding_weight_layer,unk_widx,normalize_emb):
+            def __init__(self,embedding_layer,embedding_weight_layer,unk_widx,normalize_emb,emb_dim,model_args,data_args):
                 super(NBOWAvgLayer,self).__init__()
                 self.embeddingLayerMain = embedding_layer
                 self.embeddingLayerWeight = embedding_weight_layer
                 self.unk_widx = unk_widx
                 self.normalize_emb = normalize_emb
+                self.emb_dim=emb_dim
+                self.model_args=model_args
+                self.data_args=data_args
 
             def call(self,X_input,input_mask):
                 '''
@@ -1310,14 +1313,18 @@ class SimpleNBOW(keras.Model):
                 #Getting the weights of the individual words
                 X_weight = self.embeddingLayerWeight(X_input)
 
-                #Getting the nonunk_mask ready
-                non_unk_mask = tf.expand_dims(non_unk_mask,axis=-1)
-                #Adding all the nonunk vectors
-                X_emb_weighted = X_emb_norm * tf.sigmoid(X_weight) * non_unk_mask
-                #Now we need to take average of the embedding (zero vec non-train)
-                X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),num_words)
-                #Even average will produce the effect of length variation because there are multiple words
-                #but correct this sum to average in the Probing paper in arxiv
+                if self.model_args["concat_word_emb"]:
+                    X_bow = tf.reshape(X_emb,[-1,self.data_args["max_len"]*self.emb_dim])
+                else:
+                    #Getting the nonunk_mask ready
+                    non_unk_mask = tf.expand_dims(non_unk_mask,axis=-1)
+                    #Adding all the nonunk vectors
+                    # X_emb_weighted = X_emb_norm * tf.sigmoid(X_weight) * non_unk_mask
+                    X_emb_weighted = X_emb_norm * non_unk_mask
+                    #Now we need to take average of the embedding (zero vec non-train)
+                    X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),num_words)
+                    #Even average will produce the effect of length variation because there are multiple words
+                    #but correct this sum to average in the Probing paper in arxiv
                 return X_bow
         
         #Get the embedding and weight matrix
@@ -1326,7 +1333,10 @@ class SimpleNBOW(keras.Model):
                                 embedding_layer=embedding_layer,
                                 embedding_weight_layer=embedding_weight_layer,
                                 unk_widx=self.data_handler.emb_model.key_to_index["unk"],
-                                normalize_emb=self.model_args["normalize_emb"]
+                                normalize_emb=self.model_args["normalize_emb"],
+                                emb_dim=self.emb_dim,
+                                model_args=self.model_args,
+                                data_args=self.data_args,
         )
 
         return nbow_avg_layer
@@ -2351,8 +2361,12 @@ class SimpleNBOW(keras.Model):
         topic_cf_enc = self._encoder(topic_cf_idx_train,attn_mask=attn_mask_train,training=True)
 
         #Adding the treatment lable explicitely to the encoded vector
-        input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
-        topic_cf_Z = tf.concat([(1-topic_label_train),topic_cf_enc],axis=-1)
+        if self.model_args["add_treatment_on_front"]:
+            input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
+            topic_cf_Z = tf.concat([(1-topic_label_train),topic_cf_enc],axis=-1)
+        else:
+            input_Z = input_enc
+            topic_cf_Z = topic_cf_enc
 
         #Now we have to pass both the input and cf_input along with treatment explicitely to get the alpha
         input_alpha = self.alpha_layer(input_Z)
@@ -2379,7 +2393,11 @@ class SimpleNBOW(keras.Model):
         
         #Adding the treatment lable explicitely to the encoded vector
         topic_label_train = tf.cast(tf.expand_dims(all_topic_label_train[:,tidx],axis=-1),tf.float32)
-        input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
+
+        if self.model_args["add_treatment_on_front"]:
+            input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
+        else:
+            input_Z = input_enc
 
         #Passing the input through the additional layer
         gval = self.pass_with_post_alpha_layer(input_Z)
@@ -2670,8 +2688,13 @@ class SimpleNBOW(keras.Model):
         topic_cf_enc = self._encoder(topic_cf_idx,attn_mask=attn_mask_valid,training=False)
 
         #Adding the treatment lable explicitely to the encoded vector
-        input_Z = tf.concat([topic_label,input_enc],axis=-1)
-        topic_cf_Z = tf.concat([(1-topic_label),topic_cf_enc],axis=-1)
+        if self.model_args["add_treatment_on_front"]:
+            raise NotImplementedError()
+            input_Z = tf.concat([topic_label,input_enc],axis=-1)
+            topic_cf_Z = tf.concat([(1-topic_label),topic_cf_enc],axis=-1)
+        else:
+            input_Z = input_enc
+            topic_cf_Z = topic_cf_enc
 
         #Now we have to pass both the input and cf_input to get the alpha
         input_alpha = self.alpha_layer(input_Z)
@@ -2779,6 +2802,16 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["te_valid"]  = float(self.te_valid.result().numpy())
             classifier_accuracy["te_corr_valid"]  = float(self.te_corrected_valid.result().numpy())
             classifier_accuracy["te_dr_valid"]  = float(self.te_dr_valid.result().numpy())
+
+            #Saving the group alpha values
+            for ttidx in range(2):
+                for tcfidx in range(2):
+                    treatment_key = "t{}{}".format(data_args["debug_tidx"],ttidx)
+                    tcf_key = "tcf{}".format(tcfidx)
+
+                    classifier_accuracy["alpha:{}-{}".format(treatment_key,tcf_key)] = \
+                                        float(self.alpha_val_dict[treatment_key][tcf_key].result().numpy())
+                    
 
         for tidx in range(self.data_args["num_topics"]):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
@@ -5143,6 +5176,7 @@ if __name__=="__main__":
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float,default=0.0)
     parser.add_argument('-lr',dest="lr",type=float)
     parser.add_argument('-batch_size',dest="batch_size",type=int,default=None)
+    parser.add_argument('-max_len',dest="max_len",type=int,default=200)
 
     parser.add_argument('-path',dest="path",type=str)
     parser.add_argument('-out_path',dest="out_path",type=str,default=".")
@@ -5171,6 +5205,8 @@ if __name__=="__main__":
     parser.add_argument('--measure_flip_pdelta',default=False,action="store_true")
     parser.add_argument('-gpu_num',dest="gpu_num",type=int,default=0)
     parser.add_argument('--valid_before_gupdate',default=False,action="store_true")
+    parser.add_argument('--add_treatment_on_front',default=False,action="store_true")
+    parser.add_argument('--concat_word_emb',default=False,action="store_true")
 
     #Arguments related to invariant rep learning
     parser.add_argument('-cfactuals_bsize',dest="cfactuals_bsize",type=int,default=None)
@@ -5260,7 +5296,7 @@ if __name__=="__main__":
     data_args["debug_tidx"]=args.debug_tidx
     data_args["transformer_name"]=args.transformer
     data_args["num_class"]=2
-    data_args["max_len"]=200
+    data_args["max_len"]=args.max_len
     data_args["num_sample"]=args.num_samples
     data_args["num_topic_samples"]=args.num_topic_samples
     
@@ -5340,6 +5376,7 @@ if __name__=="__main__":
     model_args["epochs"]=args.num_epochs
     model_args["l1_lambda"]=args.l1_lambda
     model_args["valid_split"]=0.2
+    model_args["concat_word_emb"]=args.concat_word_emb
     model_args["train_bert"]=args.train_bert
     model_args["cached_bemb"]=args.cached_bemb
     if args.bert_as_encoder==True:
@@ -5399,6 +5436,8 @@ if __name__=="__main__":
     model_args["num_postalpha_layer"]=args.num_postalpha_layer
     model_args["rr_lambda"]=args.rr_lambda
     model_args["tmle_lambda"]=args.tmle_lambda
+    model_args["add_treatment_on_front"]=args.add_treatment_on_front
+
     model_args["reg_lambda"]=args.reg_lambda
     model_args["hinge_width"]=args.hinge_width
 
