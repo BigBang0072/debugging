@@ -1782,18 +1782,21 @@ class DataHandleTransformer():
         
 
 
-        # if return_causal==True:
-        #Creating the data-based on the main_model_mode
-        if self.data_args["main_model_mode"]=="causal_removed_sp":
-            print("Loading the data where the spurious-topic is removed")
-            all_index_arr = all_index_arr_only_t0
-        elif self.data_args["main_model_mode"]=="causal_rebalance_sp":
-            print("Loading the data where the spurious-topic  is balanced (in causal mode)")
-            #The change in p-value will already make the all_index_arr correct
-            all_index_arr=all_index_arr
-        elif self.data_args["main_model_mode"]=="causal_same_sp":
-            print("Loading the data where the spurious-topic set to fixed val")
-            all_index_arr=all_index_arr_t1_is_1
+        #Why is this was not active? return causal extra condition. It is there
+        #in the other dataset. Reactivating it. Other wise it will give this data
+        #even when not required. cuz main_model_mode is a input param
+        if return_causal==True:
+            #Creating the data-based on the main_model_mode
+            if self.data_args["main_model_mode"]=="causal_removed_sp":
+                print("Loading the data where the spurious-topic is removed")
+                all_index_arr = all_index_arr_only_t0
+            elif self.data_args["main_model_mode"]=="causal_rebalance_sp":
+                print("Loading the data where the spurious-topic  is balanced (in causal mode)")
+                #The change in p-value will already make the all_index_arr correct
+                all_index_arr=all_index_arr
+            elif self.data_args["main_model_mode"]=="causal_same_sp":
+                print("Loading the data where the spurious-topic set to fixed val")
+                all_index_arr=all_index_arr_t1_is_1
         
         #Correcting the p-value now
         if return_causal==True:
