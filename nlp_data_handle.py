@@ -7,14 +7,14 @@ import tensorflow as tf
 import gensim.downloader as gensim_api
 
 import string
-import spacy
-nlp = spacy.load("en_core_web_lg",disable=["tagger", "parser", "lemmatizer", "ner", "textcat"])
-from spacy.lang.en.stop_words import STOP_WORDS
-from spacy.lang.en import English
-from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
-from sklearn.feature_extraction.text import CountVectorizer
+# import spacy
+# nlp = spacy.load("en_core_web_lg",disable=["tagger", "parser", "lemmatizer", "ner", "textcat"])
+# from spacy.lang.en.stop_words import STOP_WORDS
+# from spacy.lang.en import English
+# from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
+# from sklearn.feature_extraction.text import CountVectorizer
 
-from sklearn.neighbors import NearestNeighbors
+# from sklearn.neighbors import NearestNeighbors
 
 import os
 import gzip
