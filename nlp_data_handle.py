@@ -2012,7 +2012,7 @@ class DataHandleTransformer():
         ]
 
         #How many words do we allow here per topic
-        num_words_in_topic = 1
+        num_words_in_topic = 20
 
         causal_topic_pos = causal_topic_pos[0:num_words_in_topic]
         causal_topic_neg = causal_topic_neg[0:num_words_in_topic]
@@ -2048,7 +2048,7 @@ class DataHandleTransformer():
             confound_cf_fragment = None  
 
             #Getting one word from each list
-            num_words_per_topic = 1
+            num_words_per_topic = 3
             causal_pos_frag = " " + " ".join(np.random.choice(causal_topic_pos,num_words_per_topic,replace=True).tolist()) + " "
             causal_neg_frag = " " + " ".join(np.random.choice(causal_topic_neg,num_words_per_topic,replace=True).tolist()) + " "
 
@@ -2071,13 +2071,19 @@ class DataHandleTransformer():
 
             confound_fragment = None 
             confound_cf_fragment = None 
-            if spurious_label==0:
+            if confound_label==0:
                 confound_fragment = confound_neg_frag
                 confound_cf_fragment = confound_pos_frag
             else:
                 confound_fragment = confound_pos_frag
                 confound_cf_fragment = confound_neg_frag
 
+            #Here we will inject the confoundedness with certain probability
+            point_sample = np.random.uniform(0.0,1.0,1)
+            if point_sample<self.data_args["degree_confoundedness"]:
+                confound_fragment = " "
+                confound_cf_fragment = " "
+            
 
             # Next adding the spurious tokens
             spurious_fragment = None 

@@ -2404,6 +2404,10 @@ class SimpleNBOW(keras.Model):
 
         #Next getting the regression loss
         reg_loss = tf.reduce_mean(tf.square((gval-label)))
+
+        #TODO: Creating the softmax loss instead of regression loss
+
+
         #Logging the loss
         self.reg_loss.update_state(reg_loss)
 
@@ -2704,6 +2708,11 @@ class SimpleNBOW(keras.Model):
         input_gval = self.pass_with_post_alpha_layer(input_Z)
         topic_cf_gval = self.pass_with_post_alpha_layer(topic_cf_Z)
 
+        #Passing the input gval with rounding
+        if self.model_args["round_gval"]==True:
+            input_gval = tf.math.round(input_gval)
+            input_cf_gval = tf.math.round(topic_cf_gval)
+
         #Next calculating the TE without correction
         te = tf.reduce_mean( 
                                 (topic_label)*(input_gval-topic_cf_gval)\
@@ -2721,6 +2730,9 @@ class SimpleNBOW(keras.Model):
                 (topic_label)*( (input_gval-topic_cf_gval) + input_alpha*(label - input_gval) ) \
             +  (1-topic_label)*( (topic_cf_gval-input_gval) + input_alpha*(label - input_gval) )
         )
+
+        # if self.eidx==20:
+        #     pdb.set_trace()
 
         return te,te_corrected,te_dr
 
@@ -4969,6 +4981,7 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
     #Running the training loop
     print("Starting the training steps!")
     for eidx in range(model_args["epochs"]):
+        classifier_main.eidx = eidx
         print("==========================================")
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset)))
@@ -5207,6 +5220,7 @@ if __name__=="__main__":
     parser.add_argument('--valid_before_gupdate',default=False,action="store_true")
     parser.add_argument('--add_treatment_on_front',default=False,action="store_true")
     parser.add_argument('--concat_word_emb',default=False,action="store_true")
+    parser.add_argument('--round_gval',default=False,action="store_true")
 
     #Arguments related to invariant rep learning
     parser.add_argument('-cfactuals_bsize',dest="cfactuals_bsize",type=int,default=None)
@@ -5231,6 +5245,7 @@ if __name__=="__main__":
     parser.add_argument('-reg_lambda',dest="reg_lambda",type=float,default=None)
     parser.add_argument('-sp_topic_pval',dest="sp_topic_pval",type=float,default=None)
     parser.add_argument('--return_label_dataset',default=False,action="store_true")
+    parser.add_argument('-degree_confoundedness',dest="degree_confoundedness",type=float,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5347,13 +5362,14 @@ if __name__=="__main__":
     data_args["main_model_mode"]=args.main_model_mode
     data_args["sp_topic_pval"]=args.sp_topic_pval
     data_args["return_label_dataset"]=args.return_label_dataset
+    data_args["degree_confoundedness"]=args.degree_confoundedness
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])
     print("Creating log file in: {}".format(meta_folder))
     os.makedirs(meta_folder,exist_ok=True)
     data_args["expt_meta_path"]=meta_folder
-
+    
 
 
     #Setting the seeds
@@ -5437,6 +5453,7 @@ if __name__=="__main__":
     model_args["rr_lambda"]=args.rr_lambda
     model_args["tmle_lambda"]=args.tmle_lambda
     model_args["add_treatment_on_front"]=args.add_treatment_on_front
+    model_args["round_gval"]=args.round_gval
 
     model_args["reg_lambda"]=args.reg_lambda
     model_args["hinge_width"]=args.hinge_width
