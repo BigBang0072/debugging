@@ -2118,7 +2118,8 @@ class SimpleNBOW(keras.Model):
                                             input_enc=input_enc,
                                             label=label_train,
                                             all_topic_label_train=all_topic_label_train,
-                                            tidx=te_tidx
+                                            tcf_label_train=tcf_label_train,
+                                            tidx=te_tidx,
                 )
 
                 #Finally getting the tmle loss
@@ -2147,6 +2148,7 @@ class SimpleNBOW(keras.Model):
                                                 idx_t1_cf=idx_t1_cf_train,
                                                 label=label_train,
                                                 all_topic_label=all_topic_label_train, 
+                                                tcf_label=tcf_label_train,
                                                 tidx=te_tidx,
                                                 attn_mask_valid=None,
             )
@@ -2317,15 +2319,14 @@ class SimpleNBOW(keras.Model):
     def track_group_wise_alpha(self,input_alpha,all_topic_label,tcf_label,tidx):
         '''
         '''
-        #Getting the subgroups for the current treatment topic tidx
-        for ttidx in range(2):
-            for tcfidx in range(2):
-                #Getting this subgroup mask
-                mask = tf.math.logical_and(
-                                        all_topic_label[:,tidx]==ttidx,
-                                        tcf_label==tcfidx
-                )
+        #Getting the mask dict for every subgroup
+        mask_dict = self._get_subgroup_mask_toy3_riesz(all_topic_label,tcf_label,tidx)
 
+        #Getting the alpha for every subgroup
+        for ttidx in range(2):
+            for tcfidx in range(2):        
+                #Retreiving the mask 
+                mask = mask_dict[(ttidx,tcfidx)]
 
                 #Getting the alpha in this subgroup
                 group_alpha = input_alpha[mask]
@@ -2339,6 +2340,26 @@ class SimpleNBOW(keras.Model):
 
                 # pdb.set_trace()
         return 
+    
+    def _get_subgroup_mask_toy3_riesz(self,all_topic_label,tcf_label,tidx):
+        '''
+        '''
+        #Creating an empty mask dict
+        toy3_mask_dict={}
+
+        #Getting the subgroups for the current treatment topic tidx
+        for ttidx in range(2):
+            for tcfidx in range(2):
+                #Getting this subgroup mask
+                mask = tf.math.logical_and(
+                                        all_topic_label[:,tidx]==ttidx,
+                                        tcf_label==tcfidx
+                )
+
+                #Saving the mask in a dict
+                toy3_mask_dict[(ttidx,tcfidx)]=mask 
+
+        return toy3_mask_dict
 
     def get_riesz_RR_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,all_topic_label_train,attn_mask_train,tidx):
         '''
@@ -2385,7 +2406,7 @@ class SimpleNBOW(keras.Model):
 
         return RR_loss,input_alpha
     
-    def get_riesz_regression_loss(self,input_enc,label,all_topic_label_train,tidx):
+    def get_riesz_regression_loss(self,input_enc,label,all_topic_label_train,tcf_label_train,tidx):
         '''
         '''
         #This is the main label not the topic label
@@ -2622,6 +2643,7 @@ class SimpleNBOW(keras.Model):
         #Getting the train dataset
         label = dataset_batch["label"]
         all_topic_label = dataset_batch["topic_label"]
+        tcf_label = dataset_batch["tcf_label"]
         idx = dataset_batch["input_idx"]
         idx_t0_cf = dataset_batch["input_idx_t0_cf"]
         idx_t1_cf = dataset_batch["input_idx_t1_cf"]
@@ -2631,6 +2653,7 @@ class SimpleNBOW(keras.Model):
         #Getting the validation data
         label_valid = label[valid_idx:]
         all_topic_label_valid = all_topic_label[valid_idx:]
+        tcf_label_valid = tcf_label[valid_idx:]
         idx_valid = idx[valid_idx:]
         idx_t0_cf_valid = idx_t0_cf[valid_idx:]
         idx_t1_cf_valid = idx_t1_cf[valid_idx:]
@@ -2656,7 +2679,8 @@ class SimpleNBOW(keras.Model):
                                                 idx_t0_cf=idx_t0_cf_valid,
                                                 idx_t1_cf=idx_t1_cf_valid,
                                                 label=label_valid,
-                                                all_topic_label=all_topic_label_valid, 
+                                                all_topic_label=all_topic_label_valid,
+                                                tcf_label=tcf_label_valid,
                                                 tidx=te_tidx,
                                                 attn_mask_valid=None,
             )
@@ -2667,7 +2691,7 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
     
-    def get_riesz_treatment_effect(self,input_enc,idx_t0_cf,idx_t1_cf,label,all_topic_label,tidx,attn_mask_valid):
+    def get_riesz_treatment_effect(self,input_enc,idx_t0_cf,idx_t1_cf,label,all_topic_label,tcf_label,tidx,attn_mask_valid):
         '''
         '''
         #This is the main label not the topic label
@@ -2711,7 +2735,7 @@ class SimpleNBOW(keras.Model):
         #Passing the input gval with rounding
         if self.model_args["round_gval"]==True:
             input_gval = tf.math.round(input_gval)
-            input_cf_gval = tf.math.round(topic_cf_gval)
+            topic_cf_gval = tf.math.round(topic_cf_gval)
 
         #Next calculating the TE without correction
         te = tf.reduce_mean( 
@@ -2731,8 +2755,21 @@ class SimpleNBOW(keras.Model):
             +  (1-topic_label)*( (topic_cf_gval-input_gval) + input_alpha*(label - input_gval) )
         )
 
-        # if self.eidx==20:
-        #     pdb.set_trace()
+        if self.eidx==199:
+            mask_dict = self._get_subgroup_mask_toy3_riesz(
+                                                all_topic_label=all_topic_label,
+                                                tcf_label=tcf_label, 
+                                                tidx=tidx,
+            )
+
+
+            #Debug code
+            # tf.reduce_mean(tf.cast(tf.cast(tf.round(gval10),tf.int32)==tf.cast(label10,tf.int32),tf.float32))
+            # tf.reduce_mean(tf.cast(tf.cast(tf.round(gval11),tf.int32)==tf.cast(label11,tf.int32),tf.float32))
+            
+            # tf.reduce_mean((label10-gval10))
+
+            pdb.set_trace()
 
         return te,te_corrected,te_dr
 

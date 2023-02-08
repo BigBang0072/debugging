@@ -2614,6 +2614,232 @@ class DataHandleTransformer():
         
         return replacement_dict
 
+    def controlled_cebab_dataset_handler(self,return_causal=False,return_cf=False):
+        '''
+        This dataset has pairs of counterfactual data along with labels on the topic
+        on which they are purturbed.
+
+        Labelling Conventions:
+        '''
+        #Creating the dataset
+        cf_merged_df = self._get_cebab_dataframe()
+        self._get_cebab_data_stats(cf_merged_df)
+
+    
+        #Getting the list of input and counterfactuals
+        sentence_list = cf_merged_df["init_sentence"].tolist()
+        cf_sentence_lol = cf_merged_df["cf_{}_sentence".format(self.data_args["topic_name"])].tolist()
+        
+        #Tokenizing the input and getting ready for training
+        input_idx,attn_mask,token_type_idx,cf_input_idx,cf_attn_mask,cf_token_type_idx\
+                    = self._encode_sentences_for_te(sentence_list,cf_sentence_lol)
+
+
+        #Creating the labels for the task
+        y_label = cf_merged_df["init_sentiment_label"].tolist()
+        topic_label = cf_merged_df["init_{}_label".format(self.data_args["topic_name"])].tolist()
+
+        #Creating the dataset dict
+        data_dict=dict(
+                        label=y_label,
+                        input_idx=input_idx,
+                        attn_mask=attn_mask,
+                        topic_label=topic_label,
+        )
+        if return_cf==True:
+            data_dict["input_idx_t0_cf"]=cf_input_idx
+            data_dict["attn_mask_t0_cf"]=cf_attn_mask
+        #Creating the dataset object ready for consumption
+        cat_dataset=tf.data.Dataset.from_tensor_slices(data_dict)
+        cat_dataset=cat_dataset.batch(self.data_args["batch_size"])
+        # pdb.set_trace()
+
+        return cat_dataset
+    
+    def _encode_sentences_for_te(self,sentence_list,cf_sentence_lol):
+        '''
+        This function will encode the sentence and their counterfactual for the
+        treatment effect estimation for the BERT or ROBERTA based encoders
+        '''
+        #Now we will encode the input sentences
+        encoded_doc = self.tokenizer(
+                                sentence_list,
+                                padding="max_length",
+                                truncation=True,
+                                max_length=self.data_args["max_len"],
+                                return_tensors="tf"
+        )
+        input_idx = encoded_doc["input_ids"]
+        attn_mask = encoded_doc["attention_mask"]
+        token_type_idx = None 
+        if "token_type_ids" in encoded_doc:
+            token_type_idx = encoded_doc["token_type_ids"]
+        
+
+
+        #Next encoding the counterfactual sentences
+        cf_input_idx_list = []
+        cf_attn_mask_list = []
+        cf_token_type_idx_list = []
+        for cf_sentence_list  in cf_sentence_lol:
+            cf_encoded_doc = self.tokenizer(
+                                    cf_sentence_list[0:self.data_args["cfactuals_bsize"]],
+                                    padding="max_length",
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+            cf_input_idx = cf_encoded_doc["input_ids"]
+            cf_attn_mask = cf_encoded_doc["attention_mask"]
+            cf_token_type_idx = None 
+            if "token_type_ids" in cf_encoded_doc:
+                cf_token_type_idx = cf_encoded_doc["token_type_ids"]
+            
+            #Adding them to the list
+            cf_input_idx_list.append(cf_input_idx)
+            cf_attn_mask_list.append(cf_attn_mask)
+            cf_token_type_idx_list.append(cf_token_type_idx)
+        
+        #Merging all the cf_idxs
+        cf_input_idx = tf.stack(cf_input_idx_list,axis=0)
+        cf_attn_mask = tf.stack(cf_attn_mask_list,axis=0)
+        if cf_token_type_idx_list[0]!=None:
+            cf_token_type_idx = tf.stack(cf_token_type_idx_list,axis=0)
+        # pdb.set_trace()
+        
+
+        return input_idx,attn_mask,token_type_idx,cf_input_idx,cf_attn_mask,cf_token_type_idx
+
+    def _get_cebab_data_stats(self,cf_merged_df):
+        '''
+        This fucntion will give us the proportion of the samples in each subgroup
+        and the p-value of the topic with the main task.
+        '''
+        #Printing the aggreagate metrics of this dataset
+        print("positive sentiment ratio: ",cf_merged_df["init_sentiment_label"].mean())
+        #Getting the correlation statistics between the sentiment and the topic label
+        grp1_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==1)
+        grp2_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==1)
+        grp3_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==0)
+        grp4_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==0)
+
+        print("Estimated p-value in the current dataset: ",
+                    cf_merged_df[grp1_mask|grp3_mask].shape[0]/cf_merged_df.shape[0])
+        
+        return 
+
+    def _get_cebab_dataframe(self,):
+        '''
+        '''
+        #Loading the dataset from the hugginface library
+        from datasets import load_dataset
+        cebab = load_dataset("CEBaB/CEBaB")
+
+        print("Reading the data into dataframe!")
+        #Collecting all the examples
+        all_example_list=[]
+        #Dumping the dataset to a dataframe st. we can do selection and processing
+        for eidx in range(len(cebab["train_inclusive"])):
+            example_dict = dict(
+                id        = cebab["train_inclusive"][eidx]["original_id"],
+                sentence  = cebab["train_inclusive"][eidx]["description"],
+                sentiment = cebab["train_inclusive"][eidx]["review_majority"],
+                cf_topic  = cebab["train_inclusive"][eidx]["edit_type"],
+                food_label = cebab["train_inclusive"][eidx]["food_aspect_majority"],
+                ambiance_label = cebab["train_inclusive"][eidx]["ambiance_aspect_majority"],
+                service_label = cebab["train_inclusive"][eidx]["service_aspect_majority"],
+                noise_label = cebab["train_inclusive"][eidx]["noise_aspect_majority"],
+            )
+            #Skipping no majority and unknonwn labels example
+            if  example_dict["{}_label".format(self.data_args["topic_name"])]=="unknown" or \
+                example_dict["{}_label".format(self.data_args["topic_name"])]=="no majority":
+                continue
+            
+            #Skipping this example if this topic is not needed
+            if example_dict["cf_topic"]!=self.data_args["topic_name"] and\
+                example_dict["cf_topic"]!="None":
+                continue
+
+            all_example_list.append(example_dict)
+        #Creating a dataframe 
+        example_df = pd.DataFrame(all_example_list)
+        print("Number of examples post first filtering: ",example_df.shape[0])
+        # pdb.set_trace()
+
+        def convert_wordlabel_to_num(word_label):
+            # print(word_label)
+            if word_label=="Negative":
+                return 0
+            elif word_label=="Positive":
+                return 1
+            raise NotImplementedError()
+
+        print("Merging the example and their counterfactuals into one!")
+        #Grouping together the dataset (x,tcf)
+        cf_merged_example_list = []
+        for exid,edf in example_df.groupby("id"):
+            # print("Merging exid: {}".format(exid))
+            cf_example_dict=defaultdict(list)
+            
+            #In this group we should have a main setence (with none)
+            if "None" not in edf["cf_topic"].tolist() or\
+                self.data_args["topic_name"] not in edf["cf_topic"].tolist():
+                continue 
+            # pdb.set_trace()
+
+            #Going though all the counterfactuals
+            skip_flag=False
+            for cidx in range(edf.shape[0]):
+                #Getting the counterfactual topic
+                cf_topic = edf.iloc[cidx]["cf_topic"]
+
+                if(cf_topic=="None"):
+                    #Creating the sentiment label
+                    if edf.iloc[cidx]["sentiment"]=="no majority" or edf.iloc[cidx]["sentiment"]=="3":
+                        skip_flag=True
+                        break 
+                    elif int(edf.iloc[cidx]["sentiment"])>3:
+                        cf_example_dict["init_sentiment_label"]=1 
+                    elif int(edf.iloc[cidx]["sentiment"])<3:
+                        cf_example_dict["init_sentiment_label"]=0
+                    
+                    cf_example_dict["init_sentence"]=edf.iloc[cidx]["sentence"]
+                    cf_example_dict["init_{}_label".format(self.data_args["topic_name"])]\
+                                    =convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(self.data_args["topic_name"])])
+                else:
+                    #We will only add this counterfactual if this topic was actually changed from initial
+                    cf_topic_label = convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(cf_topic)])
+                    if cf_topic_label==cf_example_dict["init_{}_label".format(self.data_args["topic_name"])]:
+                        continue
+                    cf_example_dict["cf_{}_sentence".format(cf_topic)].append(edf.iloc[cidx]["sentence"])
+                    cf_example_dict["cf_{}_label".format(cf_topic)].append(cf_topic_label)
+
+                    #TODO: Decide what to do if we have no majority for these examples 
+                    # (could skip if we need the label later)
+                    cf_example_dict["cf_{}_sentiment_label".format(cf_topic)].append(edf.iloc[cidx]["sentiment"])
+
+
+            #Adding the example dict to list
+            if skip_flag==False and len(cf_example_dict["cf_{}_label".format(cf_topic)])!=0:
+                cf_merged_example_list.append(cf_example_dict)
+
+        #Creating the new dataframe with the merged examples
+        cf_merged_df = pd.DataFrame(cf_merged_example_list)
+        print("Number of Example post merging: ",cf_merged_df.shape[0])
+
+        #We have to rebalance the dataset with equal number of pos and negs
+        num_samples_pg = self.data_args["num_sample"]//2
+        positive_df = cf_merged_df[cf_merged_df["init_sentiment_label"]==1]
+        negative_df = cf_merged_df[cf_merged_df["init_sentiment_label"]==0]
+        assert positive_df.shape[0]>=num_samples_pg and negative_df.shape[0]>=num_samples_pg,"Examples Exhausted!"
+
+        positive_df_slice = positive_df[0:num_samples_pg]
+        negative_df_slice = negative_df[0:num_samples_pg]
+
+        balanced_cf_merged_df = pd.concat([positive_df_slice,negative_df_slice]).sample(frac=1).reset_index(drop=True)
+
+        return balanced_cf_merged_df
+
     def controlled_multinli_dataset_handler(self,return_causal=False):
         '''
         Here we will create a multi-nli dataset where we simplify the setting
@@ -3172,7 +3398,7 @@ if __name__=="__main__":
     data_args={}
     data_args["path"]="dataset/multinli_1.0/"
     data_args["transformer_name"]="roberta-base"
-    data_args["num_sample"]=1000
+    data_args["num_sample"]=750
     data_args["neg_topic_corr"]=0.7
     data_args["batch_size"]=32
     data_args["max_len"]=200
@@ -3181,7 +3407,10 @@ if __name__=="__main__":
     data_args["run_num"]=14
     data_args["neg1_flip_method"]="remove_negation"
     data_handler = DataHandleTransformer(data_args)
-    cat_dataset=data_handler.controlled_multinli_dataset_handler()
+    # cat_dataset=data_handler.controlled_multinli_dataset_handler()
+    data_args["topic_name"]="food"
+    data_args["cfactuals_bsize"]=1
+    data_handler.controlled_cebab_dataset_handler()
     pdb.set_trace()
 
 
