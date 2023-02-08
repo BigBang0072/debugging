@@ -1000,6 +1000,8 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = 50
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
+            elif self.data_args["dtype"]=="cebab":
+                self.hlayer_dim = 50
         else:
             if self.model_args["bert_as_encoder"]==True:
                 self.hlayer_dim = self.model_args["bemb_dim"]
@@ -2064,24 +2066,30 @@ class SimpleNBOW(keras.Model):
         #Getting the train dataset
         label = dataset_batch["label"]
         all_topic_label = dataset_batch["topic_label"]
-        tcf_label = dataset_batch["tcf_label"]
+        #Getting the idx for both the input and index
         idx = dataset_batch["input_idx"]
-        idx_t0_cf = dataset_batch["input_idx_t0_cf"]
-        idx_t1_cf = dataset_batch["input_idx_t1_cf"]
+        idx_topic_cf = dataset_batch["input_idx_t{}_cf".format(te_tidx)]
+
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
         label_train = label[0:valid_idx]
         all_topic_label_train = all_topic_label[0:valid_idx]
-        tcf_label_train = tcf_label[0:valid_idx]
         idx_train = idx[0:valid_idx]
-        idx_t0_cf_train = idx_t0_cf[0:valid_idx]
-        idx_t1_cf_train = idx_t1_cf[0:valid_idx]
-
+        idx_topic_cf_train = idx_topic_cf[0:valid_idx]
         #Initializing the attention mask
-        attn_mask_train = None      #This will be used when using the BERT
-                                    #Different attention mask for cf datapoints
+        attn_mask_train = None
+        attn_mask_topic_cf_train = None
+        if self.model_args["bert_as_encoder"]==True:
+            attn_mask_train = dataset_batch["attn_mask"][0:valid_idx]
+            attn_mask_topic_cf_train = dataset_batch["attn_mask"][0:valid_idx]
+        
+        #Getting the tcf labels for the toy story 3
+        if "nlp_toy3" in data_args["path"]:
+            tcf_label = dataset_batch["tcf_label"]
+            tcf_label_train = tcf_label[0:valid_idx]
+        
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
@@ -2099,26 +2107,26 @@ class SimpleNBOW(keras.Model):
                 #Next getting the RR loss 
                 rr_loss,input_alpha = self.get_riesz_RR_loss(
                                             input_enc=input_enc,
-                                            idx_t0_cf_train=idx_t0_cf_train,
-                                            idx_t1_cf_train=idx_t1_cf_train, 
+                                            idx_topic_cf_train=idx_topic_cf_train,
                                             all_topic_label_train=all_topic_label_train,
-                                            attn_mask_train=None,
+                                            attn_mask_topic_cf_train=attn_mask_topic_cf_train,
                                             tidx=te_tidx,
                 )
-                #Tracking the input alpha for each subgroup
-                self.track_group_wise_alpha(
-                                    input_alpha=input_alpha,
-                                    all_topic_label=all_topic_label_train,
-                                    tcf_label=tcf_label_train,
-                                    tidx=te_tidx,
-                )
+                #Currently we can only track things when we are in the toy story 3
+                if "nlp_toy3" in data_args["path"]:
+                    #Tracking the input alpha for each subgroup
+                    self.track_group_wise_alpha(
+                                        input_alpha=input_alpha,
+                                        all_topic_label=all_topic_label_train,
+                                        tcf_label=tcf_label_train,
+                                        tidx=te_tidx,
+                    )
 
                 #Getting the regression loss
                 reg_loss,gval = self.get_riesz_regression_loss(
                                             input_enc=input_enc,
                                             label=label_train,
                                             all_topic_label_train=all_topic_label_train,
-                                            tcf_label_train=tcf_label_train,
                                             tidx=te_tidx,
                 )
 
@@ -2144,13 +2152,11 @@ class SimpleNBOW(keras.Model):
             #Getting the treatment effect
             te,te_corrected,te_dr = self.get_riesz_treatment_effect(
                                                 input_enc=input_enc,
-                                                idx_t0_cf=idx_t0_cf_train,
-                                                idx_t1_cf=idx_t1_cf_train,
+                                                idx_topic_cf=idx_topic_cf_train,
                                                 label=label_train,
-                                                all_topic_label=all_topic_label_train, 
-                                                tcf_label=tcf_label_train,
+                                                all_topic_label=all_topic_label_train,
                                                 tidx=te_tidx,
-                                                attn_mask_valid=None,
+                                                attn_mask_topic_cf=attn_mask_topic_cf_train
             )
             # pdb.set_trace()
             #Logging the TE
@@ -2361,25 +2367,21 @@ class SimpleNBOW(keras.Model):
 
         return toy3_mask_dict
 
-    def get_riesz_RR_loss(self,input_enc,idx_t0_cf_train,idx_t1_cf_train,all_topic_label_train,attn_mask_train,tidx):
+    def get_riesz_RR_loss(self,input_enc,idx_topic_cf_train,all_topic_label_train,attn_mask_topic_cf_train,tidx):
         '''
         '''
         #Getting the counterfactual data
-        topic_cf_idx_train = None
+        topic_cf_idx_train = idx_topic_cf_train
         topic_label_train = tf.cast(tf.expand_dims(all_topic_label_train[:,tidx],axis=-1),tf.float32)
-        if tidx==0:
-            #We will only take one counterfactual for each example now
-            topic_cf_idx_train = idx_t0_cf_train
-        else:
-            topic_cf_idx_train = idx_t1_cf_train
         
+
         #Sampling a random example from the whole cf set
         sample_idxs = tf.range(tf.shape(topic_cf_idx_train)[1])
         cf_sample_idxs = tf.random.shuffle(sample_idxs)[0]
         topic_cf_idx_train = topic_cf_idx_train[:,cf_sample_idxs,:] 
         
         #Next we are ready to generate the encoding of the counterfactual
-        topic_cf_enc = self._encoder(topic_cf_idx_train,attn_mask=attn_mask_train,training=True)
+        topic_cf_enc = self._encoder(topic_cf_idx_train,attn_mask=attn_mask_topic_cf_train,training=True)
 
         #Adding the treatment lable explicitely to the encoded vector
         if self.model_args["add_treatment_on_front"]:
@@ -2406,7 +2408,7 @@ class SimpleNBOW(keras.Model):
 
         return RR_loss,input_alpha
     
-    def get_riesz_regression_loss(self,input_enc,label,all_topic_label_train,tcf_label_train,tidx):
+    def get_riesz_regression_loss(self,input_enc,label,all_topic_label_train,tidx):
         '''
         '''
         #This is the main label not the topic label
@@ -2643,23 +2645,28 @@ class SimpleNBOW(keras.Model):
         #Getting the train dataset
         label = dataset_batch["label"]
         all_topic_label = dataset_batch["topic_label"]
-        tcf_label = dataset_batch["tcf_label"]
         idx = dataset_batch["input_idx"]
-        idx_t0_cf = dataset_batch["input_idx_t0_cf"]
-        idx_t1_cf = dataset_batch["input_idx_t1_cf"]
+        idx_topic_cf = dataset_batch["input_idx_t{}_cf".format(te_tidx)]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
         #Getting the validation data
         label_valid = label[valid_idx:]
         all_topic_label_valid = all_topic_label[valid_idx:]
-        tcf_label_valid = tcf_label[valid_idx:]
         idx_valid = idx[valid_idx:]
-        idx_t0_cf_valid = idx_t0_cf[valid_idx:]
-        idx_t1_cf_valid = idx_t1_cf[valid_idx:]
+        idx_topic_cf_valid = idx_topic_cf[valid_idx:]
 
         #Attention mask for BERT based encoder
-        attn_mask_valid=None
+        attn_mask_valid=None 
+        attn_mask_topic_cf_valid=None
+        if self.model_args["bert_as_encoder"]==True:
+            attn_mask_valid = dataset_batch["attn_mask"][valid_idx:]
+            attn_mask_topic_cf_valid = dataset_batch["attn_mask"][valid_idx:]
+
+        #Getting the tcf label for debugging in toystory3
+        if "nlp_toy3" in data_args["path"]:
+            tcf_label = dataset_batch["tcf_label"]
+            tcf_label_valid = tcf_label[valid_idx:]
 
         #Skipping if we dont have enough samples
         if(idx_valid.shape[0]==0):
@@ -2676,13 +2683,11 @@ class SimpleNBOW(keras.Model):
             #Getting the treatment effect
             te,te_corrected,te_dr = self.get_riesz_treatment_effect(
                                                 input_enc=input_enc,
-                                                idx_t0_cf=idx_t0_cf_valid,
-                                                idx_t1_cf=idx_t1_cf_valid,
+                                                idx_topic_cf=idx_topic_cf_valid,
                                                 label=label_valid,
                                                 all_topic_label=all_topic_label_valid,
-                                                tcf_label=tcf_label_valid,
                                                 tidx=te_tidx,
-                                                attn_mask_valid=None,
+                                                attn_mask_topic_cf=attn_mask_topic_cf_valid,
             )
             #Logging the TE
             self.te_valid.update_state(te)
@@ -2691,21 +2696,16 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
     
-    def get_riesz_treatment_effect(self,input_enc,idx_t0_cf,idx_t1_cf,label,all_topic_label,tcf_label,tidx,attn_mask_valid):
+    def get_riesz_treatment_effect(self,input_enc,idx_topic_cf,label,all_topic_label,tidx,attn_mask_topic_cf,tcf_label=None):
         '''
         '''
         #This is the main label not the topic label
         label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
         
         
-        topic_cf_idx = None
+        topic_cf_idx = idx_topic_cf
         topic_label = tf.cast(tf.expand_dims(all_topic_label[:,tidx],axis=-1),tf.float32)
 
-        if tidx==0:
-            #We will only take one counterfactual for each example now
-            topic_cf_idx = idx_t0_cf
-        else:
-            topic_cf_idx = idx_t1_cf
         
         #Sampling a random example from the whole cf set
         sample_idxs = tf.range(tf.shape(topic_cf_idx)[1])
@@ -2713,7 +2713,7 @@ class SimpleNBOW(keras.Model):
         topic_cf_idx = topic_cf_idx[:,cf_sample_idxs,:]
 
         #Next getting the counterfactual encoding
-        topic_cf_enc = self._encoder(topic_cf_idx,attn_mask=attn_mask_valid,training=False)
+        topic_cf_enc = self._encoder(topic_cf_idx,attn_mask=attn_mask_topic_cf,training=False)
 
         #Adding the treatment lable explicitely to the encoded vector
         if self.model_args["add_treatment_on_front"]:
@@ -2755,12 +2755,12 @@ class SimpleNBOW(keras.Model):
             +  (1-topic_label)*( (topic_cf_gval-input_gval) + input_alpha*(label - input_gval) )
         )
 
-        if self.eidx==199:
-            mask_dict = self._get_subgroup_mask_toy3_riesz(
-                                                all_topic_label=all_topic_label,
-                                                tcf_label=tcf_label, 
-                                                tidx=tidx,
-            )
+        # if self.eidx==199:
+            # mask_dict = self._get_subgroup_mask_toy3_riesz(
+            #                                     all_topic_label=all_topic_label,
+            #                                     tcf_label=tcf_label, 
+            #                                     tidx=tidx,
+            # )
 
 
             #Debug code
@@ -2769,7 +2769,7 @@ class SimpleNBOW(keras.Model):
             
             # tf.reduce_mean((label10-gval10))
 
-            pdb.set_trace()
+            # pdb.set_trace()
 
         return te,te_corrected,te_dr
 
@@ -4998,6 +4998,8 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
     elif "nlp_toy3" in data_args["path"]:
         print("Creating the TOY-STORY3")
         cat_dataset,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+    elif "cebab" in data_args["path"]:
+        cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True)
     else:
         raise NotImplementedError()
     
@@ -5283,6 +5285,7 @@ if __name__=="__main__":
     parser.add_argument('-sp_topic_pval',dest="sp_topic_pval",type=float,default=None)
     parser.add_argument('--return_label_dataset',default=False,action="store_true")
     parser.add_argument('-degree_confoundedness',dest="degree_confoundedness",type=float,default=None)
+    parser.add_argument('-cebab_topic_name',dest="cebab_topic_name",type=str,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5381,6 +5384,10 @@ if __name__=="__main__":
         data_args["neg_topic_corr"]=args.neg_topic_corr
         data_args["noise_ratio"]=args.noise_ratio
         data_args["dtype"]=args.dtype
+    elif "cebab" in data_args["path"]:
+        data_args["neg_topic_corr"]=args.neg_topic_corr
+        data_args["noise_ratio"]=args.noise_ratio
+        data_args["dtype"]=args.dtype
 
     data_args["num_topics"]=args.num_topics
     data_args["topic_list"]=list(range(data_args["num_topics"]))
@@ -5400,6 +5407,7 @@ if __name__=="__main__":
     data_args["sp_topic_pval"]=args.sp_topic_pval
     data_args["return_label_dataset"]=args.return_label_dataset
     data_args["degree_confoundedness"]=args.degree_confoundedness
+    data_args["cebab_topic_name"]=args.cebab_topic_name
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])

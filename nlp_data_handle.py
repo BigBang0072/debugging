@@ -2628,7 +2628,7 @@ class DataHandleTransformer():
     
         #Getting the list of input and counterfactuals
         sentence_list = cf_merged_df["init_sentence"].tolist()
-        cf_sentence_lol = cf_merged_df["cf_{}_sentence".format(self.data_args["topic_name"])].tolist()
+        cf_sentence_lol = cf_merged_df["cf_{}_sentence".format(self.data_args["cebab_topic_name"])].tolist()
         
         #Tokenizing the input and getting ready for training
         input_idx,attn_mask,token_type_idx,cf_input_idx,cf_attn_mask,cf_token_type_idx\
@@ -2637,14 +2637,14 @@ class DataHandleTransformer():
 
         #Creating the labels for the task
         y_label = cf_merged_df["init_sentiment_label"].tolist()
-        topic_label = cf_merged_df["init_{}_label".format(self.data_args["topic_name"])].tolist()
+        topic_label = cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])].tolist()
 
         #Creating the dataset dict
         data_dict=dict(
                         label=y_label,
                         input_idx=input_idx,
                         attn_mask=attn_mask,
-                        topic_label=topic_label,
+                        topic_label=np.expand_dims(topic_label,axis=-1),
         )
         if return_cf==True:
             data_dict["input_idx_t0_cf"]=cf_input_idx
@@ -2718,10 +2718,10 @@ class DataHandleTransformer():
         #Printing the aggreagate metrics of this dataset
         print("positive sentiment ratio: ",cf_merged_df["init_sentiment_label"].mean())
         #Getting the correlation statistics between the sentiment and the topic label
-        grp1_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==1)
-        grp2_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==1)
-        grp3_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==0)
-        grp4_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["topic_name"])]==0)
+        grp1_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==1)
+        grp2_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==1)
+        grp3_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==0)
+        grp4_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==0)
 
         print("Estimated p-value in the current dataset: ",
                     cf_merged_df[grp1_mask|grp3_mask].shape[0]/cf_merged_df.shape[0])
@@ -2751,12 +2751,12 @@ class DataHandleTransformer():
                 noise_label = cebab["train_inclusive"][eidx]["noise_aspect_majority"],
             )
             #Skipping no majority and unknonwn labels example
-            if  example_dict["{}_label".format(self.data_args["topic_name"])]=="unknown" or \
-                example_dict["{}_label".format(self.data_args["topic_name"])]=="no majority":
+            if  example_dict["{}_label".format(self.data_args["cebab_topic_name"])]=="unknown" or \
+                example_dict["{}_label".format(self.data_args["cebab_topic_name"])]=="no majority":
                 continue
             
             #Skipping this example if this topic is not needed
-            if example_dict["cf_topic"]!=self.data_args["topic_name"] and\
+            if example_dict["cf_topic"]!=self.data_args["cebab_topic_name"] and\
                 example_dict["cf_topic"]!="None":
                 continue
 
@@ -2783,7 +2783,7 @@ class DataHandleTransformer():
             
             #In this group we should have a main setence (with none)
             if "None" not in edf["cf_topic"].tolist() or\
-                self.data_args["topic_name"] not in edf["cf_topic"].tolist():
+                self.data_args["cebab_topic_name"] not in edf["cf_topic"].tolist():
                 continue 
             # pdb.set_trace()
 
@@ -2804,12 +2804,12 @@ class DataHandleTransformer():
                         cf_example_dict["init_sentiment_label"]=0
                     
                     cf_example_dict["init_sentence"]=edf.iloc[cidx]["sentence"]
-                    cf_example_dict["init_{}_label".format(self.data_args["topic_name"])]\
-                                    =convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(self.data_args["topic_name"])])
+                    cf_example_dict["init_{}_label".format(self.data_args["cebab_topic_name"])]\
+                                    =convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(self.data_args["cebab_topic_name"])])
                 else:
                     #We will only add this counterfactual if this topic was actually changed from initial
                     cf_topic_label = convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(cf_topic)])
-                    if cf_topic_label==cf_example_dict["init_{}_label".format(self.data_args["topic_name"])]:
+                    if cf_topic_label==cf_example_dict["init_{}_label".format(self.data_args["cebab_topic_name"])]:
                         continue
                     cf_example_dict["cf_{}_sentence".format(cf_topic)].append(edf.iloc[cidx]["sentence"])
                     cf_example_dict["cf_{}_label".format(cf_topic)].append(cf_topic_label)
@@ -3408,7 +3408,7 @@ if __name__=="__main__":
     data_args["neg1_flip_method"]="remove_negation"
     data_handler = DataHandleTransformer(data_args)
     # cat_dataset=data_handler.controlled_multinli_dataset_handler()
-    data_args["topic_name"]="food"
+    data_args["cebab_topic_name"]="food"
     data_args["cfactuals_bsize"]=1
     data_handler.controlled_cebab_dataset_handler()
     pdb.set_trace()
