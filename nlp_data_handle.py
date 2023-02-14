@@ -2941,6 +2941,110 @@ class DataHandleTransformer():
         balanced_cf_merged_df = pd.concat([positive_df_slice,negative_df_slice]).sample(frac=1).reset_index(drop=True)
 
         return balanced_cf_merged_df
+    
+    def get_cebab_sentiment_only_dataset(self,nbow_mode=False):
+        '''
+        Since we are wasting the samples if we only consider the topic specific daset to 
+        train the main model. So we will now get the merged dataset to train the main base
+        model and use the counterfactual data to train the alpha.
+
+        Also, this will be the more natural setting since, we will have limited counterfactual 
+        but sufficient task specific dataset.
+        '''
+        #Loading the dataset from the hugginface library
+        from datasets import load_dataset
+        cebab = load_dataset("CEBaB/CEBaB")
+
+        print("Reading the data into dataframe!")
+        #Collecting all the examples
+        all_example_list=[]
+        #Dumping the dataset to a dataframe st. we can do selection and processing
+        for eidx in range(len(cebab["train_inclusive"])):
+            #Lets subsample here itself wrt to the bad sentiment labels
+            sentiment = cebab["train_inclusive"][eidx]["review_majority"]
+            if sentiment=="no majority" or sentiment=="3":
+                continue
+            elif int(sentiment)>3:
+                sentiment = 1
+            elif int(sentiment)<3:
+                sentiment = 0
+            else:
+                raise NotImplementedError()
+            
+
+            #Getting the only relavant field for us
+            example_dict = dict(
+                sentence  = cebab["train_inclusive"][eidx]["description"],
+                sentiment = sentiment,
+            )
+            all_example_list.append(example_dict)
+        
+        #Creating a dataframe out of it first
+        all_example_df = pd.DataFrame(all_example_list)
+        positive_df = all_example_df[all_example_df["sentiment"]==1]
+        negative_df = all_example_df[all_example_df["sentiment"]==0]
+        num_keep = min(positive_df.shape[0],negative_df.shape[0])
+        
+        #Now we will create the index for these examples
+        positive_df_slice = positive_df[0:num_keep]
+        negative_df_slice = negative_df[0:num_keep]
+        #Merging the dataframe
+        balanced_all_example_df = pd.concat(
+                        [positive_df_slice,negative_df_slice]
+        ).sample(frac=1).reset_index(drop=True)
+        
+        #Now we will convert the examples to the tensorflow dataset
+        sentence_list = balanced_all_example_df["sentence"].tolist()
+        y_label = balanced_all_example_df["sentiment"].tolist()
+
+
+        #We will user the BERT tokenizer if we will use transformer
+        if nbow_mode==False:
+            #Now we will encode the input sentences
+            encoded_doc = self.tokenizer(
+                                    sentence_list,
+                                    padding="max_length",
+                                    truncation=True,
+                                    max_length=self.data_args["max_len"],
+                                    return_tensors="tf"
+            )
+            input_idx = encoded_doc["input_ids"]
+            attn_mask = encoded_doc["attention_mask"]
+            token_type_idx = None 
+            if "token_type_ids" in encoded_doc:
+                token_type_idx = encoded_doc["token_type_ids"]
+
+            #Creating the dataset
+            data_dict = dict(
+                                label = y_label,
+                                input_idx = input_idx,
+                                attn_mask = attn_mask,
+            )
+        else:
+            #We need to encode the sentence for the word vectors
+            print("Loading the embedding!")
+            #Loading the gensim embedidng model
+            self._load_full_gensim_word_embedding()
+
+            #Converting the input sentence into the word index
+            input_index_arr = self._convert_text_to_widx(sentence_list)
+
+            #Creating the dataset
+            data_dict = dict(
+                                label = y_label,
+                                input_idx = input_idx,
+            )
+        
+        #Adding the empty topic label array
+        data_dict["topic_label"]=[None]*len(y_label)
+        data_dict["input_idx_t0_cf"]=[None]*len(y_label)
+        data_dict["attn_mask_t0_cf"]=[None]*len(y_label)
+        
+        #Batching the and sending the dataset
+        cat_dataset=tf.data.Dataset.from_tensor_slices(data_dict)
+        cat_dataset=cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset
 
     def controlled_multinli_dataset_handler(self,return_causal=False):
         '''

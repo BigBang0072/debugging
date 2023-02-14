@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -1141,6 +1141,8 @@ class SimpleNBOW(keras.Model):
             #Adding the loss term for RR
             self.rr_loss = keras.metrics.Mean(name="rr_loss")
             self.rr_loss_valid = keras.metrics.Mean(name="rr_loss_valid")
+            self.rr_loss_all = keras.metrics.Mean(name="rr_loss_all")
+            self.rr_loss_all_valid = keras.metrics.Mean(name="rr_loss_all_valid")
 
 
 
@@ -1163,6 +1165,8 @@ class SimpleNBOW(keras.Model):
             #Getting the regression loss metric
             self.reg_loss = keras.metrics.Mean(name="reg_loss")
             self.reg_loss_valid = keras.metrics.Mean(name="reg_loss_valid")
+            self.reg_loss_all = keras.metrics.Mean(name="reg_loss_all")
+            self.reg_loss_all_valid = keras.metrics.Mean(name="reg_loss_all_valid")
 
 
             #Initializing the tmle specific params
@@ -1235,6 +1239,14 @@ class SimpleNBOW(keras.Model):
         if "riesz" in self.model_args["stage_mode"]:
             self.rr_loss.reset_states()
             self.reg_loss.reset_states()
+            self.rr_loss_valid.reset_states()
+            self.reg_loss_valid.reset_states()
+
+            self.rr_loss_all.reset_states()
+            self.reg_loss_all.reset_states()
+            self.rr_loss_all_valid.reset_states()
+            self.reg_loss_all_valid.reset_states()
+
             self.tmle_loss.reset_states()
             self.te_valid.reset_states()
             self.te_train.reset_states()
@@ -2083,15 +2095,17 @@ class SimpleNBOW(keras.Model):
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
         label_train = label[0:valid_idx]
-        all_topic_label_train = all_topic_label[0:valid_idx]
         idx_train = idx[0:valid_idx]
-        idx_topic_cf_train = idx_topic_cf[0:valid_idx]
+        if task!="stage1_riesz_main_mse":
+            all_topic_label_train = all_topic_label[0:valid_idx]
+            idx_topic_cf_train = idx_topic_cf[0:valid_idx]
         #Initializing the attention mask
         attn_mask_train = None
         attn_mask_topic_cf_train = None
         if self.model_args["bert_as_encoder"]==True:
             attn_mask_train = dataset_batch["attn_mask"][0:valid_idx]
-            attn_mask_topic_cf_train = dataset_batch["attn_mask"][0:valid_idx]
+            if task!="stage1_riesz_main_mse":
+                attn_mask_topic_cf_train = dataset_batch["attn_mask"][0:valid_idx]
         
         #Getting the tcf labels for the toy story 3
         if "nlp_toy3" in data_args["path"]:
@@ -2139,6 +2153,7 @@ class SimpleNBOW(keras.Model):
                                             all_topic_label=all_topic_label_train,
                                             tidx=te_tidx,
                                             mode="train",
+                                            task=task,
                 )
 
                 #Finally getting the tmle loss
@@ -2176,7 +2191,6 @@ class SimpleNBOW(keras.Model):
             self.te_train.update_state(te)
             self.te_corrected_train.update_state(te_corrected)
             self.te_dr_train.update_state(te_dr)
-
         elif "stage2_inv_reg" in task and self.model_args["closs_type"]=="mse":
             with tf.GradientTape() as tape:
                 topic_loss = 0.0
@@ -2332,6 +2346,28 @@ class SimpleNBOW(keras.Model):
             self.optimizer.apply_gradients(
                         zip(grads,self.trainable_weights)
             )
+        elif task=="stage1_riesz_main_mse":
+            with tf.GradientTape() as tape:
+                #Getting the encoding of the Z to the latent representation
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Tracking the embedding norm (this will increase as per nagarajan paper)
+                emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
+                self.embedding_norm.update_state(emb_norm)
+
+                #Getting the mse loss
+                reg_loss_all,_ = self.get_riesz_regression_loss(
+                                            input_enc=input_enc,
+                                            label=label_train,
+                                            all_topic_label=None,
+                                            tidx=None,
+                                            mode="train",
+                                            task=task,
+                )
+            #Training the head parameters of the main classifier
+            grads = tape.gradient(reg_loss_all,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                        zip(grads,self.trainable_weights)
+            )
         else:
             raise NotImplementedError()
     
@@ -2427,16 +2463,19 @@ class SimpleNBOW(keras.Model):
 
         return RR_loss,input_alpha
     
-    def get_riesz_regression_loss(self,input_enc,label,all_topic_label,tidx,mode):
+    def get_riesz_regression_loss(self,input_enc,label,all_topic_label,tidx,mode,task):
         '''
         '''
         #This is the main label not the topic label
         label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
         
-        #Adding the treatment lable explicitely to the encoded vector
-        topic_label = tf.cast(tf.expand_dims(all_topic_label[:,tidx],axis=-1),tf.float32)
-
         if self.model_args["add_treatment_on_front"]:
+            #this is not supported with we are training the main task separately
+            if model_args["separate_cebab_de"]==True:
+                raise NotImplementedError()
+            
+            #Adding the treatment lable explicitely to the encoded vector
+            topic_label = tf.cast(tf.expand_dims(all_topic_label[:,tidx],axis=-1),tf.float32)
             input_Z = tf.concat([topic_label,input_enc],axis=-1)
         else:
             input_Z = input_enc
@@ -2451,10 +2490,20 @@ class SimpleNBOW(keras.Model):
 
 
         #Logging the loss
-        if mode=="train":
-            self.reg_loss.update_state(reg_loss)
-        elif mode=="valid":
-            self.reg_loss_valid.update_state(reg_loss)
+        if task=="stage1_riesz_main_mse":
+            if mode=="train":
+                self.reg_loss_all.update_state(reg_loss)
+            elif mode=="valid":
+                self.reg_loss_all_valid.update_state(reg_loss)
+            else:
+                raise NotImplementedError()
+        elif task=="stage1_riesz":
+            if mode=="train":
+                self.reg_loss.update_state(reg_loss)
+            elif mode=="valid":
+                self.reg_loss_valid.update_state(reg_loss)
+            else:
+                raise NotImplementedError()
         else:
             raise NotImplementedError()
 
@@ -2676,16 +2725,18 @@ class SimpleNBOW(keras.Model):
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
         #Getting the validation data
         label_valid = label[valid_idx:]
-        all_topic_label_valid = all_topic_label[valid_idx:]
         idx_valid = idx[valid_idx:]
-        idx_topic_cf_valid = idx_topic_cf[valid_idx:]
+        if task!="stage1_riesz_main_mse":
+            all_topic_label_valid = all_topic_label[valid_idx:]
+            idx_topic_cf_valid = idx_topic_cf[valid_idx:]
 
         #Attention mask for BERT based encoder
         attn_mask_valid=None 
         attn_mask_topic_cf_valid=None
         if self.model_args["bert_as_encoder"]==True:
             attn_mask_valid = dataset_batch["attn_mask"][valid_idx:]
-            attn_mask_topic_cf_valid = dataset_batch["attn_mask"][valid_idx:]
+            if task!="stage1_riesz_main_mse":
+                attn_mask_topic_cf_valid = dataset_batch["attn_mask"][valid_idx:]
 
         #Getting the tcf label for debugging in toystory3
         if "nlp_toy3" in data_args["path"]:
@@ -2721,6 +2772,7 @@ class SimpleNBOW(keras.Model):
                                             all_topic_label=all_topic_label_valid,
                                             tidx=te_tidx,
                                             mode="valid",
+                                            task=task,
             )
 
             #Getting the treatment effect
@@ -2735,7 +2787,20 @@ class SimpleNBOW(keras.Model):
             #Logging the TE
             self.te_valid.update_state(te)
             self.te_corrected_valid.update_state(te_corrected)
-            self.te_dr_valid.update_state(te_dr)          
+            self.te_dr_valid.update_state(te_dr)
+        elif task=="stage1_riesz_main_mse":
+            #Now we need to get the encoding of input
+            input_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
+
+            #Next getting the reg loss
+            _,_ = self.get_riesz_regression_loss(
+                                            input_enc=input_enc,
+                                            label=label_valid,
+                                            all_topic_label=None,
+                                            tidx=None,
+                                            mode="valid",
+                                            task=task,
+            )
         else:
             raise NotImplementedError()
     
@@ -2889,6 +2954,12 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["rr_loss"]   = float(self.rr_loss.result().numpy())
             classifier_accuracy["reg_loss_valid"]  = float(self.reg_loss_valid.result().numpy())
             classifier_accuracy["rr_loss_valid"]   = float(self.rr_loss_valid.result().numpy())
+
+            classifier_accuracy["reg_loss_all"]  = float(self.reg_loss_all.result().numpy())
+            classifier_accuracy["rr_loss_all"]   = float(self.rr_loss_all.result().numpy())
+            classifier_accuracy["reg_loss_all_valid"]  = float(self.reg_loss_all_valid.result().numpy())
+            classifier_accuracy["rr_loss_all_valid"]   = float(self.rr_loss_all_valid.result().numpy())
+
             classifier_accuracy["tmle_loss"] = float(self.tmle_loss.result().numpy())
             classifier_accuracy["l2_loss"]   = float(self.regularization_loss.result().numpy())
             classifier_accuracy["te_train"]  = float(self.te_train.result().numpy())
@@ -5047,6 +5118,10 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
     elif "cebab" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
         cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+
+        #Getting the dataset 
+        if model_args["separate_cebab_de"]==True:
+            cat_dataset_full_cebab = data_handler.get_cebab_sentiment_only_dataset(nbow_mode=nbow_mode)
     else:
         raise NotImplementedError()
     
@@ -5070,10 +5145,24 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
         classifier_main.eidx = eidx
         print("==========================================")
         classifier_main.reset_all_metrics()
-        tbar = tqdm(range(len(cat_dataset)))
+
+
+        if model_args["separate_cebab_de"]==True:
+            print("Training the Stage1 with full Dataset: \t{}".format(model_args["stage_mode"]))
+            tbar = tqdm(range(len(cat_dataset_full_cebab)))
+            for bidx,data_batch in zip(tbar,cat_dataset_full_cebab):
+                tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+
+                #Training the riesz representer
+                classifier_main.train_step_mouli(
+                                                dataset_batch=data_batch,
+                                                task="stage1_riesz_main_mse",
+                                                te_tidx=data_args["debug_tidx"]
+                )
 
         #Training the full stage1
         print("Training the Stage1 with: \t{}".format(model_args["stage_mode"]))
+        tbar = tqdm(range(len(cat_dataset)))
         for bidx,data_batch in zip(tbar,cat_dataset):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
 
@@ -5085,16 +5174,28 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
             )
         
         #Now we have to measure the tretment effect of the topic in question
+        if model_args["separate_cebab_de"]==True:
+            print("Validating the full dataset")
+            for data_batch in cat_dataset_full_cebab:
+                classifier_main.valid_step_mouli( 
+                                            dataset_batch=data_batch,
+                                            task="stage1_riesz_main_mse",
+                                            te_tidx=data_args["debug_tidx"]
+                )
+
+        print("Validating the cf-dataset")
         for data_batch in cat_dataset:
             classifier_main.valid_step_mouli( 
                                             dataset_batch=data_batch,
                                             task=model_args["stage_mode"],
                                             te_tidx=data_args["debug_tidx"]
             )
-        
+                
         #Logging the results
-        log_format = "epoch:\t\t{:}\nreg_loss:\t\t{:0.3f}\n"\
-                            +"rr_loss:\t\t{:0.3f}\n"\
+        log_format = "epoch:\t\t{:}\nreg_loss_valid:\t\t{:0.3f}\n"\
+                            +"rr_loss_valid:\t\t{:0.3f}\n"\
+                            +"reg_loss_all_valid:\t\t{:0.3f}\n"\
+                            +"rr_loss_all_valid:\t\t{:0.3f}\n"\
                             +"tmle_loss:\t\t{:0.3f}\n"\
                             +"l2_loss:\t\t{:0.3f}\n"\
                             +"emb_norm:\t\t{:0.3f}\n"\
@@ -5107,8 +5208,10 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                             
         print(log_format.format(
                             eidx,
-                            classifier_main.reg_loss.result(),
-                            classifier_main.rr_loss.result(),
+                            classifier_main.reg_loss_valid.result(),
+                            classifier_main.rr_loss_valid.result(),
+                            classifier_main.reg_loss_all_valid.result(),
+                            classifier_main.rr_loss_all_valid.result(),
                             classifier_main.tmle_loss.result(),
                             classifier_main.regularization_loss.result(),
                             classifier_main.embedding_norm.result(),
@@ -5334,6 +5437,7 @@ if __name__=="__main__":
     parser.add_argument('-degree_confoundedness',dest="degree_confoundedness",type=float,default=None)
     parser.add_argument('-cebab_topic_name',dest="cebab_topic_name",type=str,default=None)
     parser.add_argument('-topic_pval',dest="topic_pval",type=float,default=None)
+    parser.add_argument('--separate_cebab_de',default=False,action="store_true")
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5551,7 +5655,7 @@ if __name__=="__main__":
 
     model_args["reg_lambda"]=args.reg_lambda
     model_args["hinge_width"]=args.hinge_width
-
+    model_args["separate_cebab_de"]=args.separate_cebab_de
 
 
     #################################################
