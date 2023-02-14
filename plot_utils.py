@@ -47,7 +47,7 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
     
     for idx in range(len(probe_metric_list)):
         #Loading the correlaion dict if available
-        if "label_corr_dict" in probe_metric_list[idx]:
+        if probe_metric_list[idx]["label_corr_dict"]!=None:
             pdict["y-tcausal"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["1"])
             pdict["y-tconfound"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["2"])
             pdict["y-tspurious"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["3"])
@@ -93,6 +93,11 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
             pdict["te_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_valid"])
             pdict["te_corr_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_corr_valid"])
             pdict["te_dr_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["te_dr_valid"])
+
+            if "rr_loss_valid" in probe_metric_list[idx]["classifier_acc_dict"]:
+                pdict["rr_loss_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["rr_loss_valid"])
+                pdict["reg_loss_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["reg_loss_valid"])
+
 
             #Adding the alpha from the riesz estimators
             if "alpha:t10-tcf0" in probe_metric_list[idx]["classifier_acc_dict"]:

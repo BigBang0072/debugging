@@ -2614,7 +2614,7 @@ class DataHandleTransformer():
         
         return replacement_dict
 
-    def controlled_cebab_dataset_handler(self,return_causal=False,return_cf=False):
+    def controlled_cebab_dataset_handler(self,return_causal=False,return_cf=False,nbow_mode=False):
         '''
         This dataset has pairs of counterfactual data along with labels on the topic
         on which they are purturbed.
@@ -2624,16 +2624,26 @@ class DataHandleTransformer():
         #Creating the dataset
         cf_merged_df = self._get_cebab_dataframe()
         self._get_cebab_data_stats(cf_merged_df)
+        self._get_true_causal_effect_cebab(cf_merged_df)
+
+        #Getting the pbalanced df
+        if self.data_args["topic_pval"]!=None:
+            cf_merged_df = self._get_pbalanced_cebab_dataframe(cf_merged_df)
+            self._get_cebab_data_stats(cf_merged_df)
+            self._get_true_causal_effect_cebab(cf_merged_df)
 
     
         #Getting the list of input and counterfactuals
         sentence_list = cf_merged_df["init_sentence"].tolist()
         cf_sentence_lol = cf_merged_df["cf_{}_sentence".format(self.data_args["cebab_topic_name"])].tolist()
         
-        #Tokenizing the input and getting ready for training
-        input_idx,attn_mask,token_type_idx,cf_input_idx,cf_attn_mask,cf_token_type_idx\
-                    = self._encode_sentences_for_te(sentence_list,cf_sentence_lol)
-
+        if nbow_mode==False:
+            #Tokenizing the input and getting ready for training
+            input_idx,attn_mask,token_type_idx,cf_input_idx,cf_attn_mask,cf_token_type_idx\
+                        = self._encode_sentences_for_te_cebab_transformer(sentence_list,cf_sentence_lol)
+        else:
+            attn_mask,cf_attn_mask=None,None
+            input_idx,cf_input_idx = self._encode_sentences_for_te_cebab_nbow(sentence_list,cf_sentence_lol)
 
         #Creating the labels for the task
         y_label = cf_merged_df["init_sentiment_label"].tolist()
@@ -2656,10 +2666,90 @@ class DataHandleTransformer():
 
         return cat_dataset
     
-    def _encode_sentences_for_te(self,sentence_list,cf_sentence_lol):
+    def _get_pbalanced_cebab_dataframe(self,cf_merged_df):
+        '''
+        '''
+        #Shuffle the dataframe first
+        cf_merged_df = cf_merged_df.sample(frac=1).reset_index(drop=True)
+        #Getting the group mask
+        grp1_mask,grp2_mask,grp3_mask,grp4_mask=self._get_cebab_group_mask(cf_merged_df)
+
+        #Now getting the number of elements in the minoroty group
+        num_minority = cf_merged_df[grp2_mask|grp4_mask].shape[0]
+        assert (1-self.data_args["topic_pval"])>0.05,"Very high correlation"
+        num_majority = int((self.data_args["topic_pval"]/(1-self.data_args["topic_pval"]))*num_minority)
+
+        #Now getting the slice for each group
+        majority_df = cf_merged_df[grp1_mask|grp3_mask][0:num_majority]
+        minority_df = cf_merged_df[grp2_mask|grp4_mask][0:num_minority]
+
+        #Merging the df
+        pbalanced_df = pd.concat([majority_df,minority_df]).sample(frac=1).reset_index(drop=True)
+
+        # pdb.set_trace()
+
+        return pbalanced_df       
+    
+    def _get_true_causal_effect_cebab(self,cf_merged_df):
+        '''
+        Since we have the true counterfactual along with the changed sentiment label for each sentence
+        we can calculate the true causal effect of the topic. The possible problem is after changing the topic
+        there might not be a majority vote on the sentiment. Maybe just discard them!
+        '''
+        ate_list = []
+        for eidx in range(cf_merged_df.shape[0]):
+            #Getting the main sentence things
+            main_sentiment_label = cf_merged_df.iloc[eidx]["init_sentiment_label"]
+            main_topic_label     = cf_merged_df.iloc[eidx]["init_{}_label".format(self.data_args["cebab_topic_name"])]
+
+            #Now we will go through each of the counteractual sentence and get the ITE
+            num_cf = len(cf_merged_df.iloc[eidx]["cf_{}_label".format(self.data_args["cebab_topic_name"])])
+            for cidx in range(num_cf):
+                cf_sentiment_label = cf_merged_df.iloc[eidx]["cf_{}_sentiment_label".format(self.data_args["cebab_topic_name"])][cidx]
+                cf_topic_label     = cf_merged_df.iloc[eidx]["cf_{}_label".format(self.data_args["cebab_topic_name"])][cidx]
+
+                #Skip if the topic is not changed
+                if main_topic_label==cf_topic_label:
+                    continue 
+                elif main_topic_label==1:
+                    ite = main_sentiment_label-cf_sentiment_label
+                else:
+                    ite = cf_sentiment_label - main_sentiment_label
+                
+                #Adding the ite to ate_list for averaging later
+                ate_list.append(ite)
+        
+        print("ATE for {}: ".format(self.data_args["cebab_topic_name"]),np.mean(ate_list))
+    
+    def _encode_sentences_for_te_cebab_nbow(self,sentence_list,cf_sentence_lol):
+        '''
+        This will convert the cebab to word token to be processed using nbow based encoder 
+        instead of the BERT based encoder.
+        '''
+        print("Loading the embedding!")
+        #Loading the gensim embedidng model
+        self._load_full_gensim_word_embedding()
+
+        #Converting the input sentence into the word index
+        input_index_arr = self._convert_text_to_widx(sentence_list)
+
+        #Next converting the counterfactual examples to the word index
+        cf_index_lol = []
+        for cf_example_list in cf_sentence_lol:
+            cf_index_lol.append(
+                self._convert_text_to_widx(
+                    cf_example_list[0:self.data_args["cfactuals_bsize"]]
+                )
+            )
+        #Merging the index into one array -- (batch,num_cf,seq_length)
+        cf_index_arr = np.stack(cf_index_lol,axis=0)
+        
+        return input_index_arr,cf_index_arr
+    
+    def _encode_sentences_for_te_cebab_transformer(self,sentence_list,cf_sentence_lol):
         '''
         This function will encode the sentence and their counterfactual for the
-        treatment effect estimation for the BERT or ROBERTA based encoders
+        treatment effect estimation for the BERT or RoBERTa based encoders
         '''
         #Now we will encode the input sentences
         encoded_doc = self.tokenizer(
@@ -2709,7 +2799,7 @@ class DataHandleTransformer():
         
 
         return input_idx,attn_mask,token_type_idx,cf_input_idx,cf_attn_mask,cf_token_type_idx
-
+    
     def _get_cebab_data_stats(self,cf_merged_df):
         '''
         This fucntion will give us the proportion of the samples in each subgroup
@@ -2717,16 +2807,21 @@ class DataHandleTransformer():
         '''
         #Printing the aggreagate metrics of this dataset
         print("positive sentiment ratio: ",cf_merged_df["init_sentiment_label"].mean())
+        grp1_mask,grp2_mask,grp3_mask,grp4_mask = self._get_cebab_group_mask(cf_merged_df)
+
+        print("Estimated p-value in the current dataset: ",
+                    cf_merged_df[grp1_mask|grp3_mask].shape[0]/cf_merged_df.shape[0])
+        
+        return 
+    
+    def _get_cebab_group_mask(self,cf_merged_df):
         #Getting the correlation statistics between the sentiment and the topic label
         grp1_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==1)
         grp2_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==1)
         grp3_mask = (cf_merged_df["init_sentiment_label"]==0) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==0)
         grp4_mask = (cf_merged_df["init_sentiment_label"]==1) & (cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])]==0)
 
-        print("Estimated p-value in the current dataset: ",
-                    cf_merged_df[grp1_mask|grp3_mask].shape[0]/cf_merged_df.shape[0])
-        
-        return 
+        return grp1_mask,grp2_mask,grp3_mask,grp4_mask
 
     def _get_cebab_dataframe(self,):
         '''
@@ -2807,6 +2902,16 @@ class DataHandleTransformer():
                     cf_example_dict["init_{}_label".format(self.data_args["cebab_topic_name"])]\
                                     =convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(self.data_args["cebab_topic_name"])])
                 else:
+                    #TODO: Decide what to do if we have no majority for these examples 
+                    # (could skip if we need the label later)
+                    if edf.iloc[cidx]["sentiment"]=="no majority" or edf.iloc[cidx]["sentiment"]=="3":
+                        continue
+                    elif int(edf.iloc[cidx]["sentiment"])>3:
+                        cf_example_dict["cf_{}_sentiment_label".format(cf_topic)].append(1) 
+                    elif int(edf.iloc[cidx]["sentiment"])<3:
+                        cf_example_dict["cf_{}_sentiment_label".format(cf_topic)].append(0)
+                    
+
                     #We will only add this counterfactual if this topic was actually changed from initial
                     cf_topic_label = convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(cf_topic)])
                     if cf_topic_label==cf_example_dict["init_{}_label".format(self.data_args["cebab_topic_name"])]:
@@ -2814,9 +2919,6 @@ class DataHandleTransformer():
                     cf_example_dict["cf_{}_sentence".format(cf_topic)].append(edf.iloc[cidx]["sentence"])
                     cf_example_dict["cf_{}_label".format(cf_topic)].append(cf_topic_label)
 
-                    #TODO: Decide what to do if we have no majority for these examples 
-                    # (could skip if we need the label later)
-                    cf_example_dict["cf_{}_sentiment_label".format(cf_topic)].append(edf.iloc[cidx]["sentiment"])
 
 
             #Adding the example dict to list

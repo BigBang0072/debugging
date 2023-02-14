@@ -975,7 +975,8 @@ class SimpleNBOW(keras.Model):
         self.probe_metric_list=[]
 
         #Now initilaizing some of the layers for encoder
-        if self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3":
+        if self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3" or (
+                self.data_args["dtype"]=="cebab" and self.model_args["bert_as_encoder"]==False):
             self.pre_encoder_layer = self.get_nbow_avg_layer()
         elif self.data_args["dtype"]=="toytabular2":
             self.pre_encoder_layer = self.get_dummy_linear_layer()
@@ -1009,6 +1010,8 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = self.emb_dim
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
+            elif self.data_args["dtype"]=="cebab":
+                self.hlayer_dim = 50
         
         for _ in range(self.model_args["num_hidden_layer"]):
             #Getting the dense hidden layer
@@ -1137,6 +1140,7 @@ class SimpleNBOW(keras.Model):
             )
             #Adding the loss term for RR
             self.rr_loss = keras.metrics.Mean(name="rr_loss")
+            self.rr_loss_valid = keras.metrics.Mean(name="rr_loss_valid")
 
 
 
@@ -1158,6 +1162,7 @@ class SimpleNBOW(keras.Model):
             )
             #Getting the regression loss metric
             self.reg_loss = keras.metrics.Mean(name="reg_loss")
+            self.reg_loss_valid = keras.metrics.Mean(name="reg_loss_valid")
 
 
             #Initializing the tmle specific params
@@ -1323,8 +1328,9 @@ class SimpleNBOW(keras.Model):
                     #Adding all the nonunk vectors
                     # X_emb_weighted = X_emb_norm * tf.sigmoid(X_weight) * non_unk_mask
                     X_emb_weighted = X_emb_norm * non_unk_mask
-                    #Now we need to take average of the embedding (zero vec non-train)
-                    X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),num_words)
+                    #Now we need to take average of the embedding (zero vec non-train), 
+                    # added +1 for numerical consistency when all the sentence are unk
+                    X_bow=tf.divide(tf.reduce_sum(X_emb_weighted,axis=1,name="word_sum"),(num_words+1))
                     #Even average will produce the effect of length variation because there are multiple words
                     #but correct this sum to average in the Probing paper in arxiv
                 return X_bow
@@ -1444,6 +1450,8 @@ class SimpleNBOW(keras.Model):
             Xproj = self.pre_encoder_layer(X_input,attn_mask)
         else:
             Xproj = X_input
+        
+        # pdb.set_trace()
         
         #Passing through the hidden layer
         for hlayer,dlayer in zip(self.hidden_layer_list,self.dropout_layer_list):
@@ -2100,6 +2108,7 @@ class SimpleNBOW(keras.Model):
             with tf.GradientTape() as tape:
                 #Getting the encoding of the Z to the latent representation
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                # pdb.set_trace()
                 #Tracking the embedding norm (this will increase as per nagarajan paper)
                 emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
                 self.embedding_norm.update_state(emb_norm)
@@ -2107,10 +2116,11 @@ class SimpleNBOW(keras.Model):
                 #Next getting the RR loss 
                 rr_loss,input_alpha = self.get_riesz_RR_loss(
                                             input_enc=input_enc,
-                                            idx_topic_cf_train=idx_topic_cf_train,
-                                            all_topic_label_train=all_topic_label_train,
-                                            attn_mask_topic_cf_train=attn_mask_topic_cf_train,
+                                            idx_topic_cf=idx_topic_cf_train,
+                                            all_topic_label=all_topic_label_train,
+                                            attn_mask_topic_cf=attn_mask_topic_cf_train,
                                             tidx=te_tidx,
+                                            mode="train",
                 )
                 #Currently we can only track things when we are in the toy story 3
                 if "nlp_toy3" in data_args["path"]:
@@ -2126,8 +2136,9 @@ class SimpleNBOW(keras.Model):
                 reg_loss,gval = self.get_riesz_regression_loss(
                                             input_enc=input_enc,
                                             label=label_train,
-                                            all_topic_label_train=all_topic_label_train,
+                                            all_topic_label=all_topic_label_train,
                                             tidx=te_tidx,
+                                            mode="train",
                 )
 
                 #Finally getting the tmle loss
@@ -2142,11 +2153,13 @@ class SimpleNBOW(keras.Model):
                                       + self.model_args["rr_lambda"]*rr_loss \
                                       + self.model_args["tmle_lambda"]*tmle_loss\
                                       + self.model_args["l2_lambd"]*regularization_loss
+  
             #Running the optimizer
             grads = tape.gradient(total_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
                     zip(grads,self.trainable_weights)
             )
+            # pdb.set_trace()
 
             #Getting the TE for the training data
             #Getting the treatment effect
@@ -2367,26 +2380,27 @@ class SimpleNBOW(keras.Model):
 
         return toy3_mask_dict
 
-    def get_riesz_RR_loss(self,input_enc,idx_topic_cf_train,all_topic_label_train,attn_mask_topic_cf_train,tidx):
+    def get_riesz_RR_loss(self,input_enc,idx_topic_cf,all_topic_label,attn_mask_topic_cf,tidx,mode):
         '''
         '''
         #Getting the counterfactual data
-        topic_cf_idx_train = idx_topic_cf_train
-        topic_label_train = tf.cast(tf.expand_dims(all_topic_label_train[:,tidx],axis=-1),tf.float32)
+        topic_cf_idx = idx_topic_cf
+        topic_label = tf.cast(tf.expand_dims(all_topic_label[:,tidx],axis=-1),tf.float32)
         
 
         #Sampling a random example from the whole cf set
-        sample_idxs = tf.range(tf.shape(topic_cf_idx_train)[1])
+        sample_idxs = tf.range(tf.shape(topic_cf_idx)[1])
         cf_sample_idxs = tf.random.shuffle(sample_idxs)[0]
-        topic_cf_idx_train = topic_cf_idx_train[:,cf_sample_idxs,:] 
+        topic_cf_idx = topic_cf_idx[:,cf_sample_idxs,:] 
         
         #Next we are ready to generate the encoding of the counterfactual
-        topic_cf_enc = self._encoder(topic_cf_idx_train,attn_mask=attn_mask_topic_cf_train,training=True)
+        training = True if mode=="train" else False
+        topic_cf_enc = self._encoder(topic_cf_idx,attn_mask=attn_mask_topic_cf,training=training)
 
         #Adding the treatment lable explicitely to the encoded vector
         if self.model_args["add_treatment_on_front"]:
-            input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
-            topic_cf_Z = tf.concat([(1-topic_label_train),topic_cf_enc],axis=-1)
+            input_Z = tf.concat([topic_label,input_enc],axis=-1)
+            topic_cf_Z = tf.concat([(1-topic_label),topic_cf_enc],axis=-1)
         else:
             input_Z = input_enc
             topic_cf_Z = topic_cf_enc
@@ -2397,28 +2411,33 @@ class SimpleNBOW(keras.Model):
 
         #Now getting the riesz loss
         RR_loss = tf.square(input_alpha) - 2*(
-                                                    topic_label_train*(input_alpha-topic_cf_alpha)
-                                                + (1-topic_label_train)*(topic_cf_alpha-input_alpha) 
+                                                    topic_label*(input_alpha-topic_cf_alpha)
+                                                + (1-topic_label)*(topic_cf_alpha-input_alpha) 
                                             )
         RR_loss = tf.reduce_mean(RR_loss)
         #Logging the loss
-        self.rr_loss.update_state(RR_loss)
+        if mode=="train":
+            self.rr_loss.update_state(RR_loss)
+        elif mode=="valid":
+            self.rr_loss_valid.update_state(RR_loss)
+        else:
+            raise NotImplementedError()
 
         # pdb.set_trace()
 
         return RR_loss,input_alpha
     
-    def get_riesz_regression_loss(self,input_enc,label,all_topic_label_train,tidx):
+    def get_riesz_regression_loss(self,input_enc,label,all_topic_label,tidx,mode):
         '''
         '''
         #This is the main label not the topic label
         label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
         
         #Adding the treatment lable explicitely to the encoded vector
-        topic_label_train = tf.cast(tf.expand_dims(all_topic_label_train[:,tidx],axis=-1),tf.float32)
+        topic_label = tf.cast(tf.expand_dims(all_topic_label[:,tidx],axis=-1),tf.float32)
 
         if self.model_args["add_treatment_on_front"]:
-            input_Z = tf.concat([topic_label_train,input_enc],axis=-1)
+            input_Z = tf.concat([topic_label,input_enc],axis=-1)
         else:
             input_Z = input_enc
 
@@ -2432,7 +2451,12 @@ class SimpleNBOW(keras.Model):
 
 
         #Logging the loss
-        self.reg_loss.update_state(reg_loss)
+        if mode=="train":
+            self.reg_loss.update_state(reg_loss)
+        elif mode=="valid":
+            self.reg_loss_valid.update_state(reg_loss)
+        else:
+            raise NotImplementedError()
 
         return reg_loss,gval
     
@@ -2680,6 +2704,25 @@ class SimpleNBOW(keras.Model):
             #Now we need to get the encoding of input
             input_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
             
+            #Getting the riesz and regression loss in the validation set
+            #Next getting the RR loss 
+            _,input_alpha = self.get_riesz_RR_loss(
+                                        input_enc=input_enc,
+                                        idx_topic_cf=idx_topic_cf_valid,
+                                        all_topic_label=all_topic_label_valid,
+                                        attn_mask_topic_cf=attn_mask_topic_cf_valid,
+                                        tidx=te_tidx,
+                                        mode="valid",
+            )
+            #Next getting the reg loss
+            _,_ = self.get_riesz_regression_loss(
+                                            input_enc=input_enc,
+                                            label=label_valid,
+                                            all_topic_label=all_topic_label_valid,
+                                            tidx=te_tidx,
+                                            mode="valid",
+            )
+
             #Getting the treatment effect
             te,te_corrected,te_dr = self.get_riesz_treatment_effect(
                                                 input_enc=input_enc,
@@ -2755,7 +2798,8 @@ class SimpleNBOW(keras.Model):
             +  (1-topic_label)*( (topic_cf_gval-input_gval) + input_alpha*(label - input_gval) )
         )
 
-        # if self.eidx==199:
+        # if self.eidx==9:
+        #     pdb.set_trace()
             # mask_dict = self._get_subgroup_mask_toy3_riesz(
             #                                     all_topic_label=all_topic_label,
             #                                     tcf_label=tcf_label, 
@@ -2843,6 +2887,8 @@ class SimpleNBOW(keras.Model):
         if "riesz" in self.model_args["stage_mode"]:
             classifier_accuracy["reg_loss"]  = float(self.reg_loss.result().numpy())
             classifier_accuracy["rr_loss"]   = float(self.rr_loss.result().numpy())
+            classifier_accuracy["reg_loss_valid"]  = float(self.reg_loss_valid.result().numpy())
+            classifier_accuracy["rr_loss_valid"]   = float(self.rr_loss_valid.result().numpy())
             classifier_accuracy["tmle_loss"] = float(self.tmle_loss.result().numpy())
             classifier_accuracy["l2_loss"]   = float(self.regularization_loss.result().numpy())
             classifier_accuracy["te_train"]  = float(self.te_train.result().numpy())
@@ -4999,7 +5045,8 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
         print("Creating the TOY-STORY3")
         cat_dataset,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
     elif "cebab" in data_args["path"]:
-        cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True)
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
     else:
         raise NotImplementedError()
     
@@ -5286,6 +5333,7 @@ if __name__=="__main__":
     parser.add_argument('--return_label_dataset',default=False,action="store_true")
     parser.add_argument('-degree_confoundedness',dest="degree_confoundedness",type=float,default=None)
     parser.add_argument('-cebab_topic_name',dest="cebab_topic_name",type=str,default=None)
+    parser.add_argument('-topic_pval',dest="topic_pval",type=float,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5408,6 +5456,7 @@ if __name__=="__main__":
     data_args["return_label_dataset"]=args.return_label_dataset
     data_args["degree_confoundedness"]=args.degree_confoundedness
     data_args["cebab_topic_name"]=args.cebab_topic_name
+    data_args["topic_pval"]=args.topic_pval
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])
