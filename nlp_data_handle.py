@@ -2984,10 +2984,17 @@ class DataHandleTransformer():
         positive_df = all_example_df[all_example_df["sentiment"]==1]
         negative_df = all_example_df[all_example_df["sentiment"]==0]
         num_keep = min(positive_df.shape[0],negative_df.shape[0])
-        
+
+        #Lets add a cap on the overall dataset size also
+        print("Full CeBaB dataset size: ",all_example_df.shape[0])
+        print("Num Positive: ",positive_df.shape[0])
+        print("Num Negative: ",negative_df.shape[0])
+        all_dataset_size = self.data_args["num_sample_cebab_all"]
+
         #Now we will create the index for these examples
-        positive_df_slice = positive_df[0:num_keep]
-        negative_df_slice = negative_df[0:num_keep]
+        positive_df_slice = positive_df[0:num_keep][0:all_dataset_size//2]
+        negative_df_slice = negative_df[0:num_keep][0:all_dataset_size//2]
+
         #Merging the dataframe
         balanced_all_example_df = pd.concat(
                         [positive_df_slice,negative_df_slice]

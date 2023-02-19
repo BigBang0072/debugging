@@ -1167,6 +1167,8 @@ class SimpleNBOW(keras.Model):
             self.reg_loss_valid = keras.metrics.Mean(name="reg_loss_valid")
             self.reg_loss_all = keras.metrics.Mean(name="reg_loss_all")
             self.reg_loss_all_valid = keras.metrics.Mean(name="reg_loss_all_valid")
+            self.reg_acc_all = keras.metrics.Mean(name="reg_acc_all")
+            self.reg_acc_all_valid = keras.metrics.Mean(name="reg_acc_all_valid")
 
 
             #Initializing the tmle specific params
@@ -1244,8 +1246,10 @@ class SimpleNBOW(keras.Model):
 
             self.rr_loss_all.reset_states()
             self.reg_loss_all.reset_states()
+            self.reg_acc_all.reset_states()
             self.rr_loss_all_valid.reset_states()
             self.reg_loss_all_valid.reset_states()
+            self.reg_acc_all_valid.reset_states()
 
             self.tmle_loss.reset_states()
             self.te_valid.reset_states()
@@ -2488,13 +2492,22 @@ class SimpleNBOW(keras.Model):
 
         #TODO: Creating the softmax loss instead of regression loss
 
+        #Getting the accracy of prediction
+        accuracy = tf.reduce_mean(
+            tf.cast(
+                tf.cast(tf.math.round(gval),tf.int32) == tf.cast(label,tf.int32),
+                tf.float32
+            )
+        )
 
         #Logging the loss
         if task=="stage1_riesz_main_mse":
             if mode=="train":
                 self.reg_loss_all.update_state(reg_loss)
+                self.reg_acc_all.update_state(accuracy)
             elif mode=="valid":
                 self.reg_loss_all_valid.update_state(reg_loss)
+                self.reg_acc_all_valid.update_state(accuracy)
             else:
                 raise NotImplementedError()
         elif task=="stage1_riesz":
@@ -2956,8 +2969,10 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["rr_loss_valid"]   = float(self.rr_loss_valid.result().numpy())
 
             classifier_accuracy["reg_loss_all"]  = float(self.reg_loss_all.result().numpy())
+            classifier_accuracy["reg_acc_all"]  = float(self.reg_acc_all.result().numpy())
             classifier_accuracy["rr_loss_all"]   = float(self.rr_loss_all.result().numpy())
             classifier_accuracy["reg_loss_all_valid"]  = float(self.reg_loss_all_valid.result().numpy())
+            classifier_accuracy["reg_acc_all_valid"]  = float(self.reg_acc_all_valid.result().numpy())
             classifier_accuracy["rr_loss_all_valid"]   = float(self.rr_loss_all_valid.result().numpy())
 
             classifier_accuracy["tmle_loss"] = float(self.tmle_loss.result().numpy())
@@ -5161,17 +5176,26 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                 )
 
         #Training the full stage1
-        print("Training the Stage1 with: \t{}".format(model_args["stage_mode"]))
-        tbar = tqdm(range(len(cat_dataset)))
-        for bidx,data_batch in zip(tbar,cat_dataset):
-            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+        if model_args["only_de"]==False:
+            print("Training the Stage1 with: \t{}".format(model_args["stage_mode"]))
+            tbar = tqdm(range(len(cat_dataset)))
+            for bidx,data_batch in zip(tbar,cat_dataset):
+                tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
 
-            #Training the riesz representer
-            classifier_main.train_step_mouli(
-                                            dataset_batch=data_batch,
-                                            task=model_args["stage_mode"],
-                                            te_tidx=data_args["debug_tidx"]
-            )
+                #Training the riesz representer
+                classifier_main.train_step_mouli(
+                                                dataset_batch=data_batch,
+                                                task=model_args["stage_mode"],
+                                                te_tidx=data_args["debug_tidx"]
+                )
+            
+            print("Validating the cf-dataset")
+            for data_batch in cat_dataset:
+                classifier_main.valid_step_mouli( 
+                                                dataset_batch=data_batch,
+                                                task=model_args["stage_mode"],
+                                                te_tidx=data_args["debug_tidx"]
+                )
         
         #Now we have to measure the tretment effect of the topic in question
         if model_args["separate_cebab_de"]==True:
@@ -5182,19 +5206,12 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                                             task="stage1_riesz_main_mse",
                                             te_tidx=data_args["debug_tidx"]
                 )
-
-        print("Validating the cf-dataset")
-        for data_batch in cat_dataset:
-            classifier_main.valid_step_mouli( 
-                                            dataset_batch=data_batch,
-                                            task=model_args["stage_mode"],
-                                            te_tidx=data_args["debug_tidx"]
-            )
                 
         #Logging the results
         log_format = "epoch:\t\t{:}\nreg_loss_valid:\t\t{:0.3f}\n"\
                             +"rr_loss_valid:\t\t{:0.3f}\n"\
                             +"reg_loss_all_valid:\t\t{:0.3f}\n"\
+                            +"reg_acc_all_valid:\t\t{:0.3f}\n"\
                             +"rr_loss_all_valid:\t\t{:0.3f}\n"\
                             +"tmle_loss:\t\t{:0.3f}\n"\
                             +"l2_loss:\t\t{:0.3f}\n"\
@@ -5211,6 +5228,7 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                             classifier_main.reg_loss_valid.result(),
                             classifier_main.rr_loss_valid.result(),
                             classifier_main.reg_loss_all_valid.result(),
+                            classifier_main.reg_acc_all_valid.result(),
                             classifier_main.rr_loss_all_valid.result(),
                             classifier_main.tmle_loss.result(),
                             classifier_main.regularization_loss.result(),
@@ -5372,7 +5390,7 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('-expt_num',dest="expt_name",type=str)
     parser.add_argument('-run_num',dest="run_num",type=int)
-    parser.add_argument('-num_samples',dest="num_samples",type=int,default=None)
+    parser.add_argument('-num_sample',dest="num_sample",type=int,default=None)
     parser.add_argument('-num_topics',dest="num_topics",type=int)
     parser.add_argument('-num_topic_samples',dest="num_topic_samples",type=int,default=None)
     parser.add_argument('-l1_lambda',dest="l1_lambda",type=float,default=0.0)
@@ -5438,6 +5456,8 @@ if __name__=="__main__":
     parser.add_argument('-cebab_topic_name',dest="cebab_topic_name",type=str,default=None)
     parser.add_argument('-topic_pval',dest="topic_pval",type=float,default=None)
     parser.add_argument('--separate_cebab_de',default=False,action="store_true")
+    parser.add_argument('--only_de',default=False,action="store_true")
+    parser.add_argument('-num_sample_cebab_all',dest="num_sample_cebab_all",type=int,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5504,7 +5524,7 @@ if __name__=="__main__":
     data_args["transformer_name"]=args.transformer
     data_args["num_class"]=2
     data_args["max_len"]=args.max_len
-    data_args["num_sample"]=args.num_samples
+    data_args["num_sample"]=args.num_sample
     data_args["num_topic_samples"]=args.num_topic_samples
     
     if args.batch_size!=None:
@@ -5561,6 +5581,7 @@ if __name__=="__main__":
     data_args["degree_confoundedness"]=args.degree_confoundedness
     data_args["cebab_topic_name"]=args.cebab_topic_name
     data_args["topic_pval"]=args.topic_pval
+    data_args["num_sample_cebab_all"]=args.num_sample_cebab_all
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])
@@ -5656,6 +5677,7 @@ if __name__=="__main__":
     model_args["reg_lambda"]=args.reg_lambda
     model_args["hinge_width"]=args.hinge_width
     model_args["separate_cebab_de"]=args.separate_cebab_de
+    model_args["only_de"]=args.only_de
 
 
     #################################################
