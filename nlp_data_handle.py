@@ -2652,9 +2652,13 @@ class DataHandleTransformer():
         #Creating the dataset dict
         data_dict=dict(
                         label=y_label,
+                        label_denoise=y_label,
                         input_idx=input_idx,
                         attn_mask=attn_mask,
                         topic_label=np.expand_dims(topic_label,axis=-1),
+                        topic_label_denoise=np.expand_dims(topic_label,axis=-1),
+                        input_idx_t0_flip=cf_input_idx[:,0,:],
+                        attn_mask_t0_flip=cf_attn_mask[:,0,:],
         )
         if return_cf==True:
             data_dict["input_idx_t0_cf"]=cf_input_idx

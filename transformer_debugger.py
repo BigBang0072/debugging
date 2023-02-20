@@ -1165,6 +1165,9 @@ class SimpleNBOW(keras.Model):
             #Getting the regression loss metric
             self.reg_loss = keras.metrics.Mean(name="reg_loss")
             self.reg_loss_valid = keras.metrics.Mean(name="reg_loss_valid")
+            self.reg_acc = keras.metrics.Mean(name="reg_acc")
+            self.reg_acc_valid = keras.metrics.Mean(name="reg_acc_valid")
+
             self.reg_loss_all = keras.metrics.Mean(name="reg_loss_all")
             self.reg_loss_all_valid = keras.metrics.Mean(name="reg_loss_all_valid")
             self.reg_acc_all = keras.metrics.Mean(name="reg_acc_all")
@@ -1241,8 +1244,10 @@ class SimpleNBOW(keras.Model):
         if "riesz" in self.model_args["stage_mode"]:
             self.rr_loss.reset_states()
             self.reg_loss.reset_states()
+            self.reg_acc.reset_states()
             self.rr_loss_valid.reset_states()
             self.reg_loss_valid.reset_states()
+            self.reg_acc_valid.reset_states()
 
             self.rr_loss_all.reset_states()
             self.reg_loss_all.reset_states()
@@ -1823,7 +1828,7 @@ class SimpleNBOW(keras.Model):
         #Resetting all the metrics
         # self.reset_all_metrics() this leads to empty metrci at end. Why?
 
-        #Getting the dataset splits for train and valid       
+        #Getting the dataset splits for train and valid    
         label = dataset_batch["label_denoise"]
         idx = dataset_batch["input_idx"]
         topic_label = dataset_batch["topic_label_denoise"]
@@ -2092,24 +2097,16 @@ class SimpleNBOW(keras.Model):
         all_topic_label = dataset_batch["topic_label"]
         #Getting the idx for both the input and index
         idx = dataset_batch["input_idx"]
-        idx_topic_cf = dataset_batch["input_idx_t{}_cf".format(te_tidx)]
-
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
 
         label_train = label[0:valid_idx]
-        idx_train = idx[0:valid_idx]
-        if task!="stage1_riesz_main_mse":
-            all_topic_label_train = all_topic_label[0:valid_idx]
-            idx_topic_cf_train = idx_topic_cf[0:valid_idx]
+        idx_train = idx[0:valid_idx]  
         #Initializing the attention mask
         attn_mask_train = None
-        attn_mask_topic_cf_train = None
         if self.model_args["bert_as_encoder"]==True:
             attn_mask_train = dataset_batch["attn_mask"][0:valid_idx]
-            if task!="stage1_riesz_main_mse":
-                attn_mask_topic_cf_train = dataset_batch["attn_mask"][0:valid_idx]
         
         #Getting the tcf labels for the toy story 3
         if "nlp_toy3" in data_args["path"]:
@@ -2123,6 +2120,15 @@ class SimpleNBOW(keras.Model):
 
         #Now we are ready to train our model
         if task=="stage1_riesz":
+            #Getting the task specific dataset ready
+            #Getting the counterfactual data for the topic chosen
+            idx_topic_cf = dataset_batch["input_idx_t{}_cf".format(te_tidx)]
+            all_topic_label_train = all_topic_label[0:valid_idx]
+            idx_topic_cf_train = idx_topic_cf[0:valid_idx]
+            attn_mask_topic_cf_train = None
+            if self.model_args["bert_as_encoder"]==True:
+                attn_mask_topic_cf_train = dataset_batch["attn_mask_t{}_cf".format(te_tidx)][0:valid_idx]
+
             with tf.GradientTape() as tape:
                 #Getting the encoding of the Z to the latent representation
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
@@ -2258,21 +2264,22 @@ class SimpleNBOW(keras.Model):
                     for cf_tidx in tf.range(self.data_args["num_topics"]):
                         cf_tidx = int(cf_tidx.numpy())
                         #Getting the topic cf
-                        idx_tidx_cf_train=None
-                        if(cf_tidx)==0:
-                            idx_tidx_cf_train=idx_t0_cf_train
-                        else:
-                            idx_tidx_cf_train=idx_t1_cf_train
+                        idx_tidx_cf_train=dataset_batch["input_idx_t{}_cf".format(cf_tidx)][0:valid_idx]
+                        attn_mask_topic_cf_train = None
+                        if self.model_args["bert_as_encoder"]==True:
+                            attn_mask_topic_cf_train = dataset_batch["attn_mask_t{}_cf".format(cf_tidx)][0:valid_idx]
+
                         #Getting the loss
                         topic_te_loss = self.get_topic_cf_pred_loss_strict(
                                                     input_enc=input_enc,
                                                     idx_tidx_cf_train=idx_tidx_cf_train,
-                                                    attn_mask_train=attn_mask_train,
+                                                    attn_mask_topic_cf_train=attn_mask_topic_cf_train,
                                                     cf_tidx=cf_tidx,
                         )
                         #Adding the topic pred loss to overall loss
                         total_loss+=self.model_args["te_lambda"]*topic_te_loss
                 elif "weak" in task:
+                    raise NotImplementedError()# To generalize to the cebab and other dataset
                     idx_topic_cf_train_dict={}
                     idx_topic_cf_train_dict["idx_t0_cf_train"]=idx_t0_cf_train
                     idx_topic_cf_train_dict["idx_t1_cf_train"]=idx_t1_cf_train
@@ -2431,7 +2438,9 @@ class SimpleNBOW(keras.Model):
         #Sampling a random example from the whole cf set
         sample_idxs = tf.range(tf.shape(topic_cf_idx)[1])
         cf_sample_idxs = tf.random.shuffle(sample_idxs)[0]
-        topic_cf_idx = topic_cf_idx[:,cf_sample_idxs,:] 
+        topic_cf_idx = topic_cf_idx[:,cf_sample_idxs,:]
+        if self.model_args["bert_as_encoder"]==True:
+            attn_mask_topic_cf = attn_mask_topic_cf[:,cf_sample_idxs,:]
         
         #Next we are ready to generate the encoding of the counterfactual
         training = True if mode=="train" else False
@@ -2513,8 +2522,10 @@ class SimpleNBOW(keras.Model):
         elif task=="stage1_riesz":
             if mode=="train":
                 self.reg_loss.update_state(reg_loss)
+                self.reg_acc.update_state(accuracy)
             elif mode=="valid":
                 self.reg_loss_valid.update_state(reg_loss)
+                self.reg_acc_valid.update_state(accuracy)
             else:
                 raise NotImplementedError()
         else:
@@ -2627,13 +2638,13 @@ class SimpleNBOW(keras.Model):
 
         return total_topic_loss
     
-    def get_topic_cf_pred_loss_strict(self,input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx):
+    def get_topic_cf_pred_loss_strict(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,cf_tidx):
         '''
         This function will enforce that the prediction of counterfactual x is 
         in agreement with the TE.
         '''
         #Getting the cf pred delta for this topic
-        sample_te = self.get_topic_cf_pred_delta(input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx)
+        sample_te = self.get_topic_cf_pred_delta(input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,cf_tidx)
 
         #Getting the TE error
         te_error = tf.reduce_mean((sample_te - self.model_args["t{}_ate".format(cf_tidx)])**2)
@@ -2693,7 +2704,7 @@ class SimpleNBOW(keras.Model):
 
         return total_te_hinge_loss
     
-    def get_topic_cf_pred_delta(self,input_enc,idx_tidx_cf_train,attn_mask_train,cf_tidx):
+    def get_topic_cf_pred_delta(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,cf_tidx):
         '''
         This function will enforce that the prediction of counterfactual x is 
         in agreement with the TE.
@@ -2706,14 +2717,20 @@ class SimpleNBOW(keras.Model):
         # tidx_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
         #Sampling the samples
         tidx_cf_idx_train = tf.gather(idx_tidx_cf_train,tidx_sample_idxs,axis=1)
+        tidx_cf_attn_mask_cf_train = tf.gather(attn_mask_topic_cf_train,tidx_sample_idxs,axis=1)
 
         #Expanding the encoded input and getting the 
         input_prob = self.get_main_task_pred_prob(input_enc)
         extd_input_prob = tf.expand_dims(input_prob,axis=1)
 
         #Next encoding the counterfactual sample for this indexes
-        flat_tidx_cf_idx = tf.reshape(tidx_cf_idx_train,[-1,self.data_args["max_len"]])
-        flat_tidx_cf_enc = self._encoder(flat_tidx_cf_idx,attn_mask=attn_mask_train,training=True)
+        flat_shape = [-1,self.data_args["max_len"]]
+        flat_tidx_cf_idx = tf.reshape(tidx_cf_idx_train,flat_shape)
+        flat_tidx_attn_mask_cf_train = tf.reshape(tidx_cf_attn_mask_cf_train,flat_shape)
+        #Passing though the encoder
+        flat_tidx_cf_enc = self._encoder(flat_tidx_cf_idx,
+                                        attn_mask=flat_tidx_attn_mask_cf_train,
+                                        training=True)
         flat_tidx_cf_prob = self.get_main_task_pred_prob(flat_tidx_cf_enc)
         tidx_cf_prob = tf.reshape(flat_tidx_cf_prob,
                                     [-1,self.model_args["num_pos_sample"],2]
@@ -2732,24 +2749,17 @@ class SimpleNBOW(keras.Model):
         label = dataset_batch["label"]
         all_topic_label = dataset_batch["topic_label"]
         idx = dataset_batch["input_idx"]
-        idx_topic_cf = dataset_batch["input_idx_t{}_cf".format(te_tidx)]
 
         #Taking aside a chunk of data for validation
         valid_idx = int( (1-self.model_args["valid_split"]) * self.data_args["batch_size"] )
         #Getting the validation data
         label_valid = label[valid_idx:]
         idx_valid = idx[valid_idx:]
-        if task!="stage1_riesz_main_mse":
-            all_topic_label_valid = all_topic_label[valid_idx:]
-            idx_topic_cf_valid = idx_topic_cf[valid_idx:]
-
+        
         #Attention mask for BERT based encoder
-        attn_mask_valid=None 
-        attn_mask_topic_cf_valid=None
+        attn_mask_valid=None
         if self.model_args["bert_as_encoder"]==True:
             attn_mask_valid = dataset_batch["attn_mask"][valid_idx:]
-            if task!="stage1_riesz_main_mse":
-                attn_mask_topic_cf_valid = dataset_batch["attn_mask"][valid_idx:]
 
         #Getting the tcf label for debugging in toystory3
         if "nlp_toy3" in data_args["path"]:
@@ -2765,6 +2775,15 @@ class SimpleNBOW(keras.Model):
         # self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
 
         if task=="stage1_riesz":
+            #Getting the task specific inputs
+            #Getting the counterfactual inputs
+            idx_topic_cf = dataset_batch["input_idx_t{}_cf".format(te_tidx)]
+            all_topic_label_valid = all_topic_label[valid_idx:]
+            idx_topic_cf_valid = idx_topic_cf[valid_idx:]
+            attn_mask_topic_cf_valid=None
+            if self.model_args["bert_as_encoder"]==True:
+                attn_mask_topic_cf_valid = dataset_batch["attn_mask_t{}_cf".format(te_tidx)][valid_idx:]
+
             #Now we need to get the encoding of input
             input_enc = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False,)
             
@@ -2832,6 +2851,8 @@ class SimpleNBOW(keras.Model):
         sample_idxs = tf.range(tf.shape(topic_cf_idx)[1])
         cf_sample_idxs = tf.random.shuffle(sample_idxs)[0]
         topic_cf_idx = topic_cf_idx[:,cf_sample_idxs,:]
+        if self.model_args["bert_as_encoder"]==True:
+            attn_mask_topic_cf = attn_mask_topic_cf[:,cf_sample_idxs,:]
 
         #Next getting the counterfactual encoding
         topic_cf_enc = self._encoder(topic_cf_idx,attn_mask=attn_mask_topic_cf,training=False)
@@ -2964,8 +2985,10 @@ class SimpleNBOW(keras.Model):
         #Getting the stage1 invariant learning riesz
         if "riesz" in self.model_args["stage_mode"]:
             classifier_accuracy["reg_loss"]  = float(self.reg_loss.result().numpy())
+            classifier_accuracy["reg_acc"]  = float(self.reg_acc.result().numpy())
             classifier_accuracy["rr_loss"]   = float(self.rr_loss.result().numpy())
             classifier_accuracy["reg_loss_valid"]  = float(self.reg_loss_valid.result().numpy())
+            classifier_accuracy["reg_acc_valid"]  = float(self.reg_acc_valid.result().numpy())
             classifier_accuracy["rr_loss_valid"]   = float(self.rr_loss_valid.result().numpy())
 
             classifier_accuracy["reg_loss_all"]  = float(self.reg_loss_all.result().numpy())
@@ -5210,6 +5233,7 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
         #Logging the results
         log_format = "epoch:\t\t{:}\nreg_loss_valid:\t\t{:0.3f}\n"\
                             +"rr_loss_valid:\t\t{:0.3f}\n"\
+                            +"reg_acc_valid:\t\t{:0.3f}\n"\
                             +"reg_loss_all_valid:\t\t{:0.3f}\n"\
                             +"reg_acc_all_valid:\t\t{:0.3f}\n"\
                             +"rr_loss_all_valid:\t\t{:0.3f}\n"\
@@ -5227,6 +5251,7 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                             eidx,
                             classifier_main.reg_loss_valid.result(),
                             classifier_main.rr_loss_valid.result(),
+                            classifier_main.reg_acc_valid.result(),
                             classifier_main.reg_loss_all_valid.result(),
                             classifier_main.reg_acc_all_valid.result(),
                             classifier_main.rr_loss_all_valid.result(),
@@ -5263,14 +5288,20 @@ def nbow_inv_stage2_trainer(data_args,model_args):
     Given we have the treatment effect for all the topic we will impose the invariance when learning
     the model with different criteria
     '''
+    label_corr_dict = None
     print("Creating the dataset")
     data_handler = DataHandleTransformer(data_args)
     if "nlp_toy2" in data_args["path"]:
         cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
+    elif "cebab" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
     
     #Creating the classifier
     print("Creating the model")
     classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Adding the label correlation dict to the classifier
+    classifier_main.label_corr_dict = label_corr_dict
     #Now we will compile the model
     classifier_main.compile(
         keras.optimizers.Adam(learning_rate=model_args["lr"])
@@ -5359,15 +5390,19 @@ def nbow_inv_stage2_trainer(data_args,model_args):
         elif "stage2_te_reg" in model_args["stage_mode"]:
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
                             +"t0_te_closs:{:0.4f}\n"\
-                            +"t1_te_closs:{:0.4f}\n"\
-                            +"t0t1_te_closs:{:0.4f}"
+                            +"Acc(Smin):{:0.3f}\n"\
+                            +"pdelta:{:0.3f}"
+            # +"t1_te_closs:{:0.4f}\n"\
+            # +"t0t1_te_closs:{:0.4f}"\
             print(log_format.format(
                                 eidx,
                                 classifier_main.main_pred_xentropy.result(),
                                 classifier_main.main_valid_accuracy.result(),
                                 classifier_main.te_error_list[0].result(),
-                                classifier_main.te_error_list[1].result(),
-                                classifier_main.cross_te_error_list[0][1].result()
+                                # classifier_main.te_error_list[1].result(),
+                                # classifier_main.cross_te_error_list[0][1].result(),
+                                classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                                classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result()
             ))
         elif model_args["stage_mode"]=="main":
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
@@ -5655,14 +5690,18 @@ if __name__=="__main__":
     model_args["norm_lambda"]=args.norm_lambda
     model_args["inv_idx"]=args.inv_idx
     model_args["closs_type"]=args.closs_type
-    if args.ate_noise is not None and (args.debug_tidx==1):
-        #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
-        model_args["t0_ate"]=args.t0_ate #- args.ate_noise
-        model_args["t1_ate"]=args.t1_ate + args.ate_noise
-    elif args.ate_noise is not None:
-        #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
-        model_args["t0_ate"]=args.t0_ate + args.ate_noise
-        model_args["t1_ate"]=args.t1_ate #- args.ate_noise
+    if "nlp_toy3" in data_args["path"]:
+        if args.ate_noise is not None and (args.debug_tidx==1):
+            #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
+            model_args["t0_ate"]=args.t0_ate #- args.ate_noise
+            model_args["t1_ate"]=args.t1_ate + args.ate_noise
+        elif args.ate_noise is not None:
+            #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
+            model_args["t0_ate"]=args.t0_ate + args.ate_noise
+            model_args["t1_ate"]=args.t1_ate #- args.ate_noise
+    else:
+        model_args["t0_ate"]=args.t0_ate
+
     #TODO: Add support for the thresholding experiment where we clip the lower treatment effect
     model_args["stage_mode"] = args.stage_mode
     model_args["teloss_type"]=args.teloss_type
@@ -5695,8 +5734,10 @@ if __name__=="__main__":
     #                   CAD JOBS                    #
     #################################################
     # nbow_trainer_mouli(data_args,model_args)
-    # nbow_inv_stage2_trainer(data_args,model_args)
-    nbow_riesznet_stage1_trainer(data_args,model_args)
+    if "stage2" in model_args["stage_mode"] or "main" in model_args["stage_mode"]:
+        nbow_inv_stage2_trainer(data_args,model_args)
+    elif "stage1" in model_args["stage_mode"]:
+        nbow_riesznet_stage1_trainer(data_args,model_args)
 
 
             

@@ -266,6 +266,46 @@ def get_all_result_timeline(run_list,pval_list,fname_pattern,clean_smin_acc_list
         all_result_timeline[pval] = prdict_agg
     return all_result_timeline
 
+
+def get_all_result_timeline_stage2(run_list,pval_list,ate_list,fname_pattern,clean_smin_acc_list_dict=None):
+    all_result_timeline={}
+    for pval,ate in zip(pval_list,ate_list):
+        prdict_list = []
+        for ridx in run_list:
+            fname = fname_pattern.format(pval,ridx,ate)
+            # print("Loading file: {}".format(fname))
+            prdict = load_probe_metric_list(fname)
+            prdict_list.append(prdict)
+        #Getting the aggregate list
+        prdict_agg = aggregate_random_runs_timeline(prdict_list)
+        #Getting the degree of spuriousness score for every timestep
+        if clean_smin_acc_list_dict!=None:
+            for metric_name in clean_smin_acc_list_dict.keys():
+                #Now going one time step at a time and getting the score
+                timestep_mean_sp_score_list=[]
+                # print(prdict_agg)
+                for tidx in range(prdict_agg[metric_name]["mean"].shape[0]):
+                    smin_acc_list = prdict_agg[metric_name]["val_mat"][:,tidx]
+                    clean_smin_acc_list = clean_smin_acc_list_dict[metric_name]
+                    sp_score_estm_list = calculate_spuriousness_score_estimate(
+                                        smin_acc_list=smin_acc_list,
+                                        clean_smin_acc_list=clean_smin_acc_list
+                    )
+                    timestep_mean_sp_score_list.append(sp_score_estm_list)
+                #Creating the sp score matrix
+                timestep_mean_sp_score_mat = np.array(timestep_mean_sp_score_list).T
+                #Now saving the aggregate
+                prdict_agg[metric_name+"_sp_score"]=dict(
+                                            mean=np.mean(timestep_mean_sp_score_mat,axis=0),
+                                            std=np.std(timestep_mean_sp_score_mat,axis=0),
+                                            val_mat=timestep_mean_sp_score_mat,
+                )
+
+
+        #Saving the aggregate list
+        all_result_timeline[pval] = prdict_agg
+    return all_result_timeline
+
 def plot_all_results(ax,pval_list,all_result_dict,plot_item_list,plot_item_custname=None,extra_label=""):
     '''
     '''
