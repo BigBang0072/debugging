@@ -36,7 +36,7 @@ num_topics=1
 
 
 
-for topicANDsample in "food",350 #"food",750 "service",500 "ambiance",200 "noise",65
+for topicANDsample in  "noise",50 #"food",350 "service",200 "ambiance",100 "noise",50 
 do 
     IFS=',' read topic_name sample <<< "${topicANDsample}"
     for run_num in 0
@@ -45,7 +45,7 @@ do
         do 
             for pos_size in 20
             do
-                for pval in 0.5 0.6 0.7 0.9
+                for pval in 0.8 #0.5 0.6 0.7 0.9
                 do
                     python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).pval($pval).erm" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -batch_size $batch_size -lr $lr  -dtype $dtype -loss_type "x_entropy" -cebab_topic_name $topic_name  -topic_pval $pval    -run_num $run_num -dropout_rate 0.0 -debug_tidx $debug_tidx  -stage_mode $stage_mode --bert_as_encoder -transformer $transformer --train_bert 
                 done
