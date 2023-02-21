@@ -976,7 +976,8 @@ class SimpleNBOW(keras.Model):
 
         #Now initilaizing some of the layers for encoder
         if self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3" or (
-                self.data_args["dtype"]=="cebab" and self.model_args["bert_as_encoder"]==False):
+                self.data_args["dtype"]=="cebab" and self.model_args["bert_as_encoder"]==False) or (
+                self.data_args["dtype"]=="civilcomments" and self.model_args["bert_as_encoder"]==False):
             self.pre_encoder_layer = self.get_nbow_avg_layer()
         elif self.data_args["dtype"]=="toytabular2":
             self.pre_encoder_layer = self.get_dummy_linear_layer()
@@ -1001,7 +1002,7 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = 50
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
-            elif self.data_args["dtype"]=="cebab":
+            elif self.data_args["dtype"]=="cebab" or self.data_args["dtype"]=="civilcomments":
                 self.hlayer_dim = 50
         else:
             if self.model_args["bert_as_encoder"]==True:
@@ -1010,7 +1011,7 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = self.emb_dim
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
-            elif self.data_args["dtype"]=="cebab":
+            elif self.data_args["dtype"]=="cebab" or self.data_args["dtype"]=="civilcomments":
                 self.hlayer_dim = 50
         
         for _ in range(self.model_args["num_hidden_layer"]):
@@ -5160,6 +5161,9 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
         #Getting the dataset 
         if model_args["separate_cebab_de"]==True:
             cat_dataset_full_cebab = data_handler.get_cebab_sentiment_only_dataset(nbow_mode=nbow_mode)
+    elif "civilcomments" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_civilcomments_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
     else:
         raise NotImplementedError()
     
@@ -5296,7 +5300,10 @@ def nbow_inv_stage2_trainer(data_args,model_args):
     elif "cebab" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
         cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
-    
+    elif "civilcomments" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_civilcomments_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+
     #Creating the classifier
     print("Creating the model")
     classifier_main = SimpleNBOW(data_args,model_args,data_handler)
@@ -5493,6 +5500,7 @@ if __name__=="__main__":
     parser.add_argument('--separate_cebab_de',default=False,action="store_true")
     parser.add_argument('--only_de',default=False,action="store_true")
     parser.add_argument('-num_sample_cebab_all',dest="num_sample_cebab_all",type=int,default=None)
+    parser.add_argument('-topic_name',dest="topic_name",type=str,default=None)
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5591,8 +5599,7 @@ if __name__=="__main__":
         data_args["neg_topic_corr"]=args.neg_topic_corr
         data_args["noise_ratio"]=args.noise_ratio
         data_args["dtype"]=args.dtype
-    elif "cebab" in data_args["path"]:
-        data_args["neg_topic_corr"]=args.neg_topic_corr
+    elif "cebab" in data_args["path"] or "civilcomments" in data_args["path"]:
         data_args["noise_ratio"]=args.noise_ratio
         data_args["dtype"]=args.dtype
 
@@ -5617,6 +5624,7 @@ if __name__=="__main__":
     data_args["cebab_topic_name"]=args.cebab_topic_name
     data_args["topic_pval"]=args.topic_pval
     data_args["num_sample_cebab_all"]=args.num_sample_cebab_all
+    data_args["topic_name"]=args.topic_name
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])

@@ -25,6 +25,7 @@ import pdb
 pp=pprint.PrettyPrinter(indent=4)
 import random
 import jsonlines
+from tqdm import tqdm
 
 #Setting the random seed
 # random.seed(22)
@@ -288,6 +289,7 @@ class DataHandleTransformer():
         self.filter_dict=None
 
         self.emb_model=None
+        self.vocab_w2i=None
     
     def _clean_the_document(self,document):
         #Splitting the document by the delimiters
@@ -814,6 +816,9 @@ class DataHandleTransformer():
         return new_topic_set
     
     def _load_word_embedding_for_nbr_extn(self,):
+        if self.vocab_w2i!=None:
+            return 
+        
         #Loading the embedding from the gensim repo
         print("Loading the WordVectors via Gensim! Hold Tight!")
         emb_model = gensim_api.load(self.data_args["emb_path"])
@@ -3056,6 +3061,234 @@ class DataHandleTransformer():
         cat_dataset=cat_dataset.batch(self.data_args["batch_size"])
 
         return cat_dataset
+    
+    def controlled_civilcomments_dataset_handler(self,return_causal=False,return_cf=False,nbow_mode=False):
+        '''
+        In this dataset we could create the manually generated counterfactuals. 
+        The only problem is for all the axis/groups we will consider all of them are going to be non-causal
+        so how can we check if our method is not biased in giving zero causal effect all the time.
+        '''
+        #Getting the pbalnaced dataframe
+        pbalanced_df = self._get_civilcomment_dataframe()
+        #We dont have true counterfactual to get the true causal effect. 
+        #TODO: Create semi synthetic dataset where we could do this so that we could verify the stage1
+
+
+        #Now converting the dataframe into the tensor for the traning
+        sentence_list = pbalanced_df["sentence"].tolist()
+        cf_sentence_lol = pbalanced_df["cf_sentence"].tolist()
+        #Tokenizing the input and getting ready for training
+        input_idx,attn_mask,token_type_idx,cf_input_idx,cf_attn_mask,cf_token_type_idx\
+                    = self._encode_sentences_for_te_cebab_transformer(sentence_list,cf_sentence_lol)
+
+        #Creating the label
+        y_label = pbalanced_df["label"].tolist()
+        topic_label = pbalanced_df["topic_label"].tolist()
+
+        #Creating the dataset dict
+        data_dict=dict(
+                        label=y_label,
+                        label_denoise=y_label,
+                        input_idx=input_idx,
+                        attn_mask=attn_mask,
+                        topic_label=np.expand_dims(topic_label,axis=-1),
+                        topic_label_denoise=np.expand_dims(topic_label,axis=-1),
+                        input_idx_t0_flip=cf_input_idx[:,0,:],
+                        attn_mask_t0_flip=cf_attn_mask[:,0,:],
+        )
+        if return_cf==True:
+            data_dict["input_idx_t0_cf"]=cf_input_idx
+            data_dict["attn_mask_t0_cf"]=cf_attn_mask
+        #Creating the dataset object ready for consumption
+        cat_dataset=tf.data.Dataset.from_tensor_slices(data_dict)
+        cat_dataset=cat_dataset.batch(self.data_args["batch_size"])
+        # pdb.set_trace()
+
+        return cat_dataset
+
+    def _get_civilcomment_dataframe(self,):
+        '''
+        '''
+        #TODO: Add the hashing for the csv of preprocessed dataframe
+
+
+        import tensorflow_datasets as tfds
+        ds = tfds.load("civil_comments/CivilCommentsIdentities")
+
+        #Getting the topic list ready to generate the counterfactual 
+        topic_word_dict=self._get_civilcomment_topics()
+
+        #Collecting all the example into one place
+        all_example_list = []
+        print("Reading the civilcomments example list")
+        num_subsample = 100000 
+        tbar = tqdm(range(len(ds["train"].take(num_subsample))))
+        for tidx,ex_d in zip(tbar,ds["train"].take(num_subsample)):
+            #Getting the topic label 
+            topic_label = None
+            # pdb.set_trace()
+            '''
+            Since we are looking at the counterfactual where we remove the topic we need not 
+            have example where there is ony male and only female. We are temoving the the topic as
+            counterfactual.
+            '''
+            if self.data_args["topic_name"]=="religion":
+                if ex_d["christian"].numpy()>0.5 or ex_d["muslim"].numpy()>0.5:
+                    topic_label = 1
+                else:
+                    topic_label = 0
+            elif self.data_args["topic_name"]=="gender":
+                if ex_d["male"].numpy()>0.5 or ex_d["female"].numpy()>0.5:
+                    #TODO: if we use the exact 1.0 instead of 0.5 then what?
+                    #Every main exmple will have the label
+                    topic_label = 1
+                else:
+                    topic_label = 0
+            elif self.data_args["topic_name"]=="race":
+                if ex_d["black"].numpy()>0.5 or ex_d["white"].numpy()>0.5:
+                    topic_label = 1
+                else:
+                    topic_label = 0
+            else:
+                raise NotImplementedError()
+
+
+            #Creating the example
+            sentence = ex_d["text"].numpy().decode("utf-8").lower()
+            example_dict = dict(
+                            sentence = sentence,
+                            label = 1 if ex_d["toxicity"]>0.5 else 0,
+                            topic_label = topic_label,
+                            cf_sentence = [
+                                self._get_civilcommment_counterfactual(sentence,topic_word_dict),
+                            ],
+            )
+            all_example_list.append(example_dict)
+        
+        #Creating the dataframe
+        all_example_df = pd.DataFrame(all_example_list)
+        self._get_civilcomment_df_stats(all_example_df)
+
+        #Lets rebalance the dataset
+        pbalanced_df = self._get_rebalanced_civilcomment_df(all_example_df)
+        
+        
+        return pbalanced_df
+    
+    def _get_rebalanced_civilcomment_df(self,example_df):
+        '''
+        '''
+        #Getting the inividual group mask
+        grp1_mask,grp2_mask,grp3_mask,grp4_mask = self._get_civilcomment_df_group_mask(example_df)
+        min_grp_val = min(
+                    example_df[grp1_mask].shape[0],
+                    example_df[grp2_mask].shape[0],
+                    example_df[grp3_mask].shape[0],
+                    example_df[grp4_mask].shape[0]
+        )
+
+        #Now we will subsample the dataset to create artifical correlation
+        req_sample_pg = self.data_args["num_sample"]//4
+        assert req_sample_pg<min_grp_val,"Examples exhausted!"
+
+        #Now we will rebalance the rest of the sub-groups
+        majority_grp_df = pd.concat([
+                                example_df[grp1_mask][0:req_sample_pg],
+                                example_df[grp3_mask][0:req_sample_pg],
+        ])
+        #Getting the minuroty subgroup individual group sample 
+        num_mino_sub_pg = int(req_sample_pg*(1-self.data_args["topic_pval"])/self.data_args["topic_pval"])
+        minority_grp_df = pd.concat([
+                                example_df[grp2_mask][0:num_mino_sub_pg],
+                                example_df[grp4_mask][0:num_mino_sub_pg],
+        ])
+
+        pbalanced_df = pd.concat([majority_grp_df,minority_grp_df]).sample(frac=1).reset_index(drop=True)
+        #Now getting the stats of the dataframe
+        self._get_civilcomment_df_stats(pbalanced_df)
+
+        return pbalanced_df
+    
+    def _get_civilcomment_df_stats(self,example_df):
+        '''
+        '''
+        grp1_mask,grp2_mask,grp3_mask,grp4_mask = self._get_civilcomment_df_group_mask(example_df)
+
+        print("Number of element in grp1: ",example_df[grp1_mask].shape[0])
+        print("Number of element in grp2: ",example_df[grp2_mask].shape[0])
+        print("Number of element in grp3: ",example_df[grp3_mask].shape[0])
+        print("Number of element in grp4: ",example_df[grp4_mask].shape[0])
+        print("pvalue: ",example_df[grp1_mask | grp3_mask].shape[0]/example_df.shape[0])
+
+        #Getting the number of positive and negative samples ration
+        positive_df = example_df[example_df["label"]==1]
+        negative_df = example_df[example_df["label"]==0]
+        print("Number of actual positive examples: ",positive_df.shape[0])
+        print("Number of actual negative examples: ",negative_df.shape[0])
+
+        return 
+    
+    def _get_civilcomment_df_group_mask(self,example_df):
+        '''
+        '''
+        grp1_mask = ((example_df["topic_label"]==1)  & (example_df["label"]==1))
+        grp2_mask = ((example_df["topic_label"]==1)  & (example_df["label"]==0))
+        grp3_mask = ((example_df["topic_label"]==0)  & (example_df["label"]==0))
+        grp4_mask = ((example_df["topic_label"]==0)  & (example_df["label"]==1))
+
+        return grp1_mask,grp2_mask,grp3_mask,grp4_mask
+
+    def _get_civilcommment_counterfactual(self,sentence,topic_word_dict):
+        '''
+        Here we will change the sentence using words based topic model to generate counterfactuals
+        '''
+        #Here we will do the removal interventions instead of replacing them with male version
+        sentence_tokens = sentence.split(" ")
+
+        sentence_cf_tokens = []
+        for word in sentence_tokens:
+            if word not in topic_word_dict:
+                sentence_cf_tokens.append(word)
+        #Creating the counterfactual sentence
+        sentence_cf = " ".join(sentence_cf_tokens)
+        
+        return sentence_cf
+    
+    def _get_civilcomment_topics(self,):
+        '''
+        '''
+        #Creating the race topic
+        race_topic = [
+                "black","Calvin","Caleb","Assad","Emmett","Ethan","Jayden","Carter","Jacob",
+                "Liam", "white","David","Joseph","Michael","Moshe","Daniel","Jack","John","Leo"
+                "Adam","Oliver"
+        ]
+
+        #Creating the gneder topic
+        gender_topic = [
+                "male","patriarchy","feminist","woman","men","man","female","women","he","she",
+                "him","his", "mother", "father", "feminists" ,"boy", "girl"
+        ]
+
+
+        if self.data_args["topic_name"]=="gender":
+            topic_word_list = gender_topic
+        elif self.data_args["topic_name"]=="race":
+            topic_word_list = race_topic
+        
+        #Extending the topic set
+        if(self.data_args["extend_topic_set"]==True):
+            self._load_word_embedding_for_nbr_extn()
+            topic_word_list = list(self._extend_topic_set_wordembedding(topic_word_list))
+            print("topic_word_list:\n",topic_word_list)
+        
+        #Sorting such that the largest words are in front so that we dont replace the small subword 
+        #(will leave signal in the sentence then)
+        topic_word_list.sort(key=lambda s:len(s),reverse=True)
+
+        topic_word_dict = {word:True for word in topic_word_list}
+        
+        return topic_word_dict
 
     def controlled_multinli_dataset_handler(self,return_causal=False):
         '''
@@ -3615,7 +3848,7 @@ if __name__=="__main__":
     data_args={}
     data_args["path"]="dataset/multinli_1.0/"
     data_args["transformer_name"]="roberta-base"
-    data_args["num_sample"]=750
+    data_args["num_sample"]=7200
     data_args["neg_topic_corr"]=0.7
     data_args["batch_size"]=32
     data_args["max_len"]=200
@@ -3627,7 +3860,14 @@ if __name__=="__main__":
     # cat_dataset=data_handler.controlled_multinli_dataset_handler()
     data_args["cebab_topic_name"]="food"
     data_args["cfactuals_bsize"]=1
-    data_handler.controlled_cebab_dataset_handler()
+    # data_handler.controlled_cebab_dataset_handler()
+    data_args["topic_name"]="gender"
+    data_args["extend_topic_set"]=True 
+    data_args["num_neigh"]=20
+    data_args["emb_path"]="glove-wiki-gigaword-100"
+    data_args["vocab_path"]="assets/word2vec_10000_200d_labels.tsv"
+    data_args["topic_pval"]=0.9
+    data_handler.controlled_civilcomments_dataset_handler()
     pdb.set_trace()
 
 
