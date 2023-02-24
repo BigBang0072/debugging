@@ -5,7 +5,7 @@ mkdir logs
 
 
 # run_num=6
-mainepoch=8
+mainepoch=5
 # hlayer=0
 num_postalpha_layer=0
 main_mode="non_causal"
