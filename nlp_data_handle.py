@@ -3116,7 +3116,8 @@ class DataHandleTransformer():
         ds = tfds.load("civil_comments/CivilCommentsIdentities")
 
         #Getting the topic list ready to generate the counterfactual 
-        topic_word_dict=self._get_civilcomment_topics()
+        topic_word_dict = self._get_civilcomment_topics()
+        topic_wordmap = self._get_civilcomment_topic_wordmap()
 
         #Collecting all the example into one place
         all_example_list = []
@@ -3160,7 +3161,12 @@ class DataHandleTransformer():
                             label = 1 if ex_d["toxicity"]>0.5 else 0,
                             topic_label = topic_label,
                             cf_sentence = [
-                                self._get_civilcommment_counterfactual(sentence,topic_word_dict),
+                                self._get_civilcommment_counterfactual(
+                                                    sentence,
+                                                    topic_word_dict,
+                                                    topic_wordmap,
+                                                    self.data_args["replace_strategy"],
+                                ),
                             ],
             )
             all_example_list.append(example_dict)
@@ -3168,6 +3174,7 @@ class DataHandleTransformer():
         #Creating the dataframe
         all_example_df = pd.DataFrame(all_example_list)
         self._get_civilcomment_df_stats(all_example_df)
+        # pdb.set_trace()
 
         #Lets rebalance the dataset
         pbalanced_df = self._get_rebalanced_civilcomment_df(all_example_df)
@@ -3238,20 +3245,42 @@ class DataHandleTransformer():
 
         return grp1_mask,grp2_mask,grp3_mask,grp4_mask
 
-    def _get_civilcommment_counterfactual(self,sentence,topic_word_dict):
+    def _get_civilcommment_counterfactual(self,sentence,topic_word_dict,topic_wordmap,replace_strategy):
         '''
         Here we will change the sentence using words based topic model to generate counterfactuals
-        '''
-        #Here we will do the removal interventions instead of replacing them with male version
-        sentence_tokens = sentence.split(" ")
+        We will now follow two strategy to generente the counterfactual.
 
+        Strategy 1: Replace the words from the given topic from the sentnece. 
+                    This has potential problem that, sometime the topic specific mention are
+                    important for labelling the sentence. 
+        
+        Strategy 2: Here we will map the individual topic word to the counterfactual words within
+                    that topic itself. This will not change the sentence structure then. 
+                    And is a more natural version to say the toxicity should not depend on one type
+                    of religion!
+        '''
+        sentence_tokens = sentence.split(" ")
         sentence_cf_tokens = []
-        for word in sentence_tokens:
-            if word not in topic_word_dict:
-                sentence_cf_tokens.append(word)
+
+        #Here we will do the removal interventions instead of replacing them with male version
+        if replace_strategy=="remove":
+            for word in sentence_tokens:
+                if word not in topic_word_dict:
+                    sentence_cf_tokens.append(word)
+
+        elif replace_strategy=="map_replace":
+            #Here we will replace the sentence with word the mapping words we have
+            for word in sentence_tokens:
+                if word not in topic_wordmap:
+                    sentence_cf_tokens.append(word)
+                else:
+                    sentence_cf_tokens.append(topic_wordmap[word])
+        else:
+            raise NotImplementedError()
+        
+
         #Creating the counterfactual sentence
         sentence_cf = " ".join(sentence_cf_tokens)
-        
         return sentence_cf
     
     def _get_civilcomment_topics(self,):
@@ -3259,9 +3288,11 @@ class DataHandleTransformer():
         '''
         #Creating the race topic
         race_topic = [
-                "black","Calvin","Caleb","Assad","Emmett","Ethan","Jayden","Carter","Jacob",
-                "Liam", "white","David","Joseph","Michael","Moshe","Daniel","Jack","John","Leo"
-                "Adam","Oliver"
+                "black", "white", "supremacists", "obama", "clinton", "trump", "john",
+                "negro", "blacks", "whites", "nigga",
+                #These are more ethnicity related terms
+                #"asian", "ethnicity", "aloha", "india","pakistan","iran",
+                #"mexican", "mexico", "british", 
         ]
 
         #Creating the gneder topic
@@ -3270,12 +3301,20 @@ class DataHandleTransformer():
                 "him","his", "mother", "father", "feminists" ,"boy", "girl"
         ]
 
+        #Creating the religion topic
+        religion_topic = [
+                "christian","muslim","allah","jesus","john","mohammed", "catholic","priest",
+                "church", "islamic", "islam", "hijab"
+        ]
+
 
         if self.data_args["topic_name"]=="gender":
             topic_word_list = gender_topic
         elif self.data_args["topic_name"]=="race":
             topic_word_list = race_topic
-        
+        elif self.data_args["topic_name"]=="religion":
+            topic_word_list = religion_topic
+
         #Extending the topic set
         if(self.data_args["extend_topic_set"]==True):
             self._load_word_embedding_for_nbr_extn()
@@ -3286,9 +3325,68 @@ class DataHandleTransformer():
         #(will leave signal in the sentence then)
         topic_word_list.sort(key=lambda s:len(s),reverse=True)
 
+        #TODO: Is sorted listing is maintained when we create the dict? 
         topic_word_dict = {word:True for word in topic_word_list}
         
         return topic_word_dict
+
+    def _get_civilcomment_topic_wordmap(self,):
+        '''
+        This will give us the mapping of indicidual words in the topic to create a more natural
+        counterfatual where we dont remove things, but flip the topic label.
+        '''
+        def create_bidict(wordmap):
+            wordmap_cp = wordmap.copy()
+            for key,val in wordmap.items():
+                assert val not in wordmap_cp,"Value already exists in the wordmap"
+                wordmap_cp[val]=key
+            return wordmap_cp 
+
+        #Creating the wordmap for religion words (later we could expand this using word analogy)
+        religion_wordmap = {
+                                "christian" : "muslim",
+                                "jesus"     : "allah",
+                                "john"      : "mohammed",
+                                "catholic"  : "sunni",
+                                "priest"    : "imam",
+                                "church"    : "mosque",
+        }
+        religion_wordmap = create_bidict(religion_wordmap)
+
+        #Creating the word map for the gender
+        gender_wordmap = {
+                                "male"      : "female",
+                                "patriarchy": "matriarchy",
+                                "patriarch" : "matriarch",
+                                "feminist"  : "chauvinist",
+                                "man"       : "woman",
+                                "men"       : "women",
+                                "he"        : "she",
+                                "him"       : "his",
+                                "father"    : "mother",
+                                "boy"       : "girl",
+                                "uncle"     : "aunt",
+
+        }
+        gender_wordmap = create_bidict(gender_wordmap)
+
+        #Creating the race wordmap
+        race_wordmap = {
+                                "white"     : "black",
+                                "trump"     : "obama",
+                                "master"    : "slave",
+
+        }
+        race_wordmap = create_bidict(race_wordmap)
+
+        if self.data_args["topic_name"]=="gender":
+            topic_wordmap = gender_wordmap
+        elif self.data_args["topic_name"]=="race":
+            topic_wordmap = race_wordmap
+        elif self.data_args["topic_name"]=="religion":
+            topic_wordmap = religion_wordmap
+        
+        return topic_wordmap        
 
     def controlled_multinli_dataset_handler(self,return_causal=False):
         '''
@@ -3848,7 +3946,7 @@ if __name__=="__main__":
     data_args={}
     data_args["path"]="dataset/multinli_1.0/"
     data_args["transformer_name"]="roberta-base"
-    data_args["num_sample"]=7200
+    data_args["num_sample"]=4000
     data_args["neg_topic_corr"]=0.7
     data_args["batch_size"]=32
     data_args["max_len"]=200
@@ -3861,12 +3959,13 @@ if __name__=="__main__":
     data_args["cebab_topic_name"]="food"
     data_args["cfactuals_bsize"]=1
     # data_handler.controlled_cebab_dataset_handler()
-    data_args["topic_name"]="gender"
+    data_args["topic_name"]="religion"
     data_args["extend_topic_set"]=True 
     data_args["num_neigh"]=20
     data_args["emb_path"]="glove-wiki-gigaword-100"
     data_args["vocab_path"]="assets/word2vec_10000_200d_labels.tsv"
     data_args["topic_pval"]=0.9
+    data_args["replace_strategy"]="map_replace"
     data_handler.controlled_civilcomments_dataset_handler()
     pdb.set_trace()
 
