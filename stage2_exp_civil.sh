@@ -29,6 +29,7 @@ path="dataset/civilcomments/"
 out_path="dataset/civilcomments"
 dtype="civilcomments"
 num_topics=1
+replace_strategy="map_replace" #"remove"
 
 
 

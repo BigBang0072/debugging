@@ -1169,6 +1169,7 @@ class SimpleNBOW(keras.Model):
             self.reg_acc = keras.metrics.Mean(name="reg_acc")
             self.reg_acc_valid = keras.metrics.Mean(name="reg_acc_valid")
 
+            #This is for the case when we were using the full dataset for the cebab case
             self.reg_loss_all = keras.metrics.Mean(name="reg_loss_all")
             self.reg_loss_all_valid = keras.metrics.Mean(name="reg_loss_all_valid")
             self.reg_acc_all = keras.metrics.Mean(name="reg_acc_all")

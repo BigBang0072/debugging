@@ -102,6 +102,9 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
                 pdict["reg_loss_all"].append(probe_metric_list[idx]["classifier_acc_dict"]["reg_loss_all"])
                 pdict["reg_loss_all_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["reg_loss_all_valid"])
 
+            if "reg_acc_valid" in probe_metric_list[idx]["classifier_acc_dict"]:
+                pdict["reg_acc_valid"].append(probe_metric_list[idx]["classifier_acc_dict"]["reg_acc_valid"])
+                # pdict["reg_acc_valid_all"].append(probe_metric_list[idx]["classifier_acc_dict"]["reg_acc_valid_all"])
 
             #Adding the alpha from the riesz estimators
             if "alpha:t10-tcf0" in probe_metric_list[idx]["classifier_acc_dict"]:

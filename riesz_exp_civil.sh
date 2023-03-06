@@ -27,7 +27,7 @@ out_path="dataset/civilcomments"
 dtype="civilcomments"
 num_topics=1
 # topic_name="food"
-replace_strategy="map_replace" #"remove"
+replace_strategy="remove" #"map_replace" #"remove"
 
 
 for topicANDsample in "race",5000 "religion",4000 "gender",5000
@@ -41,11 +41,11 @@ do
             do
                 for reg_lambda in 1 
                 do 
-                    for rr_lambda in 1
+                    for rr_lambda in 0
                     do
                         for tmle_lambda in 0
                         do
-                            for l2_lambda in 0.0 #10.0 200.0 #for toy3# 0.0001 0.001 0.01 0.1 
+                            for l2_lambda in 0.0 10.0 200.0 #for toy3# 0.0001 0.001 0.01 0.1 
                             do
                                 for pval in 0.5 0.6 0.7 0.8 0.9 0.99
                                 do 
