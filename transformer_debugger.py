@@ -5503,6 +5503,7 @@ if __name__=="__main__":
     parser.add_argument('-num_sample_cebab_all',dest="num_sample_cebab_all",type=int,default=None)
     parser.add_argument('-topic_name',dest="topic_name",type=str,default=None)
     parser.add_argument('-replace_strategy',dest="replace_strategy",type=str,default=None)
+    parser.add_argument('--symmetrize_main_cf',default=False,action="store_true")
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5628,6 +5629,7 @@ if __name__=="__main__":
     data_args["num_sample_cebab_all"]=args.num_sample_cebab_all
     data_args["topic_name"]=args.topic_name
     data_args["replace_strategy"]=args.replace_strategy
+    data_args["symmetrize_main_cf"]=args.symmetrize_main_cf
 
     #Creating the metadata folder
     meta_folder = data_args["out_path"]+"/nlp_logs/{}".format(data_args["expt_name"])

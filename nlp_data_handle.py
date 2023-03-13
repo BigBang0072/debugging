@@ -2632,7 +2632,7 @@ class DataHandleTransformer():
         self._get_true_causal_effect_cebab(cf_merged_df)
 
         #Getting the pbalanced df
-        if self.data_args["topic_pval"]!=None:
+        if self.data_args["topic_pval"]!=float("inf"):
             cf_merged_df = self._get_pbalanced_cebab_dataframe(cf_merged_df)
             self._get_cebab_data_stats(cf_merged_df)
             self._get_true_causal_effect_cebab(cf_merged_df)
@@ -2855,14 +2855,10 @@ class DataHandleTransformer():
                 noise_label = cebab["train_inclusive"][eidx]["noise_aspect_majority"],
             )
             #Skipping no majority and unknonwn labels example
-            if  example_dict["{}_label".format(self.data_args["cebab_topic_name"])]=="unknown" or \
-                example_dict["{}_label".format(self.data_args["cebab_topic_name"])]=="no majority":
+            #Changelog 1: We will allow unknonwn topic label now
+            if  example_dict["{}_label".format(self.data_args["cebab_topic_name"])]=="no majority":
                 continue
             
-            #Skipping this example if this topic is not needed
-            if example_dict["cf_topic"]!=self.data_args["cebab_topic_name"] and\
-                example_dict["cf_topic"]!="None":
-                continue
 
             all_example_list.append(example_dict)
         #Creating a dataframe 
@@ -2870,69 +2866,27 @@ class DataHandleTransformer():
         print("Number of examples post first filtering: ",example_df.shape[0])
         # pdb.set_trace()
 
-        def convert_wordlabel_to_num(word_label):
-            # print(word_label)
-            if word_label=="Negative":
-                return 0
-            elif word_label=="Positive":
-                return 1
-            raise NotImplementedError()
 
         print("Merging the example and their counterfactuals into one!")
         #Grouping together the dataset (x,tcf)
         cf_merged_example_list = []
+        #Getting the number of availabel counterfacutal for each example
+        cf_len_list = []
         for exid,edf in example_df.groupby("id"):
-            # print("Merging exid: {}".format(exid))
-            cf_example_dict=defaultdict(list)
-            
-            #In this group we should have a main setence (with none)
-            if "None" not in edf["cf_topic"].tolist() or\
-                self.data_args["cebab_topic_name"] not in edf["cf_topic"].tolist():
-                continue 
-            # pdb.set_trace()
-
-            #Going though all the counterfactuals
-            skip_flag=False
-            for cidx in range(edf.shape[0]):
-                #Getting the counterfactual topic
-                cf_topic = edf.iloc[cidx]["cf_topic"]
-
-                if(cf_topic=="None"):
-                    #Creating the sentiment label
-                    if edf.iloc[cidx]["sentiment"]=="no majority" or edf.iloc[cidx]["sentiment"]=="3":
-                        skip_flag=True
-                        break 
-                    elif int(edf.iloc[cidx]["sentiment"])>3:
-                        cf_example_dict["init_sentiment_label"]=1 
-                    elif int(edf.iloc[cidx]["sentiment"])<3:
-                        cf_example_dict["init_sentiment_label"]=0
-                    
-                    cf_example_dict["init_sentence"]=edf.iloc[cidx]["sentence"]
-                    cf_example_dict["init_{}_label".format(self.data_args["cebab_topic_name"])]\
-                                    =convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(self.data_args["cebab_topic_name"])])
-                else:
-                    #TODO: Decide what to do if we have no majority for these examples 
-                    # (could skip if we need the label later)
-                    if edf.iloc[cidx]["sentiment"]=="no majority" or edf.iloc[cidx]["sentiment"]=="3":
-                        continue
-                    elif int(edf.iloc[cidx]["sentiment"])>3:
-                        cf_example_dict["cf_{}_sentiment_label".format(cf_topic)].append(1) 
-                    elif int(edf.iloc[cidx]["sentiment"])<3:
-                        cf_example_dict["cf_{}_sentiment_label".format(cf_topic)].append(0)
-                    
-
-                    #We will only add this counterfactual if this topic was actually changed from initial
-                    cf_topic_label = convert_wordlabel_to_num(edf.iloc[cidx]["{}_label".format(cf_topic)])
-                    if cf_topic_label==cf_example_dict["init_{}_label".format(self.data_args["cebab_topic_name"])]:
-                        continue
-                    cf_example_dict["cf_{}_sentence".format(cf_topic)].append(edf.iloc[cidx]["sentence"])
-                    cf_example_dict["cf_{}_label".format(cf_topic)].append(cf_topic_label)
-
-
+            #Getting the example_dict for this edf
+            cf_example_dict = self._get_cebab_main_counterfacutal_pair_impl2(edf)
+            if cf_example_dict==None:
+                continue
 
             #Adding the example dict to list
-            if skip_flag==False and len(cf_example_dict["cf_{}_label".format(cf_topic)])!=0:
+            num_cf = len(cf_example_dict["cf_{}_label".format(self.data_args["cebab_topic_name"])])
+            if num_cf!=0:
+                cf_len_list.append(num_cf)
                 cf_merged_example_list.append(cf_example_dict)
+        print("Avg. number of counterfactual per example:",np.mean(cf_len_list))
+        #Expanding the merged example list (by reversing the ocunterfactual and main)
+        if self.data_args["symmetrize_main_cf"]==True:
+            cf_merged_example_list = self._symmetrize_cebab_actual_cf_pairs(cf_merged_example_list)
 
         #Creating the new dataframe with the merged examples
         cf_merged_df = pd.DataFrame(cf_merged_example_list)
@@ -2950,6 +2904,150 @@ class DataHandleTransformer():
         balanced_cf_merged_df = pd.concat([positive_df_slice,negative_df_slice]).sample(frac=1).reset_index(drop=True)
 
         return balanced_cf_merged_df
+    
+    def _symmetrize_cebab_actual_cf_pairs(self,cf_merged_example_list):
+        '''
+        Since we have main example --> mapped to counterfactual examples,
+        we could do a reverse mapping and get the cf --> main example mapping. 
+        '''
+        print("Number of example pre symmetrizing: ",len(cf_merged_example_list))
+        cf_topic = self.data_args["cebab_topic_name"]
+        reverse_example_list = []
+        #Going over all the examples
+        for main_example in cf_merged_example_list:
+            #Going over all the counterfactual examples
+            for cfidx in range(len(main_example["cf_{}_sentiment_label".format(cf_topic)])):
+                cf_example_dict = {
+                            "init_sentiment_label" : main_example["cf_{}_sentiment_label".format(cf_topic)][cfidx],
+                            "init_sentence" : main_example["cf_{}_sentence".format(cf_topic)][cfidx],
+                            "init_{}_label".format(cf_topic) : main_example["cf_{}_label".format(cf_topic)][cfidx],
+                            "cf_{}_sentiment_label".format(cf_topic) : [main_example["init_sentiment_label"]],
+                            "cf_{}_sentence".format(cf_topic) : [main_example["init_sentence"]],
+                            "cf_{}_label".format(cf_topic) : [main_example["init_{}_label".format(cf_topic)]],
+                }
+                #Adding the example to the list
+                reverse_example_list.append(cf_example_dict)
+        #Now we will add all the reversed example to the main list and send back to MARS
+        cf_merged_example_list = cf_merged_example_list + reverse_example_list
+        print("Number of example post symmetrizing:",len(cf_merged_example_list))
+
+        return cf_merged_example_list
+    
+    def _get_cebab_main_counterfacutal_pair_impl2(self,edf):
+        '''
+        Our main goal is to increase the number of example we have for CEBAB,
+        becuase we have ground thruth here, thus we could check the true
+        performance of Stage 1. In other real dataset we will not have the 
+        true effect.
+
+
+        One thing we could do is to combine the UNK and the NEG label as topic 0,
+        and then we could see the effect of saying good food on the sentiment. 
+        This will possibly dilute the ATE, but there is nothing technically wrong.
+
+        '''
+        def convert_wordlabel_to_num(word_label):
+            # print(word_label)
+            if word_label=="Negative" or word_label=="unknown":
+                if self.data_args["cebab_topic_name"]=="noise":
+                    return 1
+                else:
+                    return 0
+            elif word_label=="Positive":
+                if self.data_args["cebab_topic_name"]=="noise":
+                    return 0
+                else:
+                    return 1
+            raise NotImplementedError()
+        
+        def convert_sentiment_range_to_binary(sentiment_sval):
+            #Creating the sentiment label
+            #TODO: Should we keep the label 3 on one of the side
+            #could help increase the example but will also increase difficulty
+            if sentiment_sval=="no majority" or sentiment_sval=="3":
+                return None 
+            elif int(sentiment_sval)>3:
+                return 1
+            elif int(sentiment_sval)<3:
+                return 0
+            else:
+                raise NotImplementedError() 
+        
+
+        #In this group we should have a main setence (with none)
+        if "None" not in edf["cf_topic"].tolist() or\
+            self.data_args["cebab_topic_name"] not in edf["cf_topic"].tolist():
+            return None
+        # print("Main and Counterfactual example present!")
+        
+
+        #Initializing the main example
+        cf_example_dict=defaultdict(list)
+
+        #First of getting the main example from the dataframe
+        main_idx = None
+        for midx in range(edf.shape[0]):
+            #If we get the main example then fill the main part of the example
+            if edf.iloc[midx]["cf_topic"]=="None":
+                #Keeping track to leave it the next time
+                main_idx = midx 
+
+                #Getting the sentiment label
+                sentiment_label = convert_sentiment_range_to_binary(
+                                            edf.iloc[midx]["sentiment"]
+                )
+                #If the main sentence label is no-maj or mid-senti then leave
+                if sentiment_label==None:
+                    return None
+                cf_example_dict["init_sentiment_label"]=sentiment_label
+                
+                #Getting the sentince and the initial topic label
+                cf_example_dict["init_sentence"]=edf.iloc[midx]["sentence"]
+                cf_example_dict["init_{}_label".format(self.data_args["cebab_topic_name"])]\
+                                = convert_wordlabel_to_num(
+                                    edf.iloc[midx]["{}_label".format(self.data_args["cebab_topic_name"])]
+                                )
+
+                #We are done finding the main example: Now chose the cf based on its topic label
+                break
+        # print("Main example Detected!")
+        
+        #Next we will search for the counterfactual examples
+        for cidx in range(edf.shape[0]):
+            #Getting the counterfactual topic 
+            cf_topic = edf.iloc[cidx]["cf_topic"]
+            #Skip the main example again
+            if cidx==main_idx:
+                continue 
+            #Skipping the example if the edit goal was different, i.e likely not cf wrt to req topic
+            if cf_topic!=self.data_args["cebab_topic_name"]:
+                continue 
+            
+
+            #Now we will create the counterfactual examples
+            #Getting the counterfactual sentiment labels
+            cf_sentiment_label = convert_sentiment_range_to_binary(
+                                            edf.iloc[cidx]["sentiment"]
+            )
+            #Getting the topic label for the counterfactual
+            cf_topic_label = convert_wordlabel_to_num(
+                                edf.iloc[cidx]["{}_label".format(cf_topic)]
+            )
+
+
+            #Skip if the sentiment is non-maj or rated 3
+            if cf_sentiment_label==None:
+                continue
+            #Skip if the topic label has not changed from the main
+            if cf_topic_label==cf_example_dict["init_{}_label".format(cf_topic)]:
+                continue 
+            
+            #Now we will add the sentence if its senti correct and cf is done
+            cf_example_dict["cf_{}_sentiment_label".format(cf_topic)].append(cf_sentiment_label)
+            cf_example_dict["cf_{}_sentence".format(cf_topic)].append(edf.iloc[cidx]["sentence"])
+            cf_example_dict["cf_{}_label".format(cf_topic)].append(cf_topic_label)
+
+        return cf_example_dict
     
     def get_cebab_sentiment_only_dataset(self,nbow_mode=False):
         '''
@@ -3150,6 +3248,9 @@ class DataHandleTransformer():
                     topic_label = 1
                 else:
                     topic_label = 0
+            elif self.data_args["topic_name"]=="toxic":
+                #We will use the word list itself to get the topic label
+                raise NotImplementedError()
             else:
                 raise NotImplementedError()
 
@@ -3307,6 +3408,12 @@ class DataHandleTransformer():
                 "church", "islamic", "islam", "hijab"
         ]
 
+        #Creating the toxic topic : this should have greater causal effect
+        toxic_topic = [
+                "hatred", "pronto", "crooked", "f**k", "fuck", "di*ks", "dicks",
+                "stupid", "pathetic", "bigot", "bigot", "worthless", "shit",
+                "rascal", "bastard", "whackjob", "whack", "crazy"
+        ]
 
         if self.data_args["topic_name"]=="gender":
             topic_word_list = gender_topic
@@ -3314,6 +3421,8 @@ class DataHandleTransformer():
             topic_word_list = race_topic
         elif self.data_args["topic_name"]=="religion":
             topic_word_list = religion_topic
+        elif self.data_args["topic_name"]=="toxic":
+            topic_word_list = toxic_topic
 
         #Extending the topic set
         if(self.data_args["extend_topic_set"]==True):
@@ -3379,12 +3488,17 @@ class DataHandleTransformer():
         }
         race_wordmap = create_bidict(race_wordmap)
 
+        #Creating the toxic word map
+        toxic_wordmap = {}
+
         if self.data_args["topic_name"]=="gender":
             topic_wordmap = gender_wordmap
         elif self.data_args["topic_name"]=="race":
             topic_wordmap = race_wordmap
         elif self.data_args["topic_name"]=="religion":
             topic_wordmap = religion_wordmap
+        elif self.data_args["topic_name"]=="toxic":
+            topic_wordmap = toxic_wordmap
         
         return topic_wordmap        
 
@@ -3946,7 +4060,7 @@ if __name__=="__main__":
     data_args={}
     data_args["path"]="dataset/multinli_1.0/"
     data_args["transformer_name"]="roberta-base"
-    data_args["num_sample"]=4000
+    data_args["num_sample"]=1100
     data_args["neg_topic_corr"]=0.7
     data_args["batch_size"]=32
     data_args["max_len"]=200
@@ -3958,16 +4072,16 @@ if __name__=="__main__":
     # cat_dataset=data_handler.controlled_multinli_dataset_handler()
     data_args["cebab_topic_name"]="food"
     data_args["cfactuals_bsize"]=1
-    # data_handler.controlled_cebab_dataset_handler()
-    data_args["topic_name"]="religion"
-    data_args["extend_topic_set"]=True 
-    data_args["num_neigh"]=20
-    data_args["emb_path"]="glove-wiki-gigaword-100"
-    data_args["vocab_path"]="assets/word2vec_10000_200d_labels.tsv"
-    data_args["topic_pval"]=0.9
-    data_args["replace_strategy"]="map_replace"
-    data_handler.controlled_civilcomments_dataset_handler()
-    pdb.set_trace()
+    data_handler.controlled_cebab_dataset_handler()
+    # data_args["topic_name"]="toxic"
+    # data_args["extend_topic_set"]=True 
+    # data_args["num_neigh"]=20
+    # data_args["emb_path"]="glove-wiki-gigaword-100"
+    # data_args["vocab_path"]="assets/word2vec_10000_200d_labels.tsv"
+    # data_args["topic_pval"]=0.9
+    # data_args["replace_strategy"]="map_replace"
+    # data_handler.controlled_civilcomments_dataset_handler()
+    # pdb.set_trace()
 
 
     #Testing the twitter datahandler
