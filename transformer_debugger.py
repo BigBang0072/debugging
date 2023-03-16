@@ -1158,9 +1158,14 @@ class SimpleNBOW(keras.Model):
                                 kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
                 ))
             #Getting the last layer for regression
+            g_activation=None
+            if self.model_args["riesz_reg_mode"]=="mse":
+                g_activation = None 
+            elif self.model_args["riesz_reg_mode"]=="bce":
+                g_activation = "sigmoid"
             self.riesz_regression_layer = layers.Dense(
                                 1,
-                                activation=None,#since the TE could take any value (could keep 0-1 but)
+                                activation=g_activation,#since the TE could take any value (could keep 0-1 but)
                                 kernel_regularizer=tf.keras.regularizers.l2(self.model_args["l2_lambd"]),
             )
             #Getting the regression loss metric
@@ -2480,10 +2485,7 @@ class SimpleNBOW(keras.Model):
     
     def get_riesz_regression_loss(self,input_enc,label,all_topic_label,tidx,mode,task):
         '''
-        '''
-        #This is the main label not the topic label
-        label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
-        
+        '''       
         if self.model_args["add_treatment_on_front"]:
             #this is not supported with we are training the main task separately
             if model_args["separate_cebab_de"]==True:
@@ -2497,20 +2499,35 @@ class SimpleNBOW(keras.Model):
 
         #Passing the input through the additional layer
         gval = self.pass_with_post_alpha_layer(input_Z)
+        reg_loss = None 
 
-        #Next getting the regression loss
-        reg_loss = tf.reduce_mean(tf.square((gval-label)))
+        if self.model_args["riesz_reg_mode"]=="mse":
+            #Next getting the regression loss
+            #This is the main label not the topic label
+            label = tf.cast(tf.expand_dims(label,axis=-1),tf.float32)#making the last dimension 1 to mathch dims with pred
+            reg_loss = tf.reduce_mean(tf.square((gval-label)))
 
-        #TODO: Creating the softmax loss instead of regression loss
-
-        #Getting the accracy of prediction
-        accuracy = tf.reduce_mean(
-            tf.cast(
-                tf.cast(tf.math.round(gval),tf.int32) == tf.cast(label,tf.int32),
-                tf.float32
+            #Getting the accracy of prediction
+            accuracy = tf.reduce_mean(
+                tf.cast(
+                    tf.cast(tf.math.round(gval),tf.int32) == tf.cast(label,tf.int32),
+                    tf.float32
+                )
             )
-        )
+        elif self.model_args["riesz_reg_mode"]=="bce":
+            bce = tf.keras.losses.BinaryCrossentropy(from_logits=False,reduction=tf.keras.losses.Reduction.NONE)
+            reg_loss = tf.reduce_mean(bce(label,tf.squeeze(gval)))
 
+            #Getting the accracy of prediction
+            accuracy = tf.reduce_mean(
+                tf.cast(
+                    tf.cast(tf.math.round(tf.squeeze(gval)),tf.int32) == tf.cast(label,tf.int32),
+                    tf.float32
+                )
+            )
+        else:
+            raise NotImplementedError()
+  
         #Logging the loss
         if task=="stage1_riesz_main_mse":
             if mode=="train":
@@ -5471,6 +5488,7 @@ if __name__=="__main__":
     parser.add_argument('--add_treatment_on_front',default=False,action="store_true")
     parser.add_argument('--concat_word_emb',default=False,action="store_true")
     parser.add_argument('--round_gval',default=False,action="store_true")
+    parser.add_argument('-riesz_reg_mode',dest='riesz_reg_mode',type=str,default=None)
 
     #Arguments related to invariant rep learning
     parser.add_argument('-cfactuals_bsize',dest="cfactuals_bsize",type=int,default=None)
@@ -5730,6 +5748,7 @@ if __name__=="__main__":
     model_args["hinge_width"]=args.hinge_width
     model_args["separate_cebab_de"]=args.separate_cebab_de
     model_args["only_de"]=args.only_de
+    model_args["riesz_reg_mode"]=args.riesz_reg_mode
 
 
     #################################################

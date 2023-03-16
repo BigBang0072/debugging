@@ -2653,15 +2653,19 @@ class DataHandleTransformer():
         #Creating the labels for the task
         y_label = cf_merged_df["init_sentiment_label"].tolist()
         topic_label = cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])].tolist()
+        all_label_arr = np.stack([y_label,topic_label],axis=-1)
+        #Adding noise to the labels
+        if self.data_args["noise_ratio"]!=None:
+            all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
 
         #Creating the dataset dict
         data_dict=dict(
-                        label=y_label,
-                        label_denoise=y_label,
+                        label=all_label_arr[:,0],
+                        label_denoise=all_label_arr[:,0],
                         input_idx=input_idx,
                         attn_mask=attn_mask,
-                        topic_label=np.expand_dims(topic_label,axis=-1),
-                        topic_label_denoise=np.expand_dims(topic_label,axis=-1),
+                        topic_label=all_label_arr[:,1:],
+                        topic_label_denoise=all_label_arr[:,1:],
                         input_idx_t0_flip=cf_input_idx[:,0,:],
                         attn_mask_t0_flip=cf_attn_mask[:,0,:],
         )
@@ -2896,6 +2900,8 @@ class DataHandleTransformer():
         num_samples_pg = self.data_args["num_sample"]//2
         positive_df = cf_merged_df[cf_merged_df["init_sentiment_label"]==1]
         negative_df = cf_merged_df[cf_merged_df["init_sentiment_label"]==0]
+        print("Number of initial positive examples:",positive_df.shape[0])
+        print("Number of initial negative examples:",negative_df.shape[0])
         assert positive_df.shape[0]>=num_samples_pg and negative_df.shape[0]>=num_samples_pg,"Examples Exhausted!"
 
         positive_df_slice = positive_df[0:num_samples_pg]

@@ -33,22 +33,23 @@ num_topics=1
 
 
 #Regularizing with true effect and then with DR
-for topicANDsample in "food",350 #"food",750 "service",500 "ambiance",200 "noise",65
+# for topicANDsample in "food",1100 #"food",750 "service",500 "ambiance",200 "noise",65
+for topicANDsample in "food",500 #"ambiance",340 "service",460 "noise",320 #this is with unk addition
 do 
     IFS=',' read topic_name sample <<< "${topicANDsample}"
-    for run_num in 0 1 2
+    for run_num in  0 1 2
     do
-        for te_lambda in  1 10
+        for te_lambda in  1
         do
             for pos_size in 1
             do
                 for noise in 0.0
                 do
-                    for pvalANDt0_ate in 0.5,0.45 0.6,0.54 0.7,0.58 0.8,0.60 0.9,0.69   0.5,0.05 0.6,0.25 0.7,0.45 0.8,0.4 0.9,0.6
+                    for pvalANDt0_ate in "inf",0.55 #"inf",0.42 "inf",0.45 "inf",0.5 #0.5,0.45 0.6,0.54 0.7,0.58 0.8,0.60 0.9,0.69   0.5,0.05 0.6,0.25 0.7,0.45 0.8,0.4 0.9,0.6
                     do
                         IFS=',' read pval t0_ate <<< "${pvalANDt0_ate}"
 
-                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert 
+                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert --symmetrize_main_cf
                     done
                 done
             done
@@ -59,22 +60,23 @@ done
 
 
 #Regularizing with true effect and then with DR
-for topicANDsample in "service",200 #"food",750 "service",500 "ambiance",200 "noise",65
+# for topicANDsample in "service",900 #"food",750 "service",500 "ambiance",200 "noise",65
+for topicANDsample in   "service",460 #"noise",320 #this is with unk addition
 do 
     IFS=',' read topic_name sample <<< "${topicANDsample}"
     for run_num in 0 1 2
     do
-        for te_lambda in  1 10
+        for te_lambda in  1
         do
             for pos_size in 1
             do
                 for noise in 0.0
                 do
-                    for pvalANDt0_ate in 0.5,0.15 0.6,0.175 0.7,0.2 0.8,0.27 0.9,0.32   0.5,0.3 0.6,0.1 0.7,0.2 0.8,0.48 0.9,0.4
+                    for pvalANDt0_ate in "inf",0.4 "inf",0.32 #"inf",0.16 "inf",0.24 "inf",0.20 #0.5,0.15 0.6,0.175 0.7,0.2 0.8,0.27 0.9,0.32   0.5,0.3 0.6,0.1 0.7,0.2 0.8,0.48 0.9,0.4
                     do
                         IFS=',' read pval t0_ate <<< "${pvalANDt0_ate}"
 
-                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert 
+                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert --symmetrize_main_cf
                     done
                 done
             done
@@ -84,22 +86,23 @@ done
 
 
 #Regularizing with true effect and then with DR
-for topicANDsample in "ambiance",100 #"food",750 "service",500 "ambiance",200 "noise",65
+# for topicANDsample in "ambiance",700 #"food",750 "service",500 "ambiance",200 "noise",65
+for topicANDsample in  "ambiance",340 #"noise",320 #this is with unk addition
 do 
     IFS=',' read topic_name sample <<< "${topicANDsample}"
     for run_num in 0 1 2
     do
-        for te_lambda in  1 10
+        for te_lambda in  1
         do
             for pos_size in 1
             do
                 for noise in 0.0
                 do
-                    for pvalANDt0_ate in 0.5,0.15 0.6,0.2 0.7,0.21 0.8,0.22   0.5,0.62 0.6,0.3 0.7,0.12 0.8,0.25
+                    for pvalANDt0_ate in "inf",0.09 "inf",0.15 #"inf",0.07 "inf",0.0 "inf",0.04 #0.5,0.15 0.6,0.2 0.7,0.21 0.8,0.22   0.5,0.62 0.6,0.3 0.7,0.12 0.8,0.25
                     do
                         IFS=',' read pval t0_ate <<< "${pvalANDt0_ate}"
 
-                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert 
+                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert --symmetrize_main_cf
                     done
                 done
             done
@@ -109,22 +112,23 @@ done
 
 
 #Regularizing with true effect and then with DR
-for topicANDsample in "noise",50 #"food",750 "service",500 "ambiance",200 "noise",65
+# for topicANDsample in "noise",500 #"food",750 "service",500 "ambiance",200 "noise",65
+for topicANDsample in  "noise",320 #this is with unk addition
 do 
     IFS=',' read topic_name sample <<< "${topicANDsample}"
     for run_num in 0 1 2
     do
-        for te_lambda in  1 10
+        for te_lambda in  1
         do
             for pos_size in 1
             do
                 for noise in 0.0
                 do
-                    for pvalANDt0_ate in 0.5,0.1 0.6,0.125 0.7,0.12 0.8,0.2   0.5,0.0 0.6,0.0 0.7,0.65 0.8,0.25
+                    for pvalANDt0_ate in "inf",0.62 "inf",0.40 #"inf",-0.04 "inf",0.38 "inf",0.04 #0.5,0.1 0.6,0.125 0.7,0.12 0.8,0.2   0.5,0.0 0.6,0.0 0.7,0.65 0.8,0.25
                     do
                         IFS=',' read pval t0_ate <<< "${pvalANDt0_ate}"
 
-                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert 
+                        python transformer_debugger.py -expt_num "cad.cebabs2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pval($pval).t0_ate($t0_ate).telambda($te_lambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -cebab_topic_name $topic_name -topic_pval $pval --bert_as_encoder -transformer $transformer --train_bert --symmetrize_main_cf
                     done
                 done
             done
