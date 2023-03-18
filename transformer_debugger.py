@@ -1138,6 +1138,12 @@ class SimpleNBOW(keras.Model):
             self.best_alpha_hash = defaultdict(dict)
             self.min_rr_valid_val = float("inf") #Initializing with the largest value
 
+            #Initializing the hashmap for storing the best and the current gval
+            self.current_gval_hash = defaultdict(dict)
+            self.best_gval_hash = defaultdict(dict)
+            #one selection will be on the validation loss (now it could be loss or acc) based on the args
+            self.best_reg_valid_val = float("inf") 
+
             #Adding the dense layer for alpha prediction
             self.alpha_layer = layers.Dense(
                                 1,
@@ -2178,6 +2184,7 @@ class SimpleNBOW(keras.Model):
                                             tidx=te_tidx,
                                             mode="train",
                                             task=task,
+                                            bidx=bidx,
                 )
 
                 #Finally getting the tmle loss
@@ -2389,6 +2396,7 @@ class SimpleNBOW(keras.Model):
                                             tidx=None,
                                             mode="train",
                                             task=task,
+                                            bidx=bidx,
                 )
             #Training the head parameters of the main classifier
             grads = tape.gradient(reg_loss_all,self.trainable_weights)
@@ -2473,9 +2481,6 @@ class SimpleNBOW(keras.Model):
         #Now we have to pass both the input and cf_input along with treatment explicitely to get the alpha
         input_alpha = self.alpha_layer(input_Z)
         topic_cf_alpha = self.alpha_layer(topic_cf_Z)
-        #Hashing the alphas in the current hash to be used later
-        self.current_alpha_hash[(mode,bidx)]["input_alpha"]=input_alpha
-        self.current_alpha_hash[(mode,bidx)]["topic_cf_alpha"]=topic_cf_alpha
 
         #Now getting the riesz loss
         RR_loss = tf.square(input_alpha) - 2*(
@@ -2495,7 +2500,7 @@ class SimpleNBOW(keras.Model):
 
         return RR_loss,input_alpha
     
-    def get_riesz_regression_loss(self,input_enc,label,all_topic_label,tidx,mode,task):
+    def get_riesz_regression_loss(self,input_enc,label,all_topic_label,tidx,mode,task,bidx):
         '''
         '''       
         if self.model_args["add_treatment_on_front"]:
@@ -2837,6 +2842,7 @@ class SimpleNBOW(keras.Model):
                                             tidx=te_tidx,
                                             mode="valid",
                                             task=task,
+                                            bidx=bidx,
             )
 
             #Getting the treatment effect
@@ -2866,6 +2872,7 @@ class SimpleNBOW(keras.Model):
                                             tidx=None,
                                             mode="valid",
                                             task=task,
+                                            bidx=bidx,
             )
         else:
             raise NotImplementedError()
@@ -2901,11 +2908,17 @@ class SimpleNBOW(keras.Model):
             topic_cf_Z = topic_cf_enc
 
         #Now we have to pass both the input and cf_input to get the alpha
-        # input_alpha = self.alpha_layer(input_Z)
-        # topic_cf_alpha = self.alpha_layer(topic_cf_Z)
+        #TODO: avail this option of direct training also
+        current_input_alpha = self.alpha_layer(input_Z)
+        current_topic_cf_alpha = self.alpha_layer(topic_cf_Z)
+        #Hashing the alphas in the current hash to be used later
+        self.current_alpha_hash[(mode,bidx)]["input_alpha"]=current_input_alpha
+        self.current_alpha_hash[(mode,bidx)]["topic_cf_alpha"]=current_topic_cf_alpha
+
+
         input_alpha,topic_cf_alpha = None,None 
         #Now we will use the best alpha we have kept instead of the current one
-        if "input_alpha" in self.best_alpha_hash[(mode,bidx)]:
+        if "input_alpha" in self.best_alpha_hash[(mode,bidx)] and self.model_args["select_best_alpha"]==True:
             input_alpha = self.best_alpha_hash[(mode,bidx)]["input_alpha"]
             topic_cf_alpha = self.best_alpha_hash[(mode,bidx)]["topic_cf_alpha"]
         else:
@@ -2913,8 +2926,20 @@ class SimpleNBOW(keras.Model):
             topic_cf_alpha = self.current_alpha_hash[(mode,bidx)]["topic_cf_alpha"]
 
         #Next we will get the gval for both of them
-        input_gval = self.pass_with_post_alpha_layer(input_Z)
-        topic_cf_gval = self.pass_with_post_alpha_layer(topic_cf_Z)
+        current_input_gval = self.pass_with_post_alpha_layer(input_Z)
+        current_topic_cf_gval = self.pass_with_post_alpha_layer(topic_cf_Z)
+        #Next we will hash the input gval and the topic_cf_gval too
+        self.current_gval_hash[(mode,bidx)]["input_gval"]=current_input_gval
+        self.current_gval_hash[(mode,bidx)]["topic_cf_gval"]=current_topic_cf_gval
+
+        #Next we will use the best gval or the current gval based on the presence
+        input_gval,topic_cf_gval = None,None 
+        if "input_gval" in self.best_gval_hash[(mode,bidx)] and self.model_args["select_best_gval"]==True:
+            input_gval = self.best_gval_hash[(mode,bidx)]["input_gval"]
+            topic_cf_gval = self.best_gval_hash[(mode,bidx)]["topic_cf_gval"]
+        else:
+            input_gval = self.current_gval_hash[(mode,bidx)]["input_gval"]
+            topic_cf_gval = self.current_gval_hash[(mode,bidx)]["topic_cf_gval"]
 
         #Passing the input gval with rounding
         if self.model_args["round_gval"]==True:
@@ -5288,6 +5313,28 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
             for key,val in classifier_main.current_alpha_hash.items():
                 classifier_main.best_alpha_hash[key]=val 
             print("Updated the best alpha hash, prev rr_valid={}".format(prev_rr_valid))
+        
+        #We will also now keep track of the best reg loss and based on the value we will update the best gval
+        current_reg_valid_val = None 
+        update_best_gval_flag = False 
+        if classifier_main.model_args["best_gval_selection_metric"]=="loss":
+            current_reg_valid_val = float(classifier_main.reg_loss_all_valid.result().numpy())
+            if classifier_main.best_reg_valid_val>current_reg_valid_val:
+                update_best_gval_flag = True
+        elif classifier_main.model_args["best_gval_selection_metric"]=="acc":
+            current_reg_valid_val = float(classifier_main.reg_acc_all_valid.result().numpy())
+            if classifier_main.best_reg_valid_val<current_reg_valid_val:
+                update_best_gval_flag = True 
+        else:
+            raise NotImplementedError()
+        #Now updateing the best gval if required
+        if update_best_gval_flag==True:
+            print("Updating the best value: {} with:{}".format(classifier_main.best_reg_valid_val,current_reg_valid_val))
+            classifier_main.best_reg_valid_val = current_reg_valid_val
+            #Next we will update the best gval hash
+            for key,val in classifier_main.current_gval_hash.items():
+                classifier_main.best_gval_hash[key]=val 
+        
 
                 
         #Logging the results
@@ -5560,6 +5607,10 @@ if __name__=="__main__":
     parser.add_argument('-topic_name',dest="topic_name",type=str,default=None)
     parser.add_argument('-replace_strategy',dest="replace_strategy",type=str,default=None)
     parser.add_argument('--symmetrize_main_cf',default=False,action="store_true")
+    parser.add_argument('--select_best_alpha',default=False,action="store_true")
+    parser.add_argument('--select_best_gval',default=False,action="store_true")
+    parser.add_argument('-best_gval_selection_metric',dest="best_gval_selection_metric",type=str,default=None)
+    
 
     #Argument related to TE estimation for the transformations
     parser.add_argument('-treated_topic',dest="treated_topic",type=int,default=None)
@@ -5787,7 +5838,9 @@ if __name__=="__main__":
     model_args["separate_cebab_de"]=args.separate_cebab_de
     model_args["only_de"]=args.only_de
     model_args["riesz_reg_mode"]=args.riesz_reg_mode
-
+    model_args["select_best_alpha"]=args.select_best_alpha
+    model_args["select_best_gval"]=args.select_best_gval
+    model_args["best_gval_selection_metric"]=args.best_gval_selection_metric
 
     #################################################
     #        SELECT ONE OF THE JOBS FROM BELOW      #
