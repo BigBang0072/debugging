@@ -5,7 +5,7 @@ mkdir logs
 
 
 # run_num=6
-mainepoch=10
+mainepoch=20
 # hlayer=0
 num_postalpha_layer=0
 main_mode="non_causal"
@@ -30,7 +30,7 @@ num_topics=1
 
 # for topicANDsample in "food",350 #"service",200 "ambiance",100 "noise",50
 # for topicANDsample in  "food",1100 "ambiance",700 "service",900 "noise",500 #
-for run_num in  8 9 10
+for run_num in  11 12 13 # this is using the best alpha tracker #8 9 10
 do 
     for topicANDsample in "food",500 "ambiance",340 "service",460 "noise",320 #this is with unk addition
     do 

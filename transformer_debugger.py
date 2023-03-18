@@ -1133,6 +1133,11 @@ class SimpleNBOW(keras.Model):
 
         if "riesz" in self.model_args["stage_mode"]:
             #Adding RR Specific things
+            #Initializing the hashmap for storing the baset and current alpha
+            self.current_alpha_hash = defaultdict(dict)
+            self.best_alpha_hash = defaultdict(dict)
+            self.min_rr_valid_val = float("inf") #Initializing with the largest value
+
             #Adding the dense layer for alpha prediction
             self.alpha_layer = layers.Dense(
                                 1,
@@ -2095,9 +2100,10 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
-    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None):
+    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,bidx=None):
         '''
         inv_idx         : the topic which we want our representation to be invariant of
+        bidx            : the batch index which could be used to hash certain things about the example
         '''
         #Getting the train dataset
         label = dataset_batch["label"]
@@ -2152,6 +2158,7 @@ class SimpleNBOW(keras.Model):
                                             attn_mask_topic_cf=attn_mask_topic_cf_train,
                                             tidx=te_tidx,
                                             mode="train",
+                                            bidx=bidx,
                 )
                 #Currently we can only track things when we are in the toy story 3
                 if "nlp_toy3" in data_args["path"]:
@@ -2201,7 +2208,9 @@ class SimpleNBOW(keras.Model):
                                                 label=label_train,
                                                 all_topic_label=all_topic_label_train,
                                                 tidx=te_tidx,
-                                                attn_mask_topic_cf=attn_mask_topic_cf_train
+                                                attn_mask_topic_cf=attn_mask_topic_cf_train,
+                                                mode="train",
+                                                bidx=bidx,
             )
             # pdb.set_trace()
             #Logging the TE
@@ -2434,7 +2443,7 @@ class SimpleNBOW(keras.Model):
 
         return toy3_mask_dict
 
-    def get_riesz_RR_loss(self,input_enc,idx_topic_cf,all_topic_label,attn_mask_topic_cf,tidx,mode):
+    def get_riesz_RR_loss(self,input_enc,idx_topic_cf,all_topic_label,attn_mask_topic_cf,tidx,mode,bidx):
         '''
         '''
         #Getting the counterfactual data
@@ -2464,6 +2473,9 @@ class SimpleNBOW(keras.Model):
         #Now we have to pass both the input and cf_input along with treatment explicitely to get the alpha
         input_alpha = self.alpha_layer(input_Z)
         topic_cf_alpha = self.alpha_layer(topic_cf_Z)
+        #Hashing the alphas in the current hash to be used later
+        self.current_alpha_hash[(mode,bidx)]["input_alpha"]=input_alpha
+        self.current_alpha_hash[(mode,bidx)]["topic_cf_alpha"]=topic_cf_alpha
 
         #Now getting the riesz loss
         RR_loss = tf.square(input_alpha) - 2*(
@@ -2761,7 +2773,7 @@ class SimpleNBOW(keras.Model):
 
         return sample_te
 
-    def valid_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None):
+    def valid_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,bidx=None):
         '''
         '''
         #Getting the train dataset
@@ -2815,6 +2827,7 @@ class SimpleNBOW(keras.Model):
                                         attn_mask_topic_cf=attn_mask_topic_cf_valid,
                                         tidx=te_tidx,
                                         mode="valid",
+                                        bidx=bidx,
             )
             #Next getting the reg loss
             _,_ = self.get_riesz_regression_loss(
@@ -2834,6 +2847,8 @@ class SimpleNBOW(keras.Model):
                                                 all_topic_label=all_topic_label_valid,
                                                 tidx=te_tidx,
                                                 attn_mask_topic_cf=attn_mask_topic_cf_valid,
+                                                mode="valid",
+                                                bidx=bidx,
             )
             #Logging the TE
             self.te_valid.update_state(te)
@@ -2855,7 +2870,7 @@ class SimpleNBOW(keras.Model):
         else:
             raise NotImplementedError()
     
-    def get_riesz_treatment_effect(self,input_enc,idx_topic_cf,label,all_topic_label,tidx,attn_mask_topic_cf,tcf_label=None):
+    def get_riesz_treatment_effect(self,input_enc,idx_topic_cf,label,all_topic_label,tidx,attn_mask_topic_cf,mode,bidx,tcf_label=None):
         '''
         '''
         #This is the main label not the topic label
@@ -2886,8 +2901,16 @@ class SimpleNBOW(keras.Model):
             topic_cf_Z = topic_cf_enc
 
         #Now we have to pass both the input and cf_input to get the alpha
-        input_alpha = self.alpha_layer(input_Z)
-        topic_cf_alpha = self.alpha_layer(topic_cf_Z)
+        # input_alpha = self.alpha_layer(input_Z)
+        # topic_cf_alpha = self.alpha_layer(topic_cf_Z)
+        input_alpha,topic_cf_alpha = None,None 
+        #Now we will use the best alpha we have kept instead of the current one
+        if "input_alpha" in self.best_alpha_hash[(mode,bidx)]:
+            input_alpha = self.best_alpha_hash[(mode,bidx)]["input_alpha"]
+            topic_cf_alpha = self.best_alpha_hash[(mode,bidx)]["topic_cf_alpha"]
+        else:
+            input_alpha = self.current_alpha_hash[(mode,bidx)]["input_alpha"]
+            topic_cf_alpha = self.current_alpha_hash[(mode,bidx)]["topic_cf_alpha"]
 
         #Next we will get the gval for both of them
         input_gval = self.pass_with_post_alpha_layer(input_Z)
@@ -5217,7 +5240,8 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                 classifier_main.train_step_mouli(
                                                 dataset_batch=data_batch,
                                                 task="stage1_riesz_main_mse",
-                                                te_tidx=data_args["debug_tidx"]
+                                                te_tidx=data_args["debug_tidx"],
+                                                bidx=bidx,
                 )
 
         #Training the full stage1
@@ -5231,26 +5255,40 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                 classifier_main.train_step_mouli(
                                                 dataset_batch=data_batch,
                                                 task=model_args["stage_mode"],
-                                                te_tidx=data_args["debug_tidx"]
+                                                te_tidx=data_args["debug_tidx"],
+                                                bidx=bidx,
                 )
             
             print("Validating the cf-dataset")
-            for data_batch in cat_dataset:
+            for vbidx,data_batch in enumerate(cat_dataset):
                 classifier_main.valid_step_mouli( 
                                                 dataset_batch=data_batch,
                                                 task=model_args["stage_mode"],
-                                                te_tidx=data_args["debug_tidx"]
+                                                te_tidx=data_args["debug_tidx"],
+                                                bidx=vbidx,
                 )
         
         #Now we have to measure the tretment effect of the topic in question
         if model_args["separate_cebab_de"]==True:
             print("Validating the full dataset")
-            for data_batch in cat_dataset_full_cebab:
+            for vbidx,data_batch in enumerate(cat_dataset_full_cebab):
                 classifier_main.valid_step_mouli( 
                                             dataset_batch=data_batch,
                                             task="stage1_riesz_main_mse",
-                                            te_tidx=data_args["debug_tidx"]
+                                            te_tidx=data_args["debug_tidx"],
+                                            bidx=vbidx,
                 )
+        
+        #Now we will track the best alpha value based on the rr_loss_valid and update the best alpha hash
+        if classifier_main.min_rr_valid_val>float(classifier_main.rr_loss_valid.result().numpy()):
+            #Updating the min value of the rr_loss
+            prev_rr_valid = classifier_main.min_rr_valid_val
+            classifier_main.min_rr_valid_val = float(classifier_main.rr_loss_valid.result().numpy())
+            #Updating the best alpha hash
+            for key,val in classifier_main.current_alpha_hash.items():
+                classifier_main.best_alpha_hash[key]=val 
+            print("Updated the best alpha hash, prev rr_valid={}".format(prev_rr_valid))
+
                 
         #Logging the results
         log_format = "epoch:\t\t{:}\nreg_loss_valid:\t\t{:0.3f}\n"\
