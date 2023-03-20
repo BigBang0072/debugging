@@ -1142,7 +1142,11 @@ class SimpleNBOW(keras.Model):
             self.current_gval_hash = defaultdict(dict)
             self.best_gval_hash = defaultdict(dict)
             #one selection will be on the validation loss (now it could be loss or acc) based on the args
-            self.best_reg_valid_val = float("inf") 
+            if "best_gval_selection_metric" in self.model_args:
+                if self.model_args["best_gval_selection_metric"]=="loss":
+                    self.best_reg_valid_val = float("inf")
+                elif self.model_args["best_gval_selection_metric"]=="acc":
+                    self.best_reg_valid_val = 0.0
 
             #Adding the dense layer for alpha prediction
             self.alpha_layer = layers.Dense(
@@ -2912,8 +2916,8 @@ class SimpleNBOW(keras.Model):
         current_input_alpha = self.alpha_layer(input_Z)
         current_topic_cf_alpha = self.alpha_layer(topic_cf_Z)
         #Hashing the alphas in the current hash to be used later
-        self.current_alpha_hash[(mode,bidx)]["input_alpha"]=current_input_alpha
-        self.current_alpha_hash[(mode,bidx)]["topic_cf_alpha"]=current_topic_cf_alpha
+        self.current_alpha_hash[(mode,bidx)]["input_alpha"]=current_input_alpha.numpy().copy()
+        self.current_alpha_hash[(mode,bidx)]["topic_cf_alpha"]=current_topic_cf_alpha.numpy().copy()
 
 
         input_alpha,topic_cf_alpha = None,None 
@@ -2929,8 +2933,8 @@ class SimpleNBOW(keras.Model):
         current_input_gval = self.pass_with_post_alpha_layer(input_Z)
         current_topic_cf_gval = self.pass_with_post_alpha_layer(topic_cf_Z)
         #Next we will hash the input gval and the topic_cf_gval too
-        self.current_gval_hash[(mode,bidx)]["input_gval"]=current_input_gval
-        self.current_gval_hash[(mode,bidx)]["topic_cf_gval"]=current_topic_cf_gval
+        self.current_gval_hash[(mode,bidx)]["input_gval"]=current_input_gval.numpy().copy()
+        self.current_gval_hash[(mode,bidx)]["topic_cf_gval"]=current_topic_cf_gval.numpy().copy()
 
         #Next we will use the best gval or the current gval based on the presence
         input_gval,topic_cf_gval = None,None 
@@ -5304,6 +5308,9 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
                                             bidx=vbidx,
                 )
         
+        # print("Current best alpha_valid:",classifier_main.min_rr_valid_val)
+        # print("Current best reg_valid  :",classifier_main.best_reg_valid_val)
+
         #Now we will track the best alpha value based on the rr_loss_valid and update the best alpha hash
         if classifier_main.min_rr_valid_val>float(classifier_main.rr_loss_valid.result().numpy()):
             #Updating the min value of the rr_loss
@@ -5311,29 +5318,31 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
             classifier_main.min_rr_valid_val = float(classifier_main.rr_loss_valid.result().numpy())
             #Updating the best alpha hash
             for key,val in classifier_main.current_alpha_hash.items():
-                classifier_main.best_alpha_hash[key]=val 
+                for inkey,inval in val.items():
+                    classifier_main.best_alpha_hash[key][inkey]=inval.copy() 
             print("Updated the best alpha hash, prev rr_valid={}".format(prev_rr_valid))
         
         #We will also now keep track of the best reg loss and based on the value we will update the best gval
         current_reg_valid_val = None 
         update_best_gval_flag = False 
         if classifier_main.model_args["best_gval_selection_metric"]=="loss":
-            current_reg_valid_val = float(classifier_main.reg_loss_all_valid.result().numpy())
+            current_reg_valid_val = float(classifier_main.reg_loss_valid.result().numpy())
             if classifier_main.best_reg_valid_val>current_reg_valid_val:
                 update_best_gval_flag = True
         elif classifier_main.model_args["best_gval_selection_metric"]=="acc":
-            current_reg_valid_val = float(classifier_main.reg_acc_all_valid.result().numpy())
+            current_reg_valid_val = float(classifier_main.reg_acc_valid.result().numpy())
             if classifier_main.best_reg_valid_val<current_reg_valid_val:
                 update_best_gval_flag = True 
         else:
             raise NotImplementedError()
         #Now updateing the best gval if required
         if update_best_gval_flag==True:
-            print("Updating the best value: {} with:{}".format(classifier_main.best_reg_valid_val,current_reg_valid_val))
+            print("Updating the reg-best value: {} with:{}".format(classifier_main.best_reg_valid_val,current_reg_valid_val))
             classifier_main.best_reg_valid_val = current_reg_valid_val
             #Next we will update the best gval hash
             for key,val in classifier_main.current_gval_hash.items():
-                classifier_main.best_gval_hash[key]=val 
+                for inkey,inval in val.items():
+                    classifier_main.best_gval_hash[key][inkey]=inval.copy() 
         
 
                 

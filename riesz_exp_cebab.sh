@@ -30,7 +30,7 @@ num_topics=1
 
 # for topicANDsample in "food",350 #"service",200 "ambiance",100 "noise",50
 # for topicANDsample in  "food",1100 "ambiance",700 "service",900 "noise",500 #
-for run_num in  14 # this is using the best alpha tracker #8 9 10
+for run_num in  14 15 # this is using the best alpha tracker #8 9 10
 do 
     for topicANDsample in "food",500 "ambiance",340 "service",460 "noise",320 #this is with unk addition
     do 
@@ -65,7 +65,7 @@ do
 done
 
 
-for run_num in  15 # this is using the best alpha tracker #8 9 10
+for run_num in  17 18 # this is using the best alpha tracker #8 9 10
 do 
     for topicANDsample in "food",500 "ambiance",340 "service",460 "noise",320 #this is with unk addition
     do 
