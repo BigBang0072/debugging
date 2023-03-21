@@ -41,7 +41,7 @@ num_topics=1
 for topicANDsample in    "food",500 "noise",320 "ambiance",340 "service",460  #this is with unk addition
 do 
     IFS=',' read topic_name sample <<< "${topicANDsample}"
-    for run_num in 3 0 1 2
+    for run_num in 0 1 2
     do
         for debug_tidx in 0
         do 

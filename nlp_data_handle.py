@@ -2619,12 +2619,16 @@ class DataHandleTransformer():
         
         return replacement_dict
 
-    def controlled_cebab_dataset_handler(self,return_causal=False,return_cf=False,nbow_mode=False):
+    def controlled_cebab_dataset_handler(self,return_causal=False,return_cf=False,nbow_mode=False,topic_idx=0):
         '''
         This dataset has pairs of counterfactual data along with labels on the topic
         on which they are purturbed.
 
         Labelling Conventions:
+        NA
+
+        topic_idx       : this will be used to generated the topic specific dataset with different topic number
+                            to be used for training the combined dataset at once.
         '''
         #Creating the dataset
         cf_merged_df = self._get_cebab_dataframe()
@@ -2653,7 +2657,11 @@ class DataHandleTransformer():
         #Creating the labels for the task
         y_label = cf_merged_df["init_sentiment_label"].tolist()
         topic_label = cf_merged_df["init_{}_label".format(self.data_args["cebab_topic_name"])].tolist()
-        all_label_arr = np.stack([y_label,topic_label],axis=-1)
+        #We will repeat the topic label multiple times to help the combined training run smoothly
+        all_label_arr = np.stack(
+                                [y_label,]+[topic_label,]*(topic_idx+1),
+                                axis=-1,
+        )
         #Adding noise to the labels
         if self.data_args["noise_ratio"]!=None:
             all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
@@ -2666,12 +2674,14 @@ class DataHandleTransformer():
                         attn_mask=attn_mask,
                         topic_label=all_label_arr[:,1:],
                         topic_label_denoise=all_label_arr[:,1:],
-                        input_idx_t0_flip=cf_input_idx[:,0,:],
-                        attn_mask_t0_flip=cf_attn_mask[:,0,:],
         )
+        #Adding the topic numbered counterfactual dataset (used for indexing correctly)
+        data_dict["input_idx_t{}_flip".format(topic_idx)]=cf_input_idx[:,0,:]
+        data_dict["attn_mask_t{}_flip".format(topic_idx)]=cf_attn_mask[:,0,:]
+
         if return_cf==True:
-            data_dict["input_idx_t0_cf"]=cf_input_idx
-            data_dict["attn_mask_t0_cf"]=cf_attn_mask
+            data_dict["input_idx_t{}_cf".format(topic_idx)]=cf_input_idx
+            data_dict["attn_mask_t{}_cf".format(topic_idx)]=cf_attn_mask
         #Creating the dataset object ready for consumption
         cat_dataset=tf.data.Dataset.from_tensor_slices(data_dict)
         cat_dataset=cat_dataset.batch(self.data_args["batch_size"])

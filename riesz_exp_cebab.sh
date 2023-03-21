@@ -32,7 +32,7 @@ num_topics=1
 # for topicANDsample in  "food",1100 "ambiance",700 "service",900 "noise",500 #
 for run_num in  14 15 # this is using the best alpha tracker #8 9 10
 do 
-    for topicANDsample in "food",500 "ambiance",340 "service",460 "noise",320 #this is with unk addition
+    for topicANDsample in "food",500 "service",460 "ambiance",340 "noise",320 #this is with unk addition
     do 
         IFS=',' read topic_name sample <<< "${topicANDsample}"
         for reg_mode in  "mse" "bce" 

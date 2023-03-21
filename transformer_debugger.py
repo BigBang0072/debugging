@@ -2110,10 +2110,12 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
-    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,bidx=None):
+    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None):
         '''
-        inv_idx         : the topic which we want our representation to be invariant of
         bidx            : the batch index which could be used to hash certain things about the example
+        te_tidx         : this tidx is used by stage 1 for the topic/treatment index
+        inv_idx         : the topic which we want our representation to be invariant of (stage 2)
+        cf_tidx         : this tidx is used by stage 2 for the topic/treatment index (just to keep thigs separate)
         '''
         #Getting the train dataset
         label = dataset_batch["label"]
@@ -2272,6 +2274,7 @@ class SimpleNBOW(keras.Model):
                     zip(grads,self.trainable_weights)
                 )
         elif "stage2_te_reg" in task and self.model_args["teloss_type"]=="mse":
+            all_topic_label_train = all_topic_label[0:valid_idx]
             with tf.GradientTape() as tape:
                 total_loss = 0.0
                 #Encoding the input first
@@ -2288,23 +2291,22 @@ class SimpleNBOW(keras.Model):
 
                 #Getting the topic TE loss for each topic
                 if "strong" in task:
-                    for cf_tidx in tf.range(self.data_args["num_topics"]):
-                        cf_tidx = int(cf_tidx.numpy())
-                        #Getting the topic cf
-                        idx_tidx_cf_train=dataset_batch["input_idx_t{}_cf".format(cf_tidx)][0:valid_idx]
-                        attn_mask_topic_cf_train = None
-                        if self.model_args["bert_as_encoder"]==True:
-                            attn_mask_topic_cf_train = dataset_batch["attn_mask_t{}_cf".format(cf_tidx)][0:valid_idx]
+                    #Getting the topic cf
+                    idx_tidx_cf_train=dataset_batch["input_idx_t{}_cf".format(cf_tidx)][0:valid_idx]
+                    attn_mask_topic_cf_train = None
+                    if self.model_args["bert_as_encoder"]==True:
+                        attn_mask_topic_cf_train = dataset_batch["attn_mask_t{}_cf".format(cf_tidx)][0:valid_idx]
 
-                        #Getting the loss
-                        topic_te_loss = self.get_topic_cf_pred_loss_strict(
-                                                    input_enc=input_enc,
-                                                    idx_tidx_cf_train=idx_tidx_cf_train,
-                                                    attn_mask_topic_cf_train=attn_mask_topic_cf_train,
-                                                    cf_tidx=cf_tidx,
-                        )
-                        #Adding the topic pred loss to overall loss
-                        total_loss+=self.model_args["te_lambda"]*topic_te_loss
+                    #Getting the loss
+                    topic_te_loss = self.get_topic_cf_pred_loss_strict(
+                                                input_enc=input_enc,
+                                                idx_tidx_cf_train=idx_tidx_cf_train,
+                                                attn_mask_topic_cf_train=attn_mask_topic_cf_train,
+                                                all_topic_label=all_topic_label_train,
+                                                cf_tidx=cf_tidx,
+                    )
+                    #Adding the topic pred loss to overall loss
+                    total_loss+=self.model_args["te_lambda"]*topic_te_loss
                 elif "weak" in task:
                     raise NotImplementedError()# To generalize to the cebab and other dataset
                     idx_topic_cf_train_dict={}
@@ -2678,16 +2680,21 @@ class SimpleNBOW(keras.Model):
 
         return total_topic_loss
     
-    def get_topic_cf_pred_loss_strict(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,cf_tidx):
+    def get_topic_cf_pred_loss_strict(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,all_topic_label,cf_tidx):
         '''
         This function will enforce that the prediction of counterfactual x is 
         in agreement with the TE.
         '''
         #Getting the cf pred delta for this topic
-        sample_te = self.get_topic_cf_pred_delta(input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,cf_tidx)
+        sample_te = self.get_topic_cf_pred_delta(input_enc,
+                                                idx_tidx_cf_train,
+                                                attn_mask_topic_cf_train,
+                                                all_topic_label,
+                                                cf_tidx,
+        )
 
         #Getting the TE error
-        te_error = tf.reduce_mean((sample_te - self.model_args["t{}_ate".format(cf_tidx)])**2)
+        te_error = tf.reduce_mean((sample_te - self.model_args["topic_ate_list"][cf_tidx])**2)
         self.te_error_list[cf_tidx].update_state(te_error)
 
         return te_error
@@ -2744,7 +2751,7 @@ class SimpleNBOW(keras.Model):
 
         return total_te_hinge_loss
     
-    def get_topic_cf_pred_delta(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,cf_tidx):
+    def get_topic_cf_pred_delta(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,all_topic_label,cf_tidx):
         '''
         This function will enforce that the prediction of counterfactual x is 
         in agreement with the TE.
@@ -2778,7 +2785,14 @@ class SimpleNBOW(keras.Model):
 
         #Next getting the TE for each of the sample
         y1_idx=1 #the logit idx for y1 prediction
-        sample_te = tf.abs(extd_input_prob[:,:,y1_idx]-tidx_cf_prob[:,:,y1_idx])
+        #Getting the topic label
+        topic_label = tf.cast(
+                                tf.expand_dims(tf.expand_dims(all_topic_label[:,cf_tidx],axis=-1),axis=-1),
+                                tf.float32,
+        )
+        #Getting the correct signed sample te
+        sample_te = topic_label*(extd_input_prob[:,:,y1_idx]-tidx_cf_prob[:,:,y1_idx])\
+                    + (1-topic_label)*(tidx_cf_prob[:,:,y1_idx]-extd_input_prob[:,:,y1_idx])
 
         return sample_te
 
@@ -5404,17 +5418,52 @@ def nbow_inv_stage2_trainer(data_args,model_args):
     Given we have the treatment effect for all the topic we will impose the invariance when learning
     the model with different criteria
     '''
+    #Function to flatten the cat dataset so that we could handle multiple topic in interleved faishon
+    def flatten_cat_dataset(cat_dataset,tidx):
+        cat_dataset_list = []
+        for bidx,batch in enumerate(cat_dataset):
+            cat_dataset_list.append(dict(
+                                    tidx=tidx,
+                                    bidx=bidx,
+                                    batch=batch,
+            ))
+        return cat_dataset_list
+
     label_corr_dict = None
     print("Creating the dataset")
     data_handler = DataHandleTransformer(data_args)
     if "nlp_toy2" in data_args["path"]:
         cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "cebab_all" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        #Getting all the individual cat dataset for all the topic
+        cat_dataset_list=[]
+        for tpidx,topic in enumerate(data_args["cat_list"]):
+            #setting the appropriate data args
+            data_args["cebab_topic_name"]=topic 
+            data_args["num_sample"]=data_args["num_sample_list"][tpidx]
+            data_args["topic_pval"]=data_args["topic_pval_list"][tpidx]
+            data_handler.data_args = data_args
+            #Next we will generate the topic dataset
+            topic_cat_dataset = data_handler.controlled_cebab_dataset_handler(
+                                                                    return_cf=True,
+                                                                    nbow_mode=nbow_mode,
+                                                                    topic_idx=tpidx,
+            )
+            cat_dataset_list += flatten_cat_dataset(topic_cat_dataset,tpidx)
+
+            #We will shuffle this list to ensure no topic is trained in one go, for distributed update
+            random.shuffle(cat_dataset_list)
+
     elif "cebab" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
         cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
     elif "civilcomments" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
         cat_dataset = data_handler.controlled_civilcomments_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
 
     #Creating the classifier
     print("Creating the model")
@@ -5434,13 +5483,14 @@ def nbow_inv_stage2_trainer(data_args,model_args):
     for eidx in range(model_args["epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
-        tbar = tqdm(range(len(cat_dataset)))
+        tbar = tqdm(range(len(cat_dataset_list)))
 
 
         #Training the full stage2 together 
         print("Training the Stage2-full with: \t{}".format(model_args["stage_mode"]))
-        for bidx,data_batch in zip(tbar,cat_dataset):
-            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+        for bidx,batch_dict in zip(tbar,cat_dataset_list):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset_list),bidx))
+
             #Training the full classifier
             if "no_main" in model_args["stage_mode"]:
                 # We will train the representaion using the topic loss 
@@ -5449,40 +5499,45 @@ def nbow_inv_stage2_trainer(data_args,model_args):
 
                 #Train the representaiton using the topic specific removal
                 classifier_main.train_step_mouli(
-                                                dataset_batch=data_batch,
+                                                dataset_batch=batch_dict["batch"],
                                                 inv_idx=None,
-                                                task=model_args["stage_mode"]
+                                                task=model_args["stage_mode"],
+                                                cf_tidx=batch_dict["tidx"],
                 )
 
                 #Next training the main head to see the main task accuracy progress
                 classifier_main.train_step_mouli(
-                                                dataset_batch=data_batch,
+                                                dataset_batch=batch_dict["batch"],
                                                 inv_idx=None,
                                                 task="main_head",
+                                                cf_tidx=batch_dict["tidx"],
                 )
 
             else:
                 classifier_main.train_step_mouli(
-                                                dataset_batch=data_batch,
+                                                dataset_batch=batch_dict["batch"],
                                                 inv_idx=None,
-                                                task=model_args["stage_mode"]
+                                                task=model_args["stage_mode"],
+                                                cf_tidx=batch_dict["tidx"],
                 )
 
         
         # print(data_args["debug_tidx"])
         #Next getting the validation accraucy and the relavant metrics
-        for data_batch in cat_dataset:
+        for batch_dict in cat_dataset_list:
+            data_batch = batch_dict["batch"]
+            
             #Getting the accuracy metrics  (the topic classifier is not trained so dont consider numbers)
             classifier_main.valid_step_stage2(
-                                    dataset_batch=data_batch,
+                                    dataset_batch=batch_dict["batch"],
                                     P_matrix=P_Identity,
-                                    cidx=data_args["debug_tidx"],#wrt to the topic which is spurious
+                                    cidx=batch_dict["tidx"],#wrt to the topic which is spurious
             )
             #Getting the pdelta metrics
             classifier_main.valid_step_stage2_flip_topic(
-                                    dataset_batch=data_batch,
+                                    dataset_batch=batch_dict["batch"],
                                     P_matrix=P_Identity,
-                                    cidx=data_args["debug_tidx"],
+                                    cidx=batch_dict["tidx"],
             )
             
 
@@ -5507,33 +5562,57 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                                 classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result()
             ))
         elif "stage2_te_reg" in model_args["stage_mode"]:
-            log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
-                            +"t0_te_closs:{:0.4f}\n"\
-                            +"Acc(Smin):{:0.3f}\n"\
-                            +"pdelta:{:0.3f}"
-            # +"t1_te_closs:{:0.4f}\n"\
-            # +"t0t1_te_closs:{:0.4f}"\
+            log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"
+                            # +"t0_te_closs:{:0.4f}\n"\
+                            # +"Acc(Smin):{:0.3f}\n"\
+                            # +"pdelta:{:0.3f}"
+                            # +"t1_te_closs:{:0.4f}\n"\
+                            # +"t0t1_te_closs:{:0.4f}"\
             print(log_format.format(
                                 eidx,
                                 classifier_main.main_pred_xentropy.result(),
                                 classifier_main.main_valid_accuracy.result(),
-                                classifier_main.te_error_list[0].result(),
+                                # classifier_main.te_error_list[0].result(),
                                 # classifier_main.te_error_list[1].result(),
                                 # classifier_main.cross_te_error_list[0][1].result(),
-                                classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
-                                classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result()
+                                # classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                                # classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result()
             ))
+            #Getting the topic specific metrics
+            for tidx in range(classifier_main.data_args["num_topics"]):
+                topic_log_format = "\ntopic:{}\n"\
+                                    +"te_closs:{:0.4f}\n"\
+                                    +"Acc(Smin):{:0.3f}\n"\
+                                    +"pdelta:{:0.3f}"
+                print(topic_log_format.format(
+                                tidx,
+                                classifier_main.te_error_list[tidx].result(),
+                                classifier_main.topic_smin_main_valid_accuracy_list[tidx].result(),
+                                classifier_main.topic_flip_main_prob_delta_ldict[tidx]["all"].result()
+                ))
+
         elif model_args["stage_mode"]=="main":
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"\
-                        +"Acc(Smin):{:0.3f}\n"\
-                        +"pdelta:{:0.3f}"
+                        # +"Acc(Smin):{:0.3f}\n"\
+                        # +"pdelta:{:0.3f}"
             print(log_format.format(
                                 eidx,
                                 classifier_main.main_pred_xentropy.result(),
                                 classifier_main.main_valid_accuracy.result(),
-                                classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
-                                classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result()
+                                # classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                                # classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result()
             ))
+
+            #Getting the topic specific metrics
+            for tidx in range(classifier_main.data_args["num_topics"]):
+                topic_log_format = "\ntopic:{}\n"\
+                                    +"Acc(Smin):{:0.3f}\n"\
+                                    +"pdelta:{:0.3f}"
+                print(topic_log_format.format(
+                                tidx,
+                                classifier_main.topic_smin_main_valid_accuracy_list[tidx].result(),
+                                classifier_main.topic_flip_main_prob_delta_ldict[tidx]["all"].result()
+                ))
 
         #Saving all the probe metrics
         classifier_main.save_the_probe_metric_list()           
@@ -5619,6 +5698,7 @@ if __name__=="__main__":
     parser.add_argument('--select_best_alpha',default=False,action="store_true")
     parser.add_argument('--select_best_gval',default=False,action="store_true")
     parser.add_argument('-best_gval_selection_metric',dest="best_gval_selection_metric",type=str,default=None)
+    parser.add_argument('-cebab_all_ate_mode',dest="cebab_all_ate_mode",type=str,default=None)
     
 
     #Argument related to TE estimation for the transformations
@@ -5718,6 +5798,14 @@ if __name__=="__main__":
         data_args["neg_topic_corr"]=args.neg_topic_corr
         data_args["noise_ratio"]=args.noise_ratio
         data_args["dtype"]=args.dtype
+    elif "cebab_all" in data_args["path"]:
+        data_args["noise_ratio"]=args.noise_ratio
+        data_args["dtype"]=args.dtype
+        #Hardcoding the categories and the number of samples for each topic
+        data_args["cat_list"]=["food","service","ambiance","noise"]
+        data_args["num_sample_list"]=[500,460,340,320]
+        #Hardcoding equal topic correlation for each of the topic
+        data_args["topic_pval_list"]=[args.topic_pval]*len(data_args["cat_list"])
     elif "cebab" in data_args["path"] or "civilcomments" in data_args["path"]:
         data_args["noise_ratio"]=args.noise_ratio
         data_args["dtype"]=args.dtype
@@ -5828,8 +5916,18 @@ if __name__=="__main__":
             #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
             model_args["t0_ate"]=args.t0_ate + args.ate_noise
             model_args["t1_ate"]=args.t1_ate #- args.ate_noise
+    elif "cebab_all" in data_args["path"]:
+        #Creating the ate list for all the topics
+        model_args["cebab_all_ate_mode"]=args.cebab_all_ate_mode
+        if args.cebab_all_ate_mode == "true":
+            model_args["topic_ate_list"]=[0.42,0.16,0.07,-0.05]
+        elif args.cebab_all_ate_mode == "de":
+            model_args["topic_ate_list"]=[0.41,0.21,0.20,-0.05]
+        elif args.cebab_all_ate_mode == "dr":
+            model_args["topic_ate_list"]=[0.58,0.28,0.20,-0.28]
     else:
-        model_args["t0_ate"]=args.t0_ate
+        model_args["topic_ate_list"]=[args.t0_ate]
+        # model_args["t0_ate"]=args.t0_ate
 
     #TODO: Add support for the thresholding experiment where we clip the lower treatment effect
     model_args["stage_mode"] = args.stage_mode

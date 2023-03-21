@@ -120,25 +120,27 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
                 pdict["alpha:tdtidx1-tcf1"].append(probe_metric_list[idx]["classifier_acc_dict"]["alpha:t01-tcf1"])
 
 
-        if "topic1" in probe_metric_list[idx]["classifier_acc_dict"]:
-            # pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
-            # pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
+        max_topic=10
+        for tidx in range(1,max_topic):
+            if "topic{}".format(tidx) in probe_metric_list[idx]["classifier_acc_dict"]:
+                # pdict["angle:m-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic1"])
+                # pdict["angle:t0-t1"].append(probe_metric_list[idx]["conv_angle_dict"]["topic0"]["topic1"])
 
-            pdict["acc:topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1"])
-            pdict["topic1_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main"])
-            pdict["topic1_pdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta"])
+                pdict["acc:topic{}".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}".format(tidx)])
+                pdict["topic{}_main".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main".format(tidx)])
+                pdict["topic{}_pdelta".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta".format(tidx)])
 
-            
-            pdict["main_smin_topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic1"])
-            pdict["topic1_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_smin_main"])
+                
+                pdict["main_smin_topic{}".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic{}".format(tidx)])
+                pdict["topic{}_smin".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_smin_main".format(tidx)])
 
-            pdict["topic1_logpdelta"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_logpdelta"])
-            pdict["topic1_pdelta_m1t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m1t0"])
-            pdict["topic1_pdelta_m0t0"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m0t0"])
-            pdict["topic1_pdelta_m1t1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m1t1"])
-            pdict["topic1_pdelta_m0t1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_m0t1"])
-            pdict["topic1_pdelta_all"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_all"])
-            pdict["topic1_pdelta_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main_pdelta_smin"])
+                pdict["topic{}_logpdelta".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_logpdelta".format(tidx)])
+                pdict["topic{}_pdelta_m1t0".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_m1t0".format(tidx)])
+                pdict["topic{}_pdelta_m0t0".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_m0t0".format(tidx)])
+                pdict["topic{}_pdelta_m1t1".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_m1t1".format(tidx)])
+                pdict["topic{}_pdelta_m0t1".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_m0t1".format(tidx)])
+                pdict["topic{}_pdelta_all".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_all".format(tidx)])
+                pdict["topic{}_pdelta_smin".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_smin".format(tidx)])
 
         # pdict["acc:topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1"])
         # pdict["topic1_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main"])
