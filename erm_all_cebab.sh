@@ -39,13 +39,13 @@ sample="nosymm"
 
 
 
-for run_num in 0
+for run_num in 1 2
 do
     for debug_tidx in 0
     do 
         for pos_size in 20
         do
-            for noise in 0.4 0.3 0.1
+            for noise in 0.1 0.3
             do 
                 for pval in "inf"
                 do

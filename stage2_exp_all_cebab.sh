@@ -1,5 +1,5 @@
 #STAGE2-METHOD2 EXPT
-mainepoch=20
+mainepoch=8
 main_mode="non_causal"
 cbsize=1
 max_len=80
@@ -29,15 +29,15 @@ sample="nosymm"
 
 
 #Regularizing with true effect and then with DR for all the topic at once
-for run_num in  0
+for run_num in  1 2
 do
     for cebab_all_ate_mode in "true" "de" "dr"
     do
-        for te_lambda in  1 10 
+        for te_lambda in  1 10
         do
             for pos_size in 1
             do
-                for noise in 0.4 0.3 0.1
+                for noise in 0.1 0.3
                 do
                     for pval in "inf"
                     do

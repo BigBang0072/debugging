@@ -2416,7 +2416,7 @@ class DataHandleTransformer():
         
         return
     
-    def _add_noise_to_labels(self,all_label_arr,noise_ratio):
+    def _add_noise_to_labels(self,all_label_arr,noise_ratio,only_main=False):
         '''
         Here we will add noise to each of the labels (main and or topic)
         '''
@@ -2427,6 +2427,10 @@ class DataHandleTransformer():
 
             #Flipping the label
             all_label_arr[flip_idx,tidx] = np.logical_not(all_label_arr[flip_idx,tidx]==1)
+
+            if only_main==True:
+                print("WARNING: Adding the noise only in the main label, assuming that the main label is in the first index")
+                break 
         
         #Printing the label correlation
         self._print_label_correlation(all_label_arr)
@@ -2699,8 +2703,14 @@ class DataHandleTransformer():
 
         #Now getting the number of elements in the minoroty group
         num_minority = cf_merged_df[grp2_mask|grp4_mask].shape[0]
-        assert (1-self.data_args["topic_pval"])>0.05,"Very high correlation"
+        assert (1-self.data_args["topic_pval"])>0.01,"Very high correlation"
         num_majority = int((self.data_args["topic_pval"]/(1-self.data_args["topic_pval"]))*num_minority)
+
+        #If the number of majority required to achieve that correaltion is large, we will have to subsample the minority
+        max_majority_samples = cf_merged_df[grp1_mask|grp3_mask].shape[0]
+        if num_majority>max_majority_samples:
+            num_majority = max_majority_samples
+            num_minority = int(((1-self.data_args["topic_pval"])/self.data_args["topic_pval"])*num_majority)
 
         #Now getting the slice for each group
         majority_df = cf_merged_df[grp1_mask|grp3_mask][0:num_majority]
@@ -2708,6 +2718,9 @@ class DataHandleTransformer():
 
         #Merging the df
         pbalanced_df = pd.concat([majority_df,minority_df]).sample(frac=1).reset_index(drop=True)
+        print("Number of samples before rebalancing:",cf_merged_df.shape[0])
+        print("Number of samples after rebalancing:",pbalanced_df.shape[0])
+        self.data_args["{}_num_samples".format(self.data_args["cebab_topic_name"])]=pbalanced_df.shape[0]
 
         # pdb.set_trace()
 
