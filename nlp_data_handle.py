@@ -3189,14 +3189,19 @@ class DataHandleTransformer():
 
         return cat_dataset
     
-    def controlled_civilcomments_dataset_handler(self,return_causal=False,return_cf=False,nbow_mode=False):
+    def controlled_cda_dataset_handler(self,dataset,return_causal=False,return_cf=False,nbow_mode=False):
         '''
         In this dataset we could create the manually generated counterfactuals. 
         The only problem is for all the axis/groups we will consider all of them are going to be non-causal
         so how can we check if our method is not biased in giving zero causal effect all the time.
         '''
         #Getting the pbalnaced dataframe
-        pbalanced_df = self._get_civilcomment_dataframe()
+        if dataset=="civilcomments":
+            pbalanced_df = self._get_civilcomment_dataframe()
+        elif dataset=="aae":
+            pbalanced_df = self._get_cda_aae_dataframe()
+        else:
+            raise NotImplementedError()
         #We dont have true counterfactual to get the true causal effect. 
         #TODO: Create semi synthetic dataset where we could do this so that we could verify the stage1
 
@@ -3232,6 +3237,22 @@ class DataHandleTransformer():
         # pdb.set_trace()
 
         return cat_dataset
+    
+    def _get_cda_aae_dataframe(self,):
+        '''
+        This will load the already preprocessed dataset which had the counterfactual added from the
+        the gpt.
+        '''
+        #Loading the dataframe
+        df_path = self.data_args["path"] + "aae_cf_added_df.csv"
+        aae_df = pd.read_csv(df_path,sep="\t")
+        assert aae_df[aae_df["cf_sentence"]=="got exception for this cf. ERRORCODE404"].shape[0]==0,"cf_unavailable"
+        self._get_civilcomment_df_stats(aae_df)
+
+        #Next we could rebalance the dataframe using the same civilcomments function
+        pbalanced_df = self._get_rebalanced_civilcomment_df(aae_df)
+
+        return pbalanced_df
 
     def _get_civilcomment_dataframe(self,):
         '''
@@ -3326,7 +3347,7 @@ class DataHandleTransformer():
 
         #Now we will subsample the dataset to create artifical correlation
         req_sample_pg = self.data_args["num_sample"]//4
-        assert req_sample_pg<min_grp_val,"Examples exhausted!"
+        assert req_sample_pg<=min_grp_val,"Examples exhausted!"
 
         #Now we will rebalance the rest of the sub-groups
         majority_grp_df = pd.concat([

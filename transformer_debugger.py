@@ -975,15 +975,17 @@ class SimpleNBOW(keras.Model):
         self.probe_metric_list=[]
 
         #Now initilaizing some of the layers for encoder
-        if self.data_args["dtype"]=="toynlp2" or self.data_args["dtype"]=="toynlp3" or (
-                self.data_args["dtype"]=="cebab" and self.model_args["bert_as_encoder"]==False) or (
-                self.data_args["dtype"]=="civilcomments" and self.model_args["bert_as_encoder"]==False):
-            self.pre_encoder_layer = self.get_nbow_avg_layer()
-        elif self.data_args["dtype"]=="toytabular2":
-            self.pre_encoder_layer = self.get_dummy_linear_layer()
-        elif self.model_args["bert_as_encoder"]==True:
+        if self.model_args["bert_as_encoder"]==True:
             #Getting the "pre-encoder" layer
             self.pre_encoder_layer = self.get_bert_encoder_layer()
+        elif self.data_args["dtype"]=="toytabular2":
+            self.pre_encoder_layer = self.get_dummy_linear_layer()
+        elif self.data_args["dtype"]=="toynlp2" or\
+                self.data_args["dtype"]=="toynlp3" or\
+                self.data_args["dtype"]=="cebab" or\
+                self.data_args["dtype"]=="civilcomments" or\
+                self.data_args["dtype"]=="aae":
+            self.pre_encoder_layer = self.get_nbow_avg_layer()
         else:
             raise NotImplementedError()
         
@@ -1002,7 +1004,9 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = 50
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
-            elif self.data_args["dtype"]=="cebab" or self.data_args["dtype"]=="civilcomments":
+            elif self.data_args["dtype"]=="cebab" or\
+                 self.data_args["dtype"]=="civilcomments" or\
+                 self.data_args["dtype"]=="aae":
                 self.hlayer_dim = 50
         else:
             if self.model_args["bert_as_encoder"]==True:
@@ -1011,7 +1015,9 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = self.emb_dim
             elif self.data_args["dtype"]=="toytabular2":
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
-            elif self.data_args["dtype"]=="cebab" or self.data_args["dtype"]=="civilcomments":
+            elif self.data_args["dtype"]=="cebab" or\
+                 self.data_args["dtype"]=="civilcomments" or\
+                 self.data_args["dtype"]=="aae":
                 self.hlayer_dim = 50
         
         for _ in range(self.model_args["num_hidden_layer"]):
@@ -5247,7 +5253,10 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
             cat_dataset_full_cebab = data_handler.get_cebab_sentiment_only_dataset(nbow_mode=nbow_mode)
     elif "civilcomments" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
-        cat_dataset = data_handler.controlled_civilcomments_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",return_cf=True,nbow_mode=nbow_mode)
+    elif "aae" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="aae",return_cf=True,nbow_mode=nbow_mode)
     else:
         raise NotImplementedError()
     
@@ -5347,8 +5356,6 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
             current_reg_valid_val = float(classifier_main.reg_acc_valid.result().numpy())
             if classifier_main.best_reg_valid_val<current_reg_valid_val:
                 update_best_gval_flag = True 
-        else:
-            raise NotImplementedError()
         #Now updateing the best gval if required
         if update_best_gval_flag==True:
             print("Updating the reg-best value: {} with:{}".format(classifier_main.best_reg_valid_val,current_reg_valid_val))
@@ -5462,7 +5469,11 @@ def nbow_inv_stage2_trainer(data_args,model_args):
         cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
     elif "civilcomments" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
-        cat_dataset = data_handler.controlled_civilcomments_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "aae" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="aae",return_cf=True,nbow_mode=nbow_mode)
         cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
 
     #Creating the classifier
