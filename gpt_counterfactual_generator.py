@@ -19,6 +19,16 @@ class CounterfactualGenerator():
         '''
         self.cf_args=cf_args 
 
+        #Creating the prompt for AAE dataset
+        self.prompt_aa2nhw = '''
+        Convert the following sentence in the style of African American speaker to Non-Hispanic white American speaker:
+
+        '''
+        self.prompt_nhw2aa = '''
+        Convert the following sentence in the style of Non-Hispanic white American speaker to African American speaker:
+
+        '''
+
     def generate_aae_counterfactual(self,):
         '''
         This function will generate the counterfactual for the aae dataset where we change the 
@@ -28,23 +38,13 @@ class CounterfactualGenerator():
         print("Getting the dataframe")
         aae_df = self._get_aae_dataframe()
         #Saving the dataframe in the 
-        save_path = cf_args["df_save_path"]+"aae_df.csv"
+        save_path = self.cf_args["df_save_path"]+"aae_df.csv"
         aae_df.to_csv(save_path,sep="\t")
-
-        #Creating the prompt for this dataset
-        prompt_aa2nhw = '''
-        Convert the following sentence in the style of African American speaker to Non-Hispanic white American speaker:
-
-        '''
-        prompt_nhw2aa = '''
-        Convert the following sentence in the style of Non-Hispanic white American speaker to African American speaker:
-
-        '''
 
         #Generating the counterfactual sentences
         cf_sentence_list = []
         print("Generating the counterfactual sentences")
-        with open(cf_args["df_save_path"]+"cf_example_list.txt","w") as whandle:
+        with open(self.cf_args["df_save_path"]+"cf_example_list.txt","w") as whandle:
             for eidx in range(aae_df.shape[0]):
                 try:
                     sentence = aae_df.iloc[eidx]["sentence"]
@@ -52,9 +52,9 @@ class CounterfactualGenerator():
                     prompt=None
                     #topic=1 are the tweets from the aae race
                     if topic_label==1:
-                        prompt = prompt_aa2nhw
+                        prompt = self.prompt_aa2nhw
                     else:
-                        prompt = prompt_nhw2aa
+                        prompt = self.prompt_nhw2aa
                     #Getting the counterfactual
                     cf_sentence = self._get_sentence_counterfactual(
                                                                 prompt=prompt,
@@ -73,7 +73,7 @@ class CounterfactualGenerator():
                     #Writing the list of sentence in the file
                     whandle.write("=======================================\n")
                     whandle.write("sentence:{}\n".format(sentence))
-                    whandle.write("topic_label:{}".format(topic_label))
+                    whandle.write("topic_label:{}\n".format(topic_label))
                     whandle.write("cf_sentence:{}\n".format(cf_sentence))
                     print("DONE:written to file\n\n")
                 except:
@@ -83,13 +83,71 @@ class CounterfactualGenerator():
         #Adding the counterfactual to the dataframe
         aae_df = aae_df.assign(cf_sentence=cf_sentence_list)
         #Saving the dataframe in the disk with cf
-        save_path = cf_args["df_save_path"]+"aae_cf_added_df.csv"
+        save_path = self.cf_args["df_save_path"]+"aae_cf_added_df.csv"
         aae_df.to_csv(save_path,sep="\t")
         #Reloading the df to test
         aae_df = pd.read_csv(save_path,sep="\t")
 
-        pdb.set_trace()
+        print("Number of unfinished sentences:",aae_df[aae_df["cf_sentence"]=="got exception for this cf. ERRORCODE404"].shape[0])
+        # pdb.set_trace()
         return aae_df
+    
+    def correct_unfilled_cf_sentences(self,):
+        '''
+        If for some reason the main dataframe were not filled correctly, this will refill them by running the API again.
+        '''
+        #Loading the dataframe
+        save_path = self.cf_args["df_save_path"]+self.cf_args["cf_added_fname"]
+        df = pd.read_csv(save_path,sep="\t")
+
+        cf_sentence_list=[]
+        for eidx in range(df.shape[0]):
+            #Skipping the sentence which are already filled
+            if df.iloc[eidx]["cf_sentence"]!="got exception for this cf. ERRORCODE404":
+                cf_sentence_list.append(df.iloc[eidx]["cf_sentence"])
+                continue
+            
+            try:
+                sentence = df.iloc[eidx]["sentence"]
+                topic_label = df.iloc[eidx]["topic_label"] 
+                prompt=None
+                #topic=1 are the tweets from the aae race
+                if topic_label==1:
+                    prompt = self.prompt_aa2nhw
+                else:
+                    prompt = self.prompt_nhw2aa
+                #Getting the counterfactual
+                cf_sentence = self._get_sentence_counterfactual(
+                                                            prompt=prompt,
+                                                            sentence=sentence
+                )
+                #Adding the counterfactual to the dataframe
+                cf_sentence_list.append(cf_sentence) 
+
+                #Logging the result
+                print("=========================================\n")
+                print("eidx:{}/{}\ntopic_label:{}\nsentence:{}\ncf_sentence:{}".format(
+                                                            eidx,
+                                                            df.shape[0],
+                                                            topic_label,
+                                                            sentence,
+                                                            cf_sentence
+                ))
+            except:
+                print("got exception for this cf. ERRORCODE404")
+                continue
+        
+        #Adding the counterfactual to the dataframe
+        df = df.assign(cf_sentence=cf_sentence_list)
+        #Saving the dataframe in the disk with cf
+        save_path = self.cf_args["df_save_path"]+self.cf_args["cf_added_fname"]
+        df.to_csv(save_path,sep="\t")
+        #Reloading the df to test
+        df = pd.read_csv(save_path,sep="\t")
+
+        #Testing exception again
+        print("Number of unfinished sentences:",df[df["cf_sentence"]=="got exception for this cf. ERRORCODE404"].shape[0])
+        return
         
     def _get_aae_dataframe(self,):
         '''
@@ -143,13 +201,15 @@ if __name__=="__main__":
     cf_args={}
     cf_args["path"]="dataset/twitter_aae_sentiment_race"
     cf_args["df_save_path"]="dataset/twitter_aae_sentiment_race/"
+    cf_args["cf_added_fname"]="aae_cf_added_df.csv"
     cf_args["openai_model_name"]="text-davinci-003"  #text-davinci-003", 
     cf_args["max_tokens"]=100
     cf_args["num_sample"]=10000
 
     #Creating the counterfactual generator
     cf_generator = CounterfactualGenerator(cf_args)
-    cf_generator.generate_aae_counterfactual()
+    # cf_generator.generate_aae_counterfactual()
+    cf_generator.correct_unfilled_cf_sentences()
 
         
 
