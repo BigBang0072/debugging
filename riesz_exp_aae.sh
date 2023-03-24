@@ -42,7 +42,7 @@ do
             do
                 for reg_lambda in 1 
                 do 
-                    for rr_lambda in 0
+                    for rr_lambda in 1
                     do
                         for tmle_lambda in 0
                         do
