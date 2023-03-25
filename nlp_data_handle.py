@@ -7,14 +7,14 @@ import tensorflow as tf
 import gensim.downloader as gensim_api
 
 import string
-import spacy
-nlp = spacy.load("en_core_web_lg",disable=["tagger", "parser", "lemmatizer", "ner", "textcat"])
-from spacy.lang.en.stop_words import STOP_WORDS
-from spacy.lang.en import English
-from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
-from sklearn.feature_extraction.text import CountVectorizer
+# import spacy
+# nlp = spacy.load("en_core_web_lg",disable=["tagger", "parser", "lemmatizer", "ner", "textcat"])
+# from spacy.lang.en.stop_words import STOP_WORDS
+# from spacy.lang.en import English
+# from sklearn.decomposition import NMF, LatentDirichletAllocation, TruncatedSVD
+# from sklearn.feature_extraction.text import CountVectorizer
 
-from sklearn.neighbors import NearestNeighbors
+# from sklearn.neighbors import NearestNeighbors
 
 import os
 import gzip
@@ -3244,7 +3244,7 @@ class DataHandleTransformer():
         the gpt.
         '''
         #Loading the dataframe
-        df_path = self.data_args["path"] + "aae_cf_added_df.csv"
+        df_path = self.data_args["path"] + "/aae_cf_added_df.csv"
         aae_df = pd.read_csv(df_path,sep="\t")
         assert aae_df[aae_df["cf_sentence"]=="got exception for this cf. ERRORCODE404"].shape[0]==0,"cf_unavailable"
         self._get_civilcomment_df_stats(aae_df)

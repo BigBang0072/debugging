@@ -7,8 +7,8 @@ import pathlib
 import numpy as np
 import pandas as pd
 from tensorflow._api.v2 import data
-import scipy
-from scipy.spatial import distance
+# import scipy
+# from scipy.spatial import distance
 import random
 from collections import defaultdict
 
@@ -5182,8 +5182,8 @@ def nbow_trainer_mouli(data_args,model_args):
                 "metrics_tline":all_metrics_dict
     }
     #Saving the json
-    expt_num = len(glob.glob(data_args["out_path"]+"*.json"))
-    expt_path = data_args["out_path"]+"expt{}.json".format(expt_num)
+    expt_num = len(glob.glob(data_args["out_path"]+"/*.json"))
+    expt_path = data_args["out_path"]+"/expt{}.json".format(expt_num)
     print("Dumping the config in: {}".format(expt_path))
     with open(expt_path,"w") as whandle:
         json.dump(experiment_dict,whandle,indent="\t")
