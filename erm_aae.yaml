@@ -42,7 +42,7 @@ search:
     name: search_{experiment_name:s}_{auto:3s}
     sku: G1
     command:
-    - python transformer_debugger.py -expt_num "cad.civils2.rnum({run_num}).topic({topic_name}).sample({sample}).pval({pval}).erm" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -cfactuals_bsize {cfactuals_bsize} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -batch_size {batch_size} -lr {lr}  -dtype {dtype} -loss_type {loss_type} -topic_name {topic_name}  -topic_pval {pval}   -run_num {run_num} -dropout_rate {dropout_rate} -debug_tidx {debug_tidx}  -stage_mode {stage_mode} --bert_as_encoder -transformer {transformer} --train_bert
+    - python transformer_debugger.py -expt_num "cad.civils2.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).erm" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -cfactuals_bsize {cfactuals_bsize} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -batch_size {batch_size} -lr {lr}  -dtype {dtype} -loss_type {loss_type} -topic_name {topic_name}  -topic_pval {pval}   -run_num {run_num} -dropout_rate {dropout_rate} -debug_tidx {debug_tidx}  -stage_mode {stage_mode} --bert_as_encoder -transformer {transformer} --train_bert
   type: grid
   max_trials: 100000
   params:
