@@ -3217,14 +3217,23 @@ class DataHandleTransformer():
         y_label = pbalanced_df["label"].tolist()
         topic_label = pbalanced_df["topic_label"].tolist()
 
+        #Creating the topic label 
+        all_label_arr = np.stack(
+                                [y_label,topic_label],
+                                axis=-1,
+        )
+        #Adding the noise to the labels
+        if self.data_args["noise_ratio"]!=None:
+            all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
+
         #Creating the dataset dict
         data_dict=dict(
-                        label=y_label,
-                        label_denoise=y_label,
+                        label=all_label_arr[:,0],
+                        label_denoise=all_label_arr[:,0],
                         input_idx=input_idx,
                         attn_mask=attn_mask,
-                        topic_label=np.expand_dims(topic_label,axis=-1),
-                        topic_label_denoise=np.expand_dims(topic_label,axis=-1),
+                        topic_label=all_label_arr[:,1:],
+                        topic_label_denoise=all_label_arr[:,1:],
                         input_idx_t0_flip=cf_input_idx[:,0,:],
                         attn_mask_t0_flip=cf_attn_mask[:,0,:],
         )
