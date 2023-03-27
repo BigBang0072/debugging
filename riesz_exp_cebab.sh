@@ -37,13 +37,13 @@ num_topics=1
 #         IFS=',' read topic_name sample <<< "${topicANDsample}"
 #         for reg_mode in  "mse" 
 #         do 
-#             for noise in 0.1 0.3
+#             for noise in 0.0 #0.1 0.3
 #             do 
 #                 for debug_tidx in 0
 #                 do
 #                     for reg_lambda in 1 
 #                     do 
-#                         for rr_lambda in 1
+#                         for rr_lambda in 0
 #                         do
 #                             for tmle_lambda in 0
 #                             do
@@ -73,7 +73,7 @@ do
         IFS=',' read topic_name sample <<< "${topicANDsample}"
         for reg_mode in  "mse"
         do 
-            for noise in 0.1 0.3
+            for noise in 0.0 #0.1 0.3
             do 
                 for debug_tidx in 0
                 do
@@ -109,13 +109,13 @@ done
 #         IFS=',' read topic_name sample <<< "${topicANDsample}"
 #         for reg_mode in  "mse"
 #         do 
-#             for noise in 0.1 0.3
+#             for noise in 0.0 #0.1 0.3
 #             do 
 #                 for debug_tidx in 0
 #                 do
 #                     for reg_lambda in 1 
 #                     do 
-#                         for rr_lambda in 1
+#                         for rr_lambda in 0
 #                         do
 #                             for tmle_lambda in 0
 #                             do
