@@ -1,7 +1,7 @@
 {
-	"path": "dataset/civilcomments/",
+	"path": "/mnt/default/dataset/civilcomments",
 	"expt_name": "cad.civils2.rnum(1).topic(gender).sample(5000).noise(0.0).pval(0.99).t0_ate(0.1).telambda(1)",
-	"out_path": "dataset/civilcomments",
+	"out_path": "/mnt/default/dataset/civilcomments",
 	"task_name": "sentiment",
 	"causal_ratio": null,
 	"spurious_ratio": null,
@@ -40,13 +40,15 @@
 	"topic_pval": 0.99,
 	"num_sample_cebab_all": null,
 	"topic_name": "gender",
-	"expt_meta_path": "dataset/civilcomments/nlp_logs/cad.civils2.rnum(1).topic(gender).sample(5000).noise(0.0).pval(0.99).t0_ate(0.1).telambda(1)",
+	"replace_strategy": "remove",
+	"symmetrize_main_cf": false,
+	"expt_meta_path": "/mnt/default/dataset/civilcomments/nlp_logs/cad.civils2.rnum(1).topic(gender).sample(5000).noise(0.0).pval(0.99).t0_ate(0.1).telambda(1)",
 	"run_num": 1,
 	"cfactuals_bsize": 1,
 	"load_weight_exp": null,
 	"load_weight_epoch": null,
 	"lr": 5e-05,
-	"epochs": 5,
+	"epochs": 20,
 	"l1_lambda": 0.0,
 	"valid_split": 0.2,
 	"concat_word_emb": false,
@@ -84,7 +86,9 @@
 	"norm_lambda": null,
 	"inv_idx": null,
 	"closs_type": null,
-	"t0_ate": 0.1,
+	"topic_ate_list": [
+		0.1
+	],
 	"stage_mode": "stage2_te_reg_strong",
 	"teloss_type": "mse",
 	"te_lambda": 1.0,
@@ -96,5 +100,9 @@
 	"reg_lambda": null,
 	"hinge_width": null,
 	"separate_cebab_de": false,
-	"only_de": false
+	"only_de": false,
+	"riesz_reg_mode": null,
+	"select_best_alpha": false,
+	"select_best_gval": false,
+	"best_gval_selection_metric": null
 }
