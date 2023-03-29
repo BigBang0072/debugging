@@ -5936,6 +5936,26 @@ if __name__=="__main__":
             model_args["topic_ate_list"]=[0.41,0.21,0.20,-0.05]
         elif args.cebab_all_ate_mode == "dr":
             model_args["topic_ate_list"]=[0.58,0.28,0.20,-0.28]
+        elif args.cebab_all_ate_mode == "de_acc":
+            model_args["topic_ate_list"]=[0.4,0.155,0.09,-0.03]
+        elif args.cebab_all_ate_mode == "dr_acc":
+            model_args["topic_ate_list"]=[0.4,0.155,0.09,-0.02]
+        elif args.cebab_all_ate_mode == "sel_acc_de":
+            model_args["topic_ate_list"]=[0.31,0.27,0.18,0.69]
+        elif args.cebab_all_ate_mode == "sel_acc_dr":
+            model_args["topic_ate_list"]=[0.24,0.27,0.4,0.5]
+        elif args.cebab_all_ate_mode == "sel_loss_de":
+            model_args["topic_ate_list"]=[0.16,0.22,-0.001,0.34]
+        elif args.cebab_all_ate_mode == "sel_loss_dr":
+            model_args["topic_ate_list"]=[0.35,0.008,-0.008,-0.23]
+        elif args.cebab_all_ate_mode == "acc_de":
+            model_args["topic_ate_list"]=[0.22,0.17,0.16,0.58]
+        elif args.cebab_all_ate_mode == "acc_dr":
+            model_args["topic_ate_list"]=[0.2,0.29,0.34,0.26]
+        elif args.cebab_all_ate_mode == "loss_de":
+            model_args["topic_ate_list"]=[0.39,0.19,0.19,0.31]
+        elif args.cebab_all_ate_mode == "loss_dr":
+            model_args["topic_ate_list"]=[0.3,0.29,0.1,0.26]
     else:
         model_args["topic_ate_list"]=[args.t0_ate]
         # model_args["t0_ate"]=args.t0_ate
