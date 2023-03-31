@@ -1939,17 +1939,24 @@ class DataHandleTransformer():
         print("Creating the dataset")
         all_example_widx_dict = self._create_nlp_dataset3_from_labels(label_dict)
 
+
+        #Selecting the topic to keep as second
+        second_topic_idx = 3 #1 :causal, 2: confounder 3: spurious
+
         #Creating the dataframe
         data_dict = dict(
                         label=y_label,
                         input_idx = all_example_widx_dict["all_example_widx_list"],
-                        topic_label = all_label_arr[:,[1,3]],
+                        topic_label = all_label_arr[:,[1,second_topic_idx]],
                         tcf_label = all_label_arr[:,2]
         )
         #Adding the counterfactual if required
         if return_cf==True:
             data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_causal_widx_list"]
-            data_dict["input_idx_t1_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
+            if second_topic_idx==2:
+                data_dict["input_idx_t1_cf"] = all_example_widx_dict["all_example_cf_confound_widx_list"]
+            elif second_topic_idx==3:
+                data_dict["input_idx_t1_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
 
 
         if self.data_args["return_label_dataset"]==True:
@@ -2038,6 +2045,7 @@ class DataHandleTransformer():
         all_example_cf_dict = {
                             "causal":[],
                             "spurious":[],
+                            "confound":[],
         }#This will contain the counterfactual example wrt to the topic
         for eidx in range(self.data_args["num_sample"]):
             causal_label   = label_dict["causal"][eidx]
@@ -2112,6 +2120,7 @@ class DataHandleTransformer():
             #Getting the counterfactual examples
             all_example_cf_dict["causal"].append(causal_cf_fragment+confound_fragment+spurious_fragment)
             all_example_cf_dict["spurious"].append(causal_fragment+confound_fragment+spurious_cf_fragment)
+            all_example_cf_dict["confound"].append(causal_fragment+confound_cf_fragment+spurious_fragment)
 
         # pdb.set_trace()
         #Next we will have to conver all the sentence to thier widx 
@@ -2123,7 +2132,7 @@ class DataHandleTransformer():
         #Converting the cf sentence to widx
         all_example_cf_causal_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["causal"]),axis=1)
         all_example_cf_spurious_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["spurious"]),axis=1)
-
+        all_example_cf_confound_widx_list = np.expand_dims(self._convert_text_to_widx(all_example_cf_dict["confound"]),axis=1)
 
         all_example_widx_dict = dict(
                         all_example_widx_list = all_example_widx_list,
@@ -2132,6 +2141,7 @@ class DataHandleTransformer():
                         all_example_notreat_spurious_widx_list = all_example_notreat_spurious_widx_list,
                         all_example_cf_causal_widx_list = all_example_cf_causal_widx_list,
                         all_example_cf_spurious_widx_list = all_example_cf_spurious_widx_list,
+                        all_example_cf_confound_widx_list = all_example_cf_confound_widx_list,
         )
 
         return all_example_widx_dict
