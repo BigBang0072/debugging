@@ -2770,7 +2770,8 @@ class SimpleNBOW(keras.Model):
         # tidx_sample_idxs = tf.random.shuffle(sample_idxs)[0:self.model_args["num_pos_sample"]]
         #Sampling the samples
         tidx_cf_idx_train = tf.gather(idx_tidx_cf_train,tidx_sample_idxs,axis=1)
-        tidx_cf_attn_mask_cf_train = tf.gather(attn_mask_topic_cf_train,tidx_sample_idxs,axis=1)
+        if self.model_args["bert_as_encoder"]==True:
+            tidx_cf_attn_mask_cf_train = tf.gather(attn_mask_topic_cf_train,tidx_sample_idxs,axis=1)
 
         #Expanding the encoded input and getting the 
         input_prob = self.get_main_task_pred_prob(input_enc)
@@ -2779,7 +2780,10 @@ class SimpleNBOW(keras.Model):
         #Next encoding the counterfactual sample for this indexes
         flat_shape = [-1,self.data_args["max_len"]]
         flat_tidx_cf_idx = tf.reshape(tidx_cf_idx_train,flat_shape)
-        flat_tidx_attn_mask_cf_train = tf.reshape(tidx_cf_attn_mask_cf_train,flat_shape)
+        flat_tidx_attn_mask_cf_train = None
+        if self.model_args["bert_as_encoder"]==True:
+            flat_tidx_attn_mask_cf_train = tf.reshape(tidx_cf_attn_mask_cf_train,flat_shape)
+        
         #Passing though the encoder
         flat_tidx_cf_enc = self._encoder(flat_tidx_cf_idx,
                                         attn_mask=flat_tidx_attn_mask_cf_train,
@@ -5442,6 +5446,10 @@ def nbow_inv_stage2_trainer(data_args,model_args):
     if "nlp_toy2" in data_args["path"]:
         cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
         cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "nlp_toy3" in data_args["path"]:
+        print("Creating the TOY-STORY3")
+        cat_dataset,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
     elif "cebab_all" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
         #Getting all the individual cat dataset for all the topic
@@ -5918,16 +5926,16 @@ if __name__=="__main__":
     model_args["norm_lambda"]=args.norm_lambda
     model_args["inv_idx"]=args.inv_idx
     model_args["closs_type"]=args.closs_type
-    if "nlp_toy3" in data_args["path"]:
-        if args.ate_noise is not None and (args.debug_tidx==1):
-            #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
-            model_args["t0_ate"]=args.t0_ate #- args.ate_noise
-            model_args["t1_ate"]=args.t1_ate + args.ate_noise
-        elif args.ate_noise is not None:
-            #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
-            model_args["t0_ate"]=args.t0_ate + args.ate_noise
-            model_args["t1_ate"]=args.t1_ate #- args.ate_noise
-    elif "cebab_all" in data_args["path"]:
+    # if "nlp_toy3" in data_args["path"]:
+    #     if args.ate_noise is not None and (args.debug_tidx==1):
+    #         #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
+    #         model_args["t0_ate"]=args.t0_ate #- args.ate_noise
+    #         model_args["t1_ate"]=args.t1_ate + args.ate_noise
+    #     elif args.ate_noise is not None:
+    #         #We saw that the TE for correct topic doesnt changes, only it incerease the wrong one
+    #         model_args["t0_ate"]=args.t0_ate + args.ate_noise
+    #         model_args["t1_ate"]=args.t1_ate #- args.ate_noise
+    if "cebab_all" in data_args["path"]:
         #Creating the ate list for all the topics
         model_args["cebab_all_ate_mode"]=args.cebab_all_ate_mode
         if args.cebab_all_ate_mode == "true":

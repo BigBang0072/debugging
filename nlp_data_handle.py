@@ -1941,25 +1941,39 @@ class DataHandleTransformer():
 
 
         #Selecting the topic to keep as second
-        second_topic_idx = 3 #1 :causal, 2: confounder 3: spurious
+        if self.data_args["topic_name"]=="causal":
+            topic_idx = 1 #1 :causal, 2: confounder 3: spurious
+        elif self.data_args["topic_name"]=="confound":
+            topic_idx = 2
+        elif self.data_args["topic_name"]=="spurious":
+            topic_idx = 3
+        else:
+            raise NotImplementedError()
 
         #Creating the dataframe
         data_dict = dict(
                         label=y_label,
+                        label_denoise=y_label,
                         input_idx = all_example_widx_dict["all_example_widx_list"],
-                        topic_label = all_label_arr[:,[1,second_topic_idx]],
+                        topic_label = all_label_arr[:,[topic_idx]],
+                        topic_label_denoise = all_label_arr[:,[topic_idx]],
                         tcf_label = all_label_arr[:,2]
         )
         #Adding the counterfactual if required
         if return_cf==True:
-            data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_causal_widx_list"]
-            if second_topic_idx==2:
-                data_dict["input_idx_t1_cf"] = all_example_widx_dict["all_example_cf_confound_widx_list"]
-            elif second_topic_idx==3:
-                data_dict["input_idx_t1_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
+            if topic_idx==1:
+                data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_causal_widx_list"]
+                data_dict["input_idx_t0_flip"] = all_example_widx_dict["all_example_cf_causal_widx_list"][:,0,:]
+            elif topic_idx==2:
+                data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_confound_widx_list"]
+                data_dict["input_idx_t0_flip"] = all_example_widx_dict["all_example_cf_confound_widx_list"][:,0,:]
+            elif topic_idx==3:
+                data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
+                data_dict["input_idx_t0_flip"] = all_example_widx_dict["all_example_cf_causal_widx_list"][:,0,:]
 
 
         if self.data_args["return_label_dataset"]==True:
+            raise NotImplementedError()
             #Creating the dataframe with only the labels based covariates instead of words
             data_dict["input_idx"] = all_label_arr[:,1:].astype("float32")
             #Creating the t0 counterfactual by flipping the t0 label
