@@ -76,10 +76,14 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
         pdict["topic0_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_smin_main"])
         
         
+        #Adding the stage2 specific metrics
         if "topic0_pos_con_loss" in probe_metric_list[idx]["classifier_acc_dict"]:
             pdict["topic0_pos_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_pos_con_loss"])
             pdict["topic0_neg_con_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_neg_con_loss"])
             pdict["topic0_last_emb_norm"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_last_emb_norm"])
+        
+        if "topic0_te_loss" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["topic0_te_loss"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_te_loss"])
         
         #Adding the result from Stage1 CAD riesz
         if "rr_loss" in probe_metric_list[idx]["classifier_acc_dict"]:
@@ -141,6 +145,10 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
                 pdict["topic{}_pdelta_m0t1".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_m0t1".format(tidx)])
                 pdict["topic{}_pdelta_all".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_all".format(tidx)])
                 pdict["topic{}_pdelta_smin".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_smin".format(tidx)])
+
+                #Adding the stage2 specific loss
+                if "topic{}_te_loss".format(tidx) in probe_metric_list[idx]["classifier_acc_dict"]:
+                    pdict["topic{}_te_loss".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_te_loss".format(tidx)])
 
         # pdict["acc:topic1"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1"])
         # pdict["topic1_main"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic1_flip_main"])

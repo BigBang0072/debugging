@@ -2295,6 +2295,9 @@ class SimpleNBOW(keras.Model):
                 self.main_pred_xentropy.update_state(main_xentropy_loss) 
                 total_loss += main_xentropy_loss
 
+                # if self.eidx==18:
+                #     pdb.set_trace()
+
                 #Getting the topic TE loss for each topic
                 if "strong" in task:
                     #Getting the topic cf
@@ -2803,6 +2806,10 @@ class SimpleNBOW(keras.Model):
         #Getting the correct signed sample te
         sample_te = topic_label*(extd_input_prob[:,:,y1_idx]-tidx_cf_prob[:,:,y1_idx])\
                     + (1-topic_label)*(tidx_cf_prob[:,:,y1_idx]-extd_input_prob[:,:,y1_idx])
+
+
+        # if self.eidx==18:
+        #     pdb.set_trace()
 
         return sample_te
 
@@ -5501,6 +5508,7 @@ def nbow_inv_stage2_trainer(data_args,model_args):
     print("Starting the training steps!")
     for eidx in range(model_args["epochs"]):
         print("==========================================")
+        classifier_main.eidx = eidx
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset_list)))
 

@@ -1969,7 +1969,7 @@ class DataHandleTransformer():
                 data_dict["input_idx_t0_flip"] = all_example_widx_dict["all_example_cf_confound_widx_list"][:,0,:]
             elif topic_idx==3:
                 data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
-                data_dict["input_idx_t0_flip"] = all_example_widx_dict["all_example_cf_causal_widx_list"][:,0,:]
+                data_dict["input_idx_t0_flip"] = all_example_widx_dict["all_example_cf_spurious_widx_list"][:,0,:]
 
 
         if self.data_args["return_label_dataset"]==True:
