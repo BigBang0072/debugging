@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -5955,8 +5955,10 @@ if __name__=="__main__":
         elif args.cebab_all_ate_mode == "de_acc":
             model_args["topic_ate_list"]=[0.4,0.155,0.09,-0.03]
         elif args.cebab_all_ate_mode == "dr_acc":
+            #actually this is de loss
             model_args["topic_ate_list"]=[0.4,0.155,0.09,-0.02]
         elif args.cebab_all_ate_mode == "sel_acc_de":
+            #These are with gval and alpha selection
             model_args["topic_ate_list"]=[0.31,0.27,0.18,0.69]
         elif args.cebab_all_ate_mode == "sel_acc_dr":
             model_args["topic_ate_list"]=[0.24,0.27,0.4,0.5]
@@ -5965,6 +5967,7 @@ if __name__=="__main__":
         elif args.cebab_all_ate_mode == "sel_loss_dr":
             model_args["topic_ate_list"]=[0.35,0.008,-0.008,-0.23]
         elif args.cebab_all_ate_mode == "acc_de":
+            #These are without alpha and gval selection
             model_args["topic_ate_list"]=[0.22,0.17,0.16,0.58]
         elif args.cebab_all_ate_mode == "acc_dr":
             model_args["topic_ate_list"]=[0.2,0.29,0.34,0.26]
