@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -2313,6 +2313,7 @@ class SimpleNBOW(keras.Model):
                                                 attn_mask_topic_cf_train=attn_mask_topic_cf_train,
                                                 all_topic_label=all_topic_label_train,
                                                 cf_tidx=cf_tidx,
+                                                task=task,
                     )
                     #Adding the topic pred loss to overall loss
                     total_loss+=self.model_args["te_lambda"]*topic_te_loss
@@ -2689,7 +2690,7 @@ class SimpleNBOW(keras.Model):
 
         return total_topic_loss
     
-    def get_topic_cf_pred_loss_strict(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,all_topic_label,cf_tidx):
+    def get_topic_cf_pred_loss_strict(self,input_enc,idx_tidx_cf_train,attn_mask_topic_cf_train,all_topic_label,cf_tidx,task):
         '''
         This function will enforce that the prediction of counterfactual x is 
         in agreement with the TE.
@@ -2703,7 +2704,19 @@ class SimpleNBOW(keras.Model):
         )
 
         #Getting the TE error
-        te_error = tf.reduce_mean((sample_te - self.model_args["topic_ate_list"][cf_tidx])**2)
+        te_error=None
+        if "width" in task:
+            #Adding the width based loss as a slight relaxation to the topic based loss
+            te_error = tf.reduce_mean(
+                        tf.maximum(
+                            tf.abs(sample_te - self.model_args["topic_ate_list"][cf_tidx]) - self.model_args["hinge_width"],
+                            0.0
+                        )**2
+            )
+        elif task=="stage2_te_reg_strong":
+            te_error = tf.reduce_mean((sample_te - self.model_args["topic_ate_list"][cf_tidx])**2)
+        else:
+            raise NotImplementedError()
         self.te_error_list[cf_tidx].update_state(te_error)
 
         return te_error
