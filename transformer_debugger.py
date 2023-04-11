@@ -1055,6 +1055,7 @@ class SimpleNBOW(keras.Model):
         )
         #Initializing some of the metrics for main task
         self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
+        self.main_valid_pred_xentropy = keras.metrics.Mean(name="sent_valid_pred_x")
         self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
         #Keep track of the embedding norm 
         self.post_proj_embedding_norm = keras.metrics.Mean(name="pp_emb_norm")
@@ -1263,6 +1264,7 @@ class SimpleNBOW(keras.Model):
     def reset_all_metrics(self,):
         #Resetting the main task related metrics
         self.main_pred_xentropy.reset_states()
+        self.main_valid_pred_xentropy.reset_states()
         self.main_valid_accuracy.reset_states()
         self.post_proj_embedding_norm.reset_states()
         self.embedding_norm.reset_states()
@@ -1877,6 +1879,9 @@ class SimpleNBOW(keras.Model):
             attn_mask_valid = dataset_batch["attn_mask"][valid_idx:]
 
 
+        #Initializing the loss metric
+        scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+
         #Getting the latent representaiton for the input
         X_latent = self._encoder(idx_valid,attn_mask=attn_mask_valid,training=False)
         X_proj = self._get_proj_X_enc(X_latent,P_matrix)
@@ -1905,6 +1910,8 @@ class SimpleNBOW(keras.Model):
             #Getting the validation accuracy of the main task
             #TODO: This assumes that this is the last layer of the both branches
             main_valid_prob = self.main_task_classifier(X_proj)
+            main_valid_xentropy_loss = scxentropy_loss(label_valid,main_valid_prob)
+            self.main_valid_pred_xentropy.update_state(main_valid_xentropy_loss)
             self.main_valid_accuracy.update_state(label_valid,main_valid_prob)
             #Getting the accuracy in Smin group
             self.topic_smin_main_valid_accuracy_list[cidx].update_state(
@@ -1950,7 +1957,7 @@ class SimpleNBOW(keras.Model):
         #                 main_label = label_valid,
         #                 topic_label = topic_label_valid
         # )
-        return None
+        return main_valid_prob
     
     def valid_step_stage2_flip_topic(self,dataset_batch,P_matrix,cidx):
         '''
@@ -3231,7 +3238,7 @@ class SimpleNBOW(keras.Model):
                     )
         )
     
-    def save_the_probe_metric_list(self):
+    def save_the_probe_metric_list(self,fname_suffix=""):
         '''
         '''
         #Getting the classifier information
@@ -3244,7 +3251,7 @@ class SimpleNBOW(keras.Model):
                     label_corr_dict = self.label_corr_dict,
         ))
         #Dumping the first set of metrics we have
-        probe_metric_path = "{}/probe_metric_list.json".format(data_args["expt_meta_path"])
+        probe_metric_path = "{}/probe_metric_list{}.json".format(data_args["expt_meta_path"],fname_suffix)
         print("Dumping the probe metrics in: {}".format(probe_metric_path))
         with open(probe_metric_path,"w") as whandle:
             json.dump(self.probe_metric_list,whandle,indent="\t")
@@ -5456,6 +5463,217 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
         #Saving all the probe metrics
         classifier_main.save_the_probe_metric_list()  
 
+def nbow_mouli_stage1_trainer(data_args,model_args):
+    '''
+    This fucntion will be used to get the treatment effect from the Mouli's method of 
+    using the predictive accuracy's drop to judge whether there is an arrow from a node or not.
+    '''
+    #Getting the normal and cad dataset
+    label_corr_dict=None
+    print("Creating the dataset")
+    data_handler = DataHandleTransformer(data_args)
+    if "nlp_toy2" in data_args["path"]:
+        raise NotImplementedError()
+        cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
+    elif "nlp_toy3" in data_args["path"]:
+        print("Creating the TOY-STORY3")
+        cat_dataset_normal,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+        cat_dataset_cad, _ = data_handler.toy_nlp_dataset_handler3(return_cf=True,add_mouli_cad=True)
+    elif "cebab" in data_args["path"]:
+        raise NotImplementedError()
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+
+        #Getting the dataset 
+        if model_args["separate_cebab_de"]==True:
+            cat_dataset_full_cebab = data_handler.get_cebab_sentiment_only_dataset(nbow_mode=nbow_mode)
+    elif "civilcomments" in data_args["path"]:
+        raise NotImplementedError()
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",return_cf=True,nbow_mode=nbow_mode)
+    elif "aae" in data_args["path"]:
+        raise NotImplementedError()
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="aae",return_cf=True,nbow_mode=nbow_mode)
+    else:
+        raise NotImplementedError()
+
+    
+    #First of all we will train the erm classifier to get the base predictive accuracy
+    erm_best_valid_prob_dict = _get_prediction_from_erm(
+                                                    data_args=data_args,
+                                                    model_args=model_args,
+                                                    data_handler=data_handler,
+                                                    cat_dataset=cat_dataset_normal,
+                                                    label_corr_dict=label_corr_dict,
+                                                    fname_suffix="_erm",
+    )
+
+    #Next we will train the invariant predictor using the 
+    cad_best_valid_prob_dict = _get_prediction_from_erm(
+                                                        data_args=data_args,
+                                                        model_args=model_args,
+                                                        data_handler=data_handler,
+                                                        cat_dataset=cat_dataset_cad,
+                                                        label_corr_dict=label_corr_dict,
+                                                        fname_suffix="_cad",
+                                                        cat_dataset_topred=cat_dataset_normal,
+    )
+
+    #Now is the time to get the proxy for the treatment effect
+    all_pred_tv_list = []
+    for bidx in erm_best_valid_prob_dict.keys():
+        #Getting the tv for the prediction
+        pred_tv = np.absolute(erm_best_valid_prob_dict[bidx]-cad_best_valid_prob_dict[bidx])
+        all_pred_tv_list.append(pred_tv)
+    tv_val = np.mean(np.concatenate(all_pred_tv_list,axis=0))
+    print("mean TV value = {}".format(tv_val))
+
+    #Converting all the numpy array to list to get ready to save things
+    for bidx in erm_best_valid_prob_dict.keys():
+        erm_best_valid_prob_dict[bidx] = [(float(val[0]),float(val[1])) for val in erm_best_valid_prob_dict[bidx].tolist()]
+        cad_best_valid_prob_dict[bidx] = [(float(val[0]),float(val[1])) for val in cad_best_valid_prob_dict[bidx].tolist()]
+
+    #Saving the TV value to a file for this run
+    pred_tv_data = dict(
+                    erm_best_valid_prob_dict = erm_best_valid_prob_dict,
+                    cad_best_valid_prob_dict = cad_best_valid_prob_dict,
+                    tv_val = float(tv_val),
+    )
+    pred_tv_savename = "{}/mouli_pred_tv_data.json".format(data_args["expt_meta_path"])
+    print("Dumping the TV data in: {}".format(pred_tv_savename))
+    with open(pred_tv_savename,"w") as whandle:
+        json.dump(pred_tv_data,whandle,indent="\t")
+
+
+def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label_corr_dict,fname_suffix,cat_dataset_topred=None):
+    '''
+    Here we will train normal ERM classifier to get the baseline accuracy
+    '''
+    #Creating the classifier
+    print("\n\n\n\nCreating the ERM model for stage 1")
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Adding the label correlation dict to the classifier
+    classifier_main.label_corr_dict = label_corr_dict
+
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+
+    #Getting a dummy projection matrix to use the previous stage 2 validators
+    P_Identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+
+    #Initializing the best and current prediction has dict
+    best_valid_prob_dict={}
+    best_valid_metric=None
+    if model_args["mouli_valid_sel_mode"]=="loss":
+        best_valid_metric = float("inf")
+    elif  model_args["mouli_valid_sel_mode"]=="acc":
+        best_valid_metric = 0.0
+
+
+    #Running the training loop
+    print("Starting the training steps!")
+    for eidx in range(model_args["epochs"]):
+        classifier_main.eidx = eidx
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        tbar = tqdm(range(len(cat_dataset)))
+
+        #Training the full stage2 together 
+        print("Training the Mouli-Stage1-full with: \t{}".format(model_args["stage_mode"]))
+        for bidx,data_batch in zip(tbar,cat_dataset):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
+            classifier_main.train_step_mouli(
+                                            dataset_batch=data_batch,
+                                            inv_idx=None,
+                                            task="main",
+                                            cf_tidx=None,
+            )
+        
+        #Initializing the current prediction dict
+        current_valid_prob_dict={}
+        current_valid_metric=None
+        update_best_valid_prob_flag=False
+        
+        #Getting the validation accuracy
+        for bidx,data_batch in enumerate(cat_dataset):
+            main_valid_prob = classifier_main.valid_step_stage2(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],#wrt to the topic which is spurious
+            )
+            #Getting the pdelta metrics
+            classifier_main.valid_step_stage2_flip_topic(
+                                    dataset_batch=data_batch,
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],
+            )
+
+            if main_valid_prob==None:
+                print("Skipping a valid step. It was an empty life!")
+                continue
+            #Updating the current prediction hash
+            current_valid_prob_dict[bidx]=main_valid_prob.numpy().copy()
+        
+        #Now we will decide if we have to update the best prediction hash or not
+        if model_args["mouli_valid_sel_mode"]=="loss":
+            current_valid_metric = float(classifier_main.main_valid_pred_xentropy.result().numpy())
+            if current_valid_metric<best_valid_metric:
+                best_valid_metric=current_valid_metric
+                update_best_valid_prob_flag=True
+        elif model_args["mouli_valid_sel_mode"]=="acc":
+            current_valid_metric = float(classifier_main.main_valid_accuracy.result().numpy())
+            if current_valid_metric>best_valid_metric:
+                best_valid_metric=current_valid_metric
+                update_best_valid_prob_flag=True
+        else:
+            raise NotImplementedError()
+        
+        #Printing the logs for this training setp
+        log_format="epoch:{:}\nxloss:{:0.4f}\nvxloss:{:0.3f}\nvacc:{:0.3f}\n"\
+                        + "Acc(smin):{:0.3f}\n"\
+                        + "pdelta:{:0.3f}"
+        print(log_format.format(
+                            eidx,
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+                            classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                            classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result(),
+        ))
+        #Saving all the probe metrics
+        classifier_main.save_the_probe_metric_list(fname_suffix=fname_suffix) 
+
+        #Updating the best predcition dict if required
+        if update_best_valid_prob_flag == True:
+            #This is for the ERM mode when we have the correct dataset to get the prediction
+            if cat_dataset_topred==None:
+                for kbidx,predval in current_valid_prob_dict.items():
+                    best_valid_prob_dict[kbidx]=predval.copy()
+            else:
+                #This is for the case when we are training the invariant model but want to get prediction
+                #on normal dataset without cad
+                #Getting the prediction probability on the prediction dataset
+                for bidx_topred,data_batch_topred in enumerate(cat_dataset_topred):
+                    best_main_valid_prob = classifier_main.valid_step_stage2(
+                                    dataset_batch=data_batch_topred,
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],#wrt to the topic which is spurious
+                    )
+                    if best_main_valid_prob==None:
+                        print("Skipping a valid step. It was an empty life!")
+                        continue
+                    best_valid_prob_dict[bidx_topred] = best_main_valid_prob.numpy().copy()
+    
+    #Releasing the current model
+    print("Releasing the previous model to get a new model for next step")
+    del classifier_main
+
+    #Returning the best prediction from ERM
+    return best_valid_prob_dict
+
 def nbow_inv_stage2_trainer(data_args,model_args):
     '''
     Given we have the treatment effect for all the topic we will impose the invariance when learning
@@ -5752,6 +5970,9 @@ if __name__=="__main__":
     parser.add_argument('--select_best_gval',default=False,action="store_true")
     parser.add_argument('-best_gval_selection_metric',dest="best_gval_selection_metric",type=str,default=None)
     parser.add_argument('-cebab_all_ate_mode',dest="cebab_all_ate_mode",type=str,default=None)
+
+    #Arguments related to Stage1 using Mouli's predictive accuracy method
+    parser.add_argument('-mouli_valid_sel_mode',dest="mouli_valid_sel_mode",type=str,default=None)
     
 
     #Argument related to TE estimation for the transformations
@@ -6025,6 +6246,7 @@ if __name__=="__main__":
     model_args["select_best_alpha"]=args.select_best_alpha
     model_args["select_best_gval"]=args.select_best_gval
     model_args["best_gval_selection_metric"]=args.best_gval_selection_metric
+    model_args["mouli_valid_sel_mode"]=args.mouli_valid_sel_mode
 
 
     #Setting up the gpu
@@ -6047,7 +6269,9 @@ if __name__=="__main__":
     #                   CAD JOBS                    #
     #################################################
     # nbow_trainer_mouli(data_args,model_args)
-    if "stage2" in model_args["stage_mode"] or "main" in model_args["stage_mode"]:
+    if "mouli" in model_args["stage_mode"]:
+        nbow_mouli_stage1_trainer(data_args,model_args)
+    elif "stage2" in model_args["stage_mode"] or "main" in model_args["stage_mode"]:
         nbow_inv_stage2_trainer(data_args,model_args)
     elif "stage1" in model_args["stage_mode"]:
         nbow_riesznet_stage1_trainer(data_args,model_args)

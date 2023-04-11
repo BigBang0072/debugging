@@ -1860,7 +1860,7 @@ class DataHandleTransformer():
         
         return cat_dataset
     
-    def toy_nlp_dataset_handler3(self,return_causal=False,return_cf=False,return_fulldict=False):
+    def toy_nlp_dataset_handler3(self,return_causal=False,return_cf=False,return_fulldict=False,add_mouli_cad=False):
         '''
         This function will generate the third version of the toy data handle
         which will have a particular causal graph to generate data:
@@ -1868,6 +1868,11 @@ class DataHandleTransformer():
            tm --> Y (causal topic/treatment)
 
            w  --> ts (spurious topic/treatment)
+
+
+        add_mouli_cad   : this will add the counterfactual data (wrt to topic) with the same main task lable.
+                            The main intent is to learn an invariant representation wrt to topic whcih 
+                            can be use to find the causal effect based on Mouli's Theorem-1.
         '''
         #Generating the topic labels 
         tm_conf_topic_label = np.array([
@@ -1971,6 +1976,40 @@ class DataHandleTransformer():
                 data_dict["input_idx_t0_cf"] = all_example_widx_dict["all_example_cf_spurious_widx_list"]
                 data_dict["input_idx_t0_flip"] = all_example_widx_dict["all_example_cf_spurious_widx_list"][:,0,:]
 
+        #Next we will add the counterfactual in the main dataset if needed to do CAD for inv rep (Mouli for S1)
+        #TODO: We can generalize the same code for all the dataset. Adapt later
+        if add_mouli_cad==True: 
+            #Adding the counterfactual label (this will be same as the main label cuz CAD for invariance)
+            data_dict["label"] = np.concatenate([data_dict["label"],data_dict["label"]],axis=0)
+            data_dict["label_denoise"] = np.concatenate([data_dict["label_denoise"],data_dict["label_denoise"]],axis=0)
+
+            #Next we will add the input idx for the cf (which is same as the topic flip)
+            init_input_idx = data_dict["input_idx"].copy()
+            data_dict["input_idx"] = np.concatenate([data_dict["input_idx"],data_dict["input_idx_t0_cf"][:,0,:]],axis=0)
+            #Adding the counterfactua / flip sentence for cf as input which is the input sentence for pdelta calc
+            if return_cf==True:
+                data_dict["input_idx_t0_cf"] = np.concatenate([data_dict["input_idx_t0_cf"],np.expand_dims(init_input_idx,axis=1)],axis=0)
+                data_dict["input_idx_t0_flip"] = np.concatenate([data_dict["input_idx_t0_flip"],init_input_idx],axis=0)
+
+            #Also we need to change the topic label to opposite since we added counterfactual
+            #Assumption: The labels are 0/1 thus using 1-init_topic_label will flip things
+            data_dict["topic_label"] = np.concatenate([data_dict["topic_label"],1-data_dict["topic_label"]],axis=0)
+            data_dict["topic_label_denoise"] = np.concatenate([data_dict["topic_label_denoise"],1-data_dict["topic_label_denoise"]],axis=0)
+
+            #Next we will add the confounder label
+            #This will change if the debug tidx itself is confounder, other wise it will remain same
+            if self.data_args["topic_name"]=="confound":
+                data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],1-data_dict["tcf_label"]],axis=0)
+            else:
+                data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],data_dict["tcf_label"]],axis=0)
+            
+            #Next we need to reshuffle the dataset so that the counterfactual examples are evenly distributed
+            shuffle_idx_list = list(range(data_dict["label"].shape[0]))
+            np.random.shuffle(shuffle_idx_list)
+            #Shuffling all the data with same shuffling index
+            for dkey in data_dict.keys():
+                data_dict[dkey] = data_dict[dkey][shuffle_idx_list]
+        
 
         if self.data_args["return_label_dataset"]==True:
             raise NotImplementedError()
