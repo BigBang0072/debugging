@@ -1979,37 +1979,7 @@ class DataHandleTransformer():
         #Next we will add the counterfactual in the main dataset if needed to do CAD for inv rep (Mouli for S1)
         #TODO: We can generalize the same code for all the dataset. Adapt later
         if add_mouli_cad==True: 
-            #Adding the counterfactual label (this will be same as the main label cuz CAD for invariance)
-            data_dict["label"] = np.concatenate([data_dict["label"],data_dict["label"]],axis=0)
-            data_dict["label_denoise"] = np.concatenate([data_dict["label_denoise"],data_dict["label_denoise"]],axis=0)
-
-            #Next we will add the input idx for the cf (which is same as the topic flip)
-            init_input_idx = data_dict["input_idx"].copy()
-            data_dict["input_idx"] = np.concatenate([data_dict["input_idx"],data_dict["input_idx_t0_cf"][:,0,:]],axis=0)
-            #Adding the counterfactua / flip sentence for cf as input which is the input sentence for pdelta calc
-            if return_cf==True:
-                data_dict["input_idx_t0_cf"] = np.concatenate([data_dict["input_idx_t0_cf"],np.expand_dims(init_input_idx,axis=1)],axis=0)
-                data_dict["input_idx_t0_flip"] = np.concatenate([data_dict["input_idx_t0_flip"],init_input_idx],axis=0)
-
-            #Also we need to change the topic label to opposite since we added counterfactual
-            #Assumption: The labels are 0/1 thus using 1-init_topic_label will flip things
-            data_dict["topic_label"] = np.concatenate([data_dict["topic_label"],1-data_dict["topic_label"]],axis=0)
-            data_dict["topic_label_denoise"] = np.concatenate([data_dict["topic_label_denoise"],1-data_dict["topic_label_denoise"]],axis=0)
-
-            #Next we will add the confounder label
-            #This will change if the debug tidx itself is confounder, other wise it will remain same
-            if self.data_args["topic_name"]=="confound":
-                data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],1-data_dict["tcf_label"]],axis=0)
-            else:
-                data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],data_dict["tcf_label"]],axis=0)
-            
-            #Next we need to reshuffle the dataset so that the counterfactual examples are evenly distributed
-            shuffle_idx_list = list(range(data_dict["label"].shape[0]))
-            np.random.shuffle(shuffle_idx_list)
-            #Shuffling all the data with same shuffling index
-            for dkey in data_dict.keys():
-                data_dict[dkey] = data_dict[dkey][shuffle_idx_list]
-        
+            data_dict = self._prepare_cad_data_dict_for_mouli(data_dict,return_cf)
 
         if self.data_args["return_label_dataset"]==True:
             raise NotImplementedError()
@@ -2038,6 +2008,55 @@ class DataHandleTransformer():
             cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
         return cat_dataset,label_corr_dict
+    
+    def _prepare_cad_data_dict_for_mouli(self,data_dict,return_cf):
+        '''
+        Since mouli requires counterfactual data augmentation for learning a invariant classifier,
+        we have to symmetrize the data dict and include the counterfactual examples as main-task 
+        examples only.
+        '''
+        print("Adding the counterfactual data in the main examples to create CAD for this topic")
+        #Adding the counterfactual label (this will be same as the main label cuz CAD for invariance)
+        data_dict["label"] = np.concatenate([data_dict["label"],data_dict["label"]],axis=0)
+        data_dict["label_denoise"] = np.concatenate([data_dict["label_denoise"],data_dict["label_denoise"]],axis=0)
+
+        #Next we will add the input idx for the cf (which is same as the topic flip)
+        init_input_idx = data_dict["input_idx"].copy()
+        data_dict["input_idx"] = np.concatenate([data_dict["input_idx"],data_dict["input_idx_t0_cf"][:,0,:]],axis=0)
+        #Adding the counterfactua / flip sentence for cf as input which is the input sentence for pdelta calc
+        if return_cf==True:
+            data_dict["input_idx_t0_cf"] = np.concatenate([data_dict["input_idx_t0_cf"],np.expand_dims(init_input_idx,axis=1)],axis=0)
+            data_dict["input_idx_t0_flip"] = np.concatenate([data_dict["input_idx_t0_flip"],init_input_idx],axis=0)
+
+        #Also we need to change the topic label to opposite since we added counterfactual
+        #Assumption: The labels are 0/1 thus using 1-init_topic_label will flip things
+        data_dict["topic_label"] = np.concatenate([data_dict["topic_label"],1-data_dict["topic_label"]],axis=0)
+        data_dict["topic_label_denoise"] = np.concatenate([data_dict["topic_label_denoise"],1-data_dict["topic_label_denoise"]],axis=0)
+
+        #Next we will add the confounder label
+        #This will change if the debug tidx itself is confounder, other wise it will remain same
+        if "nlp_toy3" in self.data_args["path"]:
+            if self.data_args["topic_name"]=="confound":
+                data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],1-data_dict["tcf_label"]],axis=0)
+            else:
+                data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],data_dict["tcf_label"]],axis=0)
+        else:
+            #Rest of the dataset also have attentaion mask. Expand them too
+            init_attn_mask = data_dict["attn_mask"].copy()
+            data_dict["attn_mask"] = np.concatenate([data_dict["attn_mask"],data_dict["attn_mask_t0_cf"][:,0,:]],axis=0)
+            #Adding the mask for the counterfactuals
+            if return_cf==True:
+                data_dict["attn_mask_t0_cf"] = np.concatenate([data_dict["attn_mask_t0_cf"],np.expand_dims(init_attn_mask,axis=1)],axis=0)
+                data_dict["attn_mask_t0_flip"] = np.concatenate([data_dict["attn_mask_t0_flip"],init_attn_mask],axis=0)
+
+        #Next we need to reshuffle the dataset so that the counterfactual examples are evenly distributed
+        shuffle_idx_list = list(range(data_dict["label"].shape[0]))
+        np.random.shuffle(shuffle_idx_list)
+        #Shuffling all the data with same shuffling index
+        for dkey in data_dict.keys():
+            data_dict[dkey] = data_dict[dkey][shuffle_idx_list]
+
+        return data_dict
     
     def _create_nlp_dataset3_from_labels(self,label_dict):
         '''
@@ -2858,11 +2877,11 @@ class DataHandleTransformer():
                                 max_length=self.data_args["max_len"],
                                 return_tensors="tf"
         )
-        input_idx = encoded_doc["input_ids"]
-        attn_mask = encoded_doc["attention_mask"]
+        input_idx = encoded_doc["input_ids"].numpy()
+        attn_mask = encoded_doc["attention_mask"].numpy()
         token_type_idx = None 
         if "token_type_ids" in encoded_doc:
-            token_type_idx = encoded_doc["token_type_ids"]
+            token_type_idx = encoded_doc["token_type_ids"].numpy()
         
 
 
@@ -2890,10 +2909,10 @@ class DataHandleTransformer():
             cf_token_type_idx_list.append(cf_token_type_idx)
         
         #Merging all the cf_idxs
-        cf_input_idx = tf.stack(cf_input_idx_list,axis=0)
-        cf_attn_mask = tf.stack(cf_attn_mask_list,axis=0)
+        cf_input_idx = tf.stack(cf_input_idx_list,axis=0).numpy()
+        cf_attn_mask = tf.stack(cf_attn_mask_list,axis=0).numpy()
         if cf_token_type_idx_list[0]!=None:
-            cf_token_type_idx = tf.stack(cf_token_type_idx_list,axis=0)
+            cf_token_type_idx = tf.stack(cf_token_type_idx_list,axis=0).numpy()
         # pdb.set_trace()
         
 
@@ -3252,7 +3271,7 @@ class DataHandleTransformer():
 
         return cat_dataset
     
-    def controlled_cda_dataset_handler(self,dataset,return_causal=False,return_cf=False,nbow_mode=False):
+    def controlled_cda_dataset_handler(self,dataset,return_causal=False,return_cf=False,nbow_mode=False,add_mouli_cad=False):
         '''
         In this dataset we could create the manually generated counterfactuals. 
         The only problem is for all the axis/groups we will consider all of them are going to be non-causal
@@ -3303,6 +3322,10 @@ class DataHandleTransformer():
         if return_cf==True:
             data_dict["input_idx_t0_cf"]=cf_input_idx
             data_dict["attn_mask_t0_cf"]=cf_attn_mask
+        
+        if add_mouli_cad==True: 
+            data_dict = self._prepare_cad_data_dict_for_mouli(data_dict,return_cf)
+
         #Creating the dataset object ready for consumption
         cat_dataset=tf.data.Dataset.from_tensor_slices(data_dict)
         cat_dataset=cat_dataset.batch(self.data_args["batch_size"])

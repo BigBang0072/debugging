@@ -43,7 +43,7 @@ search:
     name: search_{experiment_name:s}
     sku: G1
     command:
-    - python transformer_debugger.py -expt_num "cad.civils2.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).t0_ate({t0_ate}).telambda({te_lambda}).hwidth({hwidth})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -batch_size {batch_size} -dtype {dtype} -loss_type {loss_type} -teloss_type {teloss_type} -cfactuals_bsize {cfactuals_bsize}  -num_pos_sample {pos_size} -num_neg_sample {pos_size} -te_lambda {te_lambda} -run_num {run_num} -dropout_rate {dropout_rate} -t0_ate {t0_ate} -debug_tidx {debug_tidx} -stage_mode {stage_mode} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert  -replace_strategy {replace_strategy} -hinge_width {hwidth}
+    - python transformer_debugger.py -expt_num "cad.moulis1civil.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).mvsel({mouli_valid_sel_mode})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -batch_size {batch_size} -dtype {dtype} -loss_type {loss_type} -cfactuals_bsize {cfactuals_bsize}  -num_pos_sample {pos_size} -num_neg_sample {pos_size} -run_num {run_num} -dropout_rate {dropout_rate} -debug_tidx {debug_tidx} -stage_mode {stage_mode} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert -mouli_valid_sel_mode {mouli_valid_sel_mode}
   type: grid
   max_trials: 100000
   params:
@@ -59,14 +59,12 @@ search:
     - name: noise
       values: [0.0,]
     - name: dtype
-      values: ["civilcomments"]
+      values: ["aae"]
     - name: num_topics
       values: [1,]
     - name: topic_name
       values: ["race","gender"]
       # values: ["religion",]
-    - name: replace_strategy
-      values: ["remove"]
     - name: max_len
       values: [80,]
     - name: mainepoch
@@ -82,31 +80,13 @@ search:
     - name: hlayer
       values: [0,]
     - name: stage_mode
-      values: ["stage2_te_reg_strong",] #stage2_te_reg_strong_with_width
-    - name: teloss_type
-      values: ["mse",]
+      values: ["stage1_mouli",]
     - name: pos_size
       values: [1,]
-    - name: te_lambda
-      values: [1000,10000]
     - name: pval
-      # values: [0.5]
-      # values: [0.6]
-      # values: [0.7]
-      # values: [0.8]
-      # values: [0.9]
-      # values: [0.99]
       values: [0.5,0.6,0.7,0.8,0.9,0.99]
-    - name: t0_ate
-      # values: [-0.017,]
-      # values: [0.001,0.07,]
-      # values: [0.16,0.12,]
-      # values: [0.21,]
-      # values: [0.3,]
-      # values: [0.29,0.26,]
-      values: [-1.0,-0.5,-0.3,-0.1,0.0,0.1,0.3,0.5,0.7,0.9,1.0] #[-50.0,-10.0,-1.0,-0.5,-0.1,2.0,3.0,5.0,10.0,50.0,100.0] 
-    - name: hwidth
-      values: [0.0]
+    - name: mouli_valid_sel_mode 
+      values: ["loss", "acc"]
     - name: transformer
       values: ["bert-base-uncased",]
     - name: lr

@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -5488,13 +5488,23 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         if model_args["separate_cebab_de"]==True:
             cat_dataset_full_cebab = data_handler.get_cebab_sentiment_only_dataset(nbow_mode=nbow_mode)
     elif "civilcomments" in data_args["path"]:
-        raise NotImplementedError()
         nbow_mode = False if model_args["bert_as_encoder"] else True
-        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
+                                                                dataset="civilcomments",
+                                                                return_cf=True,
+                                                                nbow_mode=nbow_mode,
+                                                                add_mouli_cad=True,
+        )
     elif "aae" in data_args["path"]:
-        raise NotImplementedError()
         nbow_mode = False if model_args["bert_as_encoder"] else True
-        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="aae",return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="aae",return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
+                                                                dataset="aae",
+                                                                return_cf=True,
+                                                                nbow_mode=nbow_mode,
+                                                                add_mouli_cad=True,
+        )
     else:
         raise NotImplementedError()
 
