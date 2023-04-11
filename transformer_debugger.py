@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -5545,7 +5545,6 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
     with open(pred_tv_savename,"w") as whandle:
         json.dump(pred_tv_data,whandle,indent="\t")
 
-
 def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label_corr_dict,fname_suffix,cat_dataset_topred=None):
     '''
     Here we will train normal ERM classifier to get the baseline accuracy
@@ -5673,6 +5672,8 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
 
     #Returning the best prediction from ERM
     return best_valid_prob_dict
+
+
 
 def nbow_inv_stage2_trainer(data_args,model_args):
     '''
@@ -6251,6 +6252,7 @@ if __name__=="__main__":
 
     #Setting up the gpu
     if "nlp_toy3" in data_args["path"]:
+        print("Disabling GPU")
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
