@@ -1891,10 +1891,10 @@ class DataHandleTransformer():
         #Generating the main task labels
         #Getting the CPD of the Y=0 given topic causal and confounder
         y_cpd_tm_conf = defaultdict(dict)
-        y_cpd_tm_conf[0][0]= 0.9
-        y_cpd_tm_conf[0][1]= 0.4
-        y_cpd_tm_conf[1][0]= 0.6
-        y_cpd_tm_conf[1][1]= 0.1
+        y_cpd_tm_conf[0][0]= 0.99 #0.9 
+        y_cpd_tm_conf[0][1]= 0.30 #0.4
+        y_cpd_tm_conf[1][0]= 0.70 #0.6
+        y_cpd_tm_conf[1][1]= 0.01 #0.1
 
         #Generating the Y label
         y_label = []

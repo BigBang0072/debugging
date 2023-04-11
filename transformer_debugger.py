@@ -2123,6 +2123,9 @@ class SimpleNBOW(keras.Model):
         inv_idx         : the topic which we want our representation to be invariant of (stage 2)
         cf_tidx         : this tidx is used by stage 2 for the topic/treatment index (just to keep thigs separate)
         '''
+        #Iniitalizing the debug dict to dump things which will be used for debugging
+        self.debug_dict={}
+
         #Getting the train dataset
         label = dataset_batch["label"]
         all_topic_label = dataset_batch["topic_label"]
@@ -2143,6 +2146,7 @@ class SimpleNBOW(keras.Model):
         if "nlp_toy3" in data_args["path"]:
             tcf_label = dataset_batch["tcf_label"]
             tcf_label_train = tcf_label[0:valid_idx]
+            self.debug_dict["tcf_label_train"] = tcf_label_train
         
 
         #Initializing the loss metric
@@ -2829,6 +2833,9 @@ class SimpleNBOW(keras.Model):
     def valid_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,bidx=None):
         '''
         '''
+        #Dict that will be used for debugging (will be used for keeping things to be used for debugging!)
+        self.debug_dict = {}
+
         #Getting the train dataset
         label = dataset_batch["label"]
         all_topic_label = dataset_batch["topic_label"]
@@ -2849,6 +2856,7 @@ class SimpleNBOW(keras.Model):
         if "nlp_toy3" in data_args["path"]:
             tcf_label = dataset_batch["tcf_label"]
             tcf_label_valid = tcf_label[valid_idx:]
+            self.debug_dict["tcf_label_valid"]=tcf_label_valid
 
         #Skipping if we dont have enough samples
         if(idx_valid.shape[0]==0):
@@ -3011,6 +3019,10 @@ class SimpleNBOW(keras.Model):
                 (topic_label)*( (input_gval-topic_cf_gval) + input_alpha*(label - input_gval) ) \
             +  (1-topic_label)*( (topic_cf_gval-input_gval) + input_alpha*(label - input_gval) )
         )
+
+
+        if self.model_args["debug_mode"]==True and (self.eidx==50 or self.eidx==100 or self.eidx==199):
+            pdb.set_trace()
 
         # if self.eidx==9:
         #     pdb.set_trace()
@@ -5702,6 +5714,7 @@ if __name__=="__main__":
     parser.add_argument('--concat_word_emb',default=False,action="store_true")
     parser.add_argument('--round_gval',default=False,action="store_true")
     parser.add_argument('-riesz_reg_mode',dest='riesz_reg_mode',type=str,default=None)
+    parser.add_argument('--debug_mode',default=False,action="store_true")
 
     #Arguments related to invariant rep learning
     parser.add_argument('-cfactuals_bsize',dest="cfactuals_bsize",type=int,default=None)
@@ -6002,6 +6015,7 @@ if __name__=="__main__":
     model_args["tmle_lambda"]=args.tmle_lambda
     model_args["add_treatment_on_front"]=args.add_treatment_on_front
     model_args["round_gval"]=args.round_gval
+    model_args["debug_mode"]=args.debug_mode
 
     model_args["reg_lambda"]=args.reg_lambda
     model_args["hinge_width"]=args.hinge_width
@@ -6011,6 +6025,12 @@ if __name__=="__main__":
     model_args["select_best_alpha"]=args.select_best_alpha
     model_args["select_best_gval"]=args.select_best_gval
     model_args["best_gval_selection_metric"]=args.best_gval_selection_metric
+
+
+    #Setting up the gpu
+    if "nlp_toy3" in data_args["path"]:
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     #################################################
     #        SELECT ONE OF THE JOBS FROM BELOW      #
