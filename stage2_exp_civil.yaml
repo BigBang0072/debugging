@@ -82,13 +82,13 @@ search:
     - name: hlayer
       values: [0,]
     - name: stage_mode
-      values: ["stage2_te_reg_strong",] #stage2_te_reg_strong_with_width
+      values: ["stage2_te_reg_strong_with_width",] #stage2_te_reg_strong_with_width stage2_te_reg_strong
     - name: teloss_type
       values: ["mse",]
     - name: pos_size
       values: [1,]
     - name: te_lambda
-      values: [1000,10000]
+      values: [1,10,100,1000]
     - name: pval
       # values: [0.5]
       # values: [0.6]
@@ -96,7 +96,7 @@ search:
       # values: [0.8]
       # values: [0.9]
       # values: [0.99]
-      values: [0.5,0.6,0.7,0.8,0.9,0.99]
+      values: [0.5,0.7,0.9,0.99]
     - name: t0_ate
       # values: [-0.017,]
       # values: [0.001,0.07,]
@@ -104,9 +104,9 @@ search:
       # values: [0.21,]
       # values: [0.3,]
       # values: [0.29,0.26,]
-      values: [-1.0,-0.5,-0.3,-0.1,0.0,0.1,0.3,0.5,0.7,0.9,1.0] #[-50.0,-10.0,-1.0,-0.5,-0.1,2.0,3.0,5.0,10.0,50.0,100.0] 
+      values: [-1.0,-0.5,-0.3,-0.1,0.0,0.1,0.3,0.5,1.0] #[-50.0,-10.0,-1.0,-0.5,-0.1,2.0,3.0,5.0,10.0,50.0,100.0] 
     - name: hwidth
-      values: [0.0]
+      values: [0.1,0.5,1.0]
     - name: transformer
       values: ["bert-base-uncased",]
     - name: lr
