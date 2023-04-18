@@ -43,15 +43,15 @@ search:
     name: search_{experiment_name:s}
     sku: G1
     command:
-    - python transformer_debugger.py -expt_num "cad.civils2.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).t0_ate({t0_ate}).telambda({te_lambda}).hwidth({hwidth})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -batch_size {batch_size} -dtype {dtype} -loss_type {loss_type} -teloss_type {teloss_type} -cfactuals_bsize {cfactuals_bsize}  -num_pos_sample {pos_size} -num_neg_sample {pos_size} -te_lambda {te_lambda} -run_num {run_num} -dropout_rate {dropout_rate} -t0_ate {t0_ate} -debug_tidx {debug_tidx} -stage_mode {stage_mode} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert  -replace_strategy {replace_strategy} -hinge_width {hwidth}
+    - python transformer_debugger.py -expt_num "cad.civils2.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).t0_ate({t0_ate}).telambda({te_lambda}).hwidth({hwidth})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -batch_size {batch_size} -dtype {dtype} -loss_type {loss_type} -teloss_type {teloss_type} -cfactuals_bsize {cfactuals_bsize}  -num_pos_sample {pos_size} -num_neg_sample {pos_size} -te_lambda {te_lambda} -run_num {run_num} -dropout_rate {dropout_rate} -t0_ate {t0_ate} -debug_tidx {debug_tidx} -stage_mode {stage_mode} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert  -replace_strategy {replace_strategy} #-hinge_width {hwidth}
   type: grid
   max_trials: 100000
   params:
     - name: run_num
-      values: [0,1,2]
+      values: [2]
     - name: sample
-      values: [5000,]
-      # values: [4000,]
+      # values: [5000,]
+      values: [4000,]
     - name: batch_size
       values: [32,]
     - name: debug_tidx
@@ -63,8 +63,8 @@ search:
     - name: num_topics
       values: [1,]
     - name: topic_name
-      values: ["race","gender"]
-      # values: ["religion",]
+      # values: ["race","gender"]
+      values: ["religion",]
     - name: replace_strategy
       values: ["remove"]
     - name: max_len
@@ -82,13 +82,13 @@ search:
     - name: hlayer
       values: [0,]
     - name: stage_mode
-      values: ["stage2_te_reg_strong_with_width",] #stage2_te_reg_strong_with_width stage2_te_reg_strong
+      values: ["stage2_te_reg_strong",] #stage2_te_reg_strong_with_width stage2_te_reg_strong
     - name: teloss_type
       values: ["mse",]
     - name: pos_size
       values: [1,]
     - name: te_lambda
-      values: [1,10,100,1000]
+      values: [1,10,100,1000,10000]
     - name: pval
       # values: [0.5]
       # values: [0.6]
@@ -96,7 +96,7 @@ search:
       # values: [0.8]
       # values: [0.9]
       # values: [0.99]
-      values: [0.5,0.7,0.9,0.99]
+      values: [0.5,0.6,0.7,0.8,0.9,0.99]
     - name: t0_ate
       # values: [-0.017,]
       # values: [0.001,0.07,]
@@ -106,7 +106,7 @@ search:
       # values: [0.29,0.26,]
       values: [-1.0,-0.5,-0.3,-0.1,0.0,0.1,0.3,0.5,1.0] #[-50.0,-10.0,-1.0,-0.5,-0.1,2.0,3.0,5.0,10.0,50.0,100.0] 
     - name: hwidth
-      values: [0.1,0.5,1.0]
+      values: [0.0,] #[0.1,0.5,1.0]
     - name: transformer
       values: ["bert-base-uncased",]
     - name: lr

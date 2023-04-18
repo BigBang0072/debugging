@@ -43,15 +43,15 @@ search:
     name: search_{experiment_name:s}
     sku: G1
     command:
-    - python transformer_debugger.py -expt_num "cad.civils1riesz.rnum({run_num}).sample({sample}).hlayer({hlayer}).pval({pval}).dtidx({debug_tidx}).rr_lmd({rr_lambda}).reg_lmd({reg_lambda}).tmle_lmd({tmle_lambda}).l2_lmd({l2_lambda}).noise({noise}).topic({topic_name}).replace_strategy({replace_strategy}).gmode({gval_select_mode})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -dtype {dtype}  -loss_type {loss_type} -cfactuals_bsize {cfactuals_bsize}  -run_num {run_num} -dropout_rate {dropout_rate} -debug_tidx {debug_tidx}  -stage_mode {stage_mode} -rr_lambda {rr_lambda} -tmle_lambda {tmle_lambda} -l2_lambd {l2_lambda} -reg_lambda {reg_lambda} -num_postalpha_layer {num_postalpha_layer} -batch_size {batch_size} -max_len {max_len} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert -replace_strategy {replace_strategy}    -riesz_reg_mode {reg_mode} #-best_gval_selection_metric {gval_select_mode} --select_best_gval --select_best_alpha
+    - python transformer_debugger.py -expt_num "cad.civils1riesz.rnum({run_num}).sample({sample}).hlayer({hlayer}).pval({pval}).dtidx({debug_tidx}).rr_lmd({rr_lambda}).reg_lmd({reg_lambda}).tmle_lmd({tmle_lambda}).l2_lmd({l2_lambda}).noise({noise}).topic({topic_name}).replace_strategy({replace_strategy}).gmode({gval_select_mode})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -dtype {dtype}  -loss_type {loss_type} -cfactuals_bsize {cfactuals_bsize}  -run_num {run_num} -dropout_rate {dropout_rate} -debug_tidx {debug_tidx}  -stage_mode {stage_mode} -rr_lambda {rr_lambda} -tmle_lambda {tmle_lambda} -l2_lambd {l2_lambda} -reg_lambda {reg_lambda} -num_postalpha_layer {num_postalpha_layer} -batch_size {batch_size} -max_len {max_len} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert -replace_strategy {replace_strategy}    -riesz_reg_mode {reg_mode} -best_gval_selection_metric {gval_select_mode} --select_best_gval --select_best_alpha
   type: grid
   max_trials: 100000
   params:
     - name: run_num
-      values: [1,11,21] #[0,10,20]      [1,11,21] also for the direct effect actual
+      values: [0,10,20] #[0,10,20]      [1,11,21] also for the direct effect actual
     - name: sample
-      values: [5000,]
-      # values: [4000,]
+      # values: [5000,]
+      values: [4000,]
     - name: batch_size
       values: [32,]
     - name: debug_tidx
@@ -63,8 +63,8 @@ search:
     - name: num_topics
       values: [1,]
     - name: topic_name
-      values: ["race","gender"]
-      # values: ["religion"]
+      # values: ["race","gender"]
+      values: ["religion"]
     - name: replace_strategy
       values: ["remove"]
     - name: max_len
@@ -96,7 +96,7 @@ search:
     - name: reg_mode
       values: ["mse",]
     - name: gval_select_mode
-      values: ["acc",]
+      values: ["acc","loss"]
     - name: pval
       values: [0.5,0.6,0.7,0.8,0.9,0.99]
     - name: transformer

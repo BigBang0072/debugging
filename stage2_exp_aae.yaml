@@ -83,7 +83,7 @@ search:
     - name: pos_size
       values: [1,]
     - name: te_lambda
-      values: [1,10,100,1000,10000]
+      values: [1000,] #1,10,100,1000,10000]
     - name: pval
       # values: [0.5]
       # values: [0.6]
@@ -101,7 +101,7 @@ search:
       # values: [0.29,0.26,]
       values: [-1.0,-0.5,-0.3,-0.1,0.0,0.1,0.3,0.5,1.0]
     - name: hwidth
-      values: [0.1,0.5,1.0]
+      values: [0.5] #0.1,0.5,1.0]
     - name: transformer
       values: ["bert-base-uncased",]
     - name: lr
