@@ -1055,7 +1055,10 @@ class SimpleNBOW(keras.Model):
         )
         #Initializing some of the metrics for main task
         self.main_pred_xentropy = keras.metrics.Mean(name="sent_pred_x")
+        self.main_pred_xentropy_sum = keras.metrics.Sum(name="sent_pred_x_sum")
+        self.main_train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_tacc")
         self.main_random_pred_xentropy = keras.metrics.Mean(name="sent_random_pred_x")
+        self.main_random_pred_xentropy_sum = keras.metrics.Sum(name="sent_random_pred_x_sum")
         self.main_valid_pred_xentropy = keras.metrics.Mean(name="sent_valid_pred_x")
         self.main_valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="main_vacc")
         #Keep track of the embedding norm 
@@ -1265,7 +1268,10 @@ class SimpleNBOW(keras.Model):
     def reset_all_metrics(self,):
         #Resetting the main task related metrics
         self.main_pred_xentropy.reset_states()
+        self.main_pred_xentropy_sum.reset_states()
+        self.main_train_accuracy.reset_states()
         self.main_random_pred_xentropy.reset_states()
+        self.main_random_pred_xentropy_sum.reset_states()
         self.main_valid_pred_xentropy.reset_states()
         self.main_valid_accuracy.reset_states()
         self.post_proj_embedding_norm.reset_states()
@@ -2125,7 +2131,7 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
-    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None):
+    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None,grad_update=True):
         '''
         bidx            : the batch index which could be used to hash certain things about the example
         te_tidx         : this tidx is used by stage 1 for the topic/treatment index
@@ -2160,7 +2166,10 @@ class SimpleNBOW(keras.Model):
 
         #Initializing the loss metric
         scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
-
+        scxentropy_loss_sum = keras.losses.SparseCategoricalCrossentropy(
+                                                                from_logits=False,
+                                                                reduction=tf.keras.losses.Reduction.SUM,
+        )
 
         #Now we are ready to train our model
         if task=="stage1_riesz":
@@ -2412,7 +2421,11 @@ class SimpleNBOW(keras.Model):
         elif task=="main_mouli":
             #Taking out the randomized labels for getting the model complexity result
             label_randomized_train = dataset_batch["y_randomized"][0:valid_idx]
-            scxentropy_loss_random = keras.losses.SparseCategoricalCrossentropy(from_logits=False) 
+            scxentropy_loss_random = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+            scxentropy_loss_random_sum = keras.losses.SparseCategoricalCrossentropy(
+                                                                from_logits=False,
+                                                                reduction=tf.keras.losses.Reduction.SUM,
+            ) 
 
             with tf.GradientTape() as tape:
                 #Encoding the input first
@@ -2424,19 +2437,26 @@ class SimpleNBOW(keras.Model):
                 #Getting the main task loss
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
                 main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                main_xentropy_loss_sum = scxentropy_loss_sum(label_train,main_task_prob)
                 self.main_pred_xentropy.update_state(main_xentropy_loss)
+                self.main_pred_xentropy_sum.update_state(main_xentropy_loss_sum)
+                self.main_train_accuracy.update_state(label_train,main_task_prob)
 
                 #Getting the random label prediction loss (to get the maximum complexity)
                 random_main_xentropy_loss = scxentropy_loss_random(label_randomized_train,main_task_prob)
+                random_main_xentropy_loss_sum = scxentropy_loss_random_sum(label_randomized_train,main_task_prob)
+
                 self.main_random_pred_xentropy.update_state(random_main_xentropy_loss)
+                self.main_random_pred_xentropy_sum.update_state(random_main_xentropy_loss_sum)
 
                 combined_main_random_loss = main_xentropy_loss + random_main_xentropy_loss
             
-            #Training the head parameters of the main classifier
-            grads = tape.gradient(combined_main_random_loss,self.trainable_weights)
-            self.optimizer.apply_gradients(
-                        zip(grads,self.trainable_weights)
-            )
+            if grad_update==True:
+                #Training the head parameters of the main classifier
+                grads = tape.gradient(combined_main_random_loss,self.trainable_weights)
+                self.optimizer.apply_gradients(
+                            zip(grads,self.trainable_weights)
+                )
         elif task=="stage1_riesz_main_mse":
             with tf.GradientTape() as tape:
                 #Getting the encoding of the Z to the latent representation
@@ -5566,6 +5586,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                     cat_dataset=erm_cat_dataset_normal,
                                                     label_corr_dict=label_corr_dict,
                                                     fname_suffix="_erm",
+                                                    cat_dataset_topred=erm_cat_dataset_normal,
     )
     print("{}-Prediction Metric = {:0.3f}".format("ERM",erm_best_valid_main_metric))
     print("{}-Random Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_random_metric))
@@ -5696,47 +5717,53 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                                             cf_tidx=None,
             )
         
+        #Resetting the metrics to capture the metric on the to pred data
+        classifier_main.reset_all_metrics()
+
         #Initializing the current prediction dict
         current_valid_prob_dict={}
         current_valid_metric=None
         update_best_valid_prob_flag=False
         
-        #Getting the validation accuracy
-        for bidx,data_batch in enumerate(cat_dataset):
-            main_valid_prob = classifier_main.valid_step_stage2(
-                                    dataset_batch=data_batch,
-                                    P_matrix=P_Identity,
-                                    cidx=data_args["debug_tidx"],#wrt to the topic which is spurious
-            )
-            #Getting the pdelta metrics
-            classifier_main.valid_step_stage2_flip_topic(
-                                    dataset_batch=data_batch,
-                                    P_matrix=P_Identity,
-                                    cidx=data_args["debug_tidx"],
+        #Running the traininga nd validation evaluation on the prediction dataset
+        for bidx,data_batch_topred in enumerate(cat_dataset_topred):
+            #Getting the training metrics but in validation mode i.e no gradient update
+            classifier_main.train_step_mouli(
+                                            dataset_batch=data_batch_topred,
+                                            inv_idx=None,
+                                            task="main_mouli",
+                                            cf_tidx=None,
             )
 
-            if main_valid_prob==None:
+            #Validating the dataset also on this evaluation dataset
+            current_valid_prob = classifier_main.valid_step_stage2(
+                                            dataset_batch=data_batch_topred,
+                                            P_matrix=P_Identity,
+                                            cidx=data_args["debug_tidx"],
+            )
+            if current_valid_prob==None:
                 print("Skipping a valid step. It was an empty life!")
                 continue
-            #Updating the current prediction hash
-            current_valid_prob_dict[bidx]=main_valid_prob.numpy().copy()
+            current_valid_prob_dict[bidx]=current_valid_prob.numpy().copy()
+
         
         #Now we will decide if we have to update the best prediction hash or not
         if model_args["mouli_valid_sel_mode"]=="loss":
-            current_valid_metric = float(classifier_main.main_valid_pred_xentropy.result().numpy()) \
-                                    +float(classifier_main.main_random_pred_xentropy.result().numpy())
+            current_valid_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy()) \
+                                    +float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
             if current_valid_metric<best_valid_metric:
-                best_valid_metric=current_valid_metric
-                best_valid_main_metric = float(classifier_main.main_valid_pred_xentropy.result().numpy())
-                best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy.result().numpy())
+                best_valid_metric = current_valid_metric
+                best_valid_main_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy())
+                best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
                 best_valid_main_acc = float(classifier_main.main_valid_accuracy.result().numpy())
                 update_best_valid_prob_flag=True
         elif model_args["mouli_valid_sel_mode"]=="acc":
-            current_valid_metric = float(classifier_main.main_valid_accuracy.result().numpy()) \
-                                    -float(classifier_main.main_random_pred_xentropy.result().numpy())
+            raise NotImplementedError()
+            current_valid_metric = float(classifier_main.main_train_accuracy.result().numpy()) \
+                                    -float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
             if current_valid_metric>best_valid_metric:
-                best_valid_main_metric = float(classifier_main.main_valid_accuracy.result().numpy())
-                best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy.result().numpy())
+                best_valid_main_metric = float(classifier_main.main_train_accuracy.result().numpy())
+                best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
                 best_valid_main_acc = float(classifier_main.main_valid_accuracy.result().numpy())
                 best_valid_metric=current_valid_metric
                 update_best_valid_prob_flag=True
@@ -5750,10 +5777,10 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                         + "pdelta:{:0.3f}"
         print(log_format.format(
                             eidx,
-                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_pred_xentropy_sum.result(),
                             classifier_main.main_valid_pred_xentropy.result(),
                             classifier_main.main_valid_accuracy.result(),
-                            classifier_main.main_random_pred_xentropy.result(),
+                            classifier_main.main_random_pred_xentropy_sum.result(),
                             classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
                             classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result(),
         ))
@@ -5762,24 +5789,9 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
 
         #Updating the best predcition dict if required
         if update_best_valid_prob_flag == True:
-            #This is for the ERM mode when we have the correct dataset to get the prediction
-            if cat_dataset_topred==None:
-                for kbidx,predval in current_valid_prob_dict.items():
-                    best_valid_prob_dict[kbidx]=predval.copy()
-            else:
-                #This is for the case when we are training the invariant model but want to get prediction
-                #on normal dataset without cad
-                #Getting the prediction probability on the prediction dataset
-                for bidx_topred,data_batch_topred in enumerate(cat_dataset_topred):
-                    best_main_valid_prob = classifier_main.valid_step_stage2(
-                                    dataset_batch=data_batch_topred,
-                                    P_matrix=P_Identity,
-                                    cidx=data_args["debug_tidx"],#wrt to the topic which is spurious
-                    )
-                    if best_main_valid_prob==None:
-                        print("Skipping a valid step. It was an empty life!")
-                        continue
-                    best_valid_prob_dict[bidx_topred] = best_main_valid_prob.numpy().copy()
+            #Updating the prediction probability on the prediction dataset
+            for bidx in current_valid_prob_dict.keys():
+                best_valid_prob_dict[bidx] = current_valid_prob_dict[bidx].copy()
     
     #Releasing the current model
     print("Releasing the previous model to get a new model for next step")
