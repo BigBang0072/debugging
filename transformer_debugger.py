@@ -5576,9 +5576,9 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         raise NotImplementedError()
 
     #First of all we will train the erm classifier to get the base predictive accuracy (the no invarance setting)
-    erm_cat_dataset_normal =  cat_dataset_dict[topic_list[0]]["cat_dataset_normal"]
+    erm_cat_dataset_normal =  cat_dataset_dict["spurious"]["cat_dataset_normal"]
     print("Training the ERM model. The base invariant model i.e without invariance!")
-    erm_best_valid_prob_dict,erm_best_valid_main_metric,erm_best_train_main_random_metric,erm_best_valid_main_acc = \
+    erm_best_valid_prob_dict,erm_best_train_main_metric,erm_best_train_main_random_metric,erm_best_valid_main_acc = \
                                 _get_prediction_from_erm(
                                                     data_args=data_args,
                                                     model_args=model_args,
@@ -5588,12 +5588,12 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                     fname_suffix="_erm",
                                                     cat_dataset_topred=erm_cat_dataset_normal,
     )
-    print("{}-Prediction Metric = {:0.3f}".format("ERM",erm_best_valid_main_metric))
+    print("{}-Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_metric))
     print("{}-Random Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_random_metric))
 
     #Saving the TV value to a file for this run
     pred_tv_data = dict(
-                    best_valid_main_metric = erm_best_valid_main_metric,
+                    best_train_main_metric = erm_best_train_main_metric,
                     best_valid_main_acc = erm_best_valid_main_acc,
                     best_train_main_random_metric = erm_best_train_main_random_metric,
     )
@@ -5625,14 +5625,14 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                     merged_cat_dataset_cad += [cad_batch for cad_batch in inv_topic_cat_dataset_cad]
             print("Training the invariant model on subset of topics: {}".format(topic_subset))
             #Now we will train the invariant classifier on all the merged dataset
-            cad_best_valid_prob_dict,cad_best_valid_main_metric,cad_best_train_main_random_metric,cad_best_valid_main_acc = \
+            cad_best_valid_prob_dict,cad_best_train_main_metric,cad_best_train_main_random_metric,cad_best_valid_main_acc = \
                                         _get_prediction_from_erm(
                                                                 data_args=data_args,
                                                                 model_args=model_args,
                                                                 data_handler=data_handler,
                                                                 cat_dataset=merged_cat_dataset_cad,
                                                                 label_corr_dict=label_corr_dict,
-                                                                fname_suffix="_{}_cad".format(topic_subset),
+                                                                fname_suffix="_({})_cad".format("".join(topic_subset)),
                                                                 cat_dataset_topred=erm_cat_dataset_normal,
             )
 
@@ -5644,7 +5644,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                 all_pred_tv_list.append(pred_tv)
             tv_val = np.mean(np.concatenate(all_pred_tv_list,axis=0))
             print("mean TV value = {}".format(tv_val))
-            print("{}-Prediction Metric = {:0.3f}".format(topic_subset,cad_best_valid_main_metric))
+            print("{}-Prediction Metric = {:0.3f}".format(topic_subset,cad_best_train_main_metric))
             print("{}-Random Prediction Metric = {:0.3f}".format(topic_subset,cad_best_train_main_random_metric))
 
             #Converting all the numpy array to list to get ready to save things
@@ -5659,7 +5659,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                             erm_best_valid_prob_dict = erm_best_valid_prob_dict_denumpy,
                             cad_best_valid_prob_dict = cad_best_valid_prob_dict,
                             tv_val = float(tv_val),
-                            best_valid_main_metric = cad_best_valid_main_metric,
+                            best_train_main_metric = cad_best_train_main_metric,
                             best_valid_main_acc = cad_best_valid_main_acc,
                             best_train_main_random_metric = cad_best_train_main_random_metric,
             )
@@ -5741,6 +5741,15 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                                             P_matrix=P_Identity,
                                             cidx=data_args["debug_tidx"],
             )
+
+            #Getting the pdelta metrics too
+            #Getting the pdelta metrics
+            classifier_main.valid_step_stage2_flip_topic(
+                                    dataset_batch=data_batch_topred,
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],
+            )
+
             if current_valid_prob==None:
                 print("Skipping a valid step. It was an empty life!")
                 continue
@@ -5753,7 +5762,7 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                                     +float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
             if current_valid_metric<best_valid_metric:
                 best_valid_metric = current_valid_metric
-                best_valid_main_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy())
+                best_train_main_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy())
                 best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
                 best_valid_main_acc = float(classifier_main.main_valid_accuracy.result().numpy())
                 update_best_valid_prob_flag=True
@@ -5762,7 +5771,7 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
             current_valid_metric = float(classifier_main.main_train_accuracy.result().numpy()) \
                                     -float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
             if current_valid_metric>best_valid_metric:
-                best_valid_main_metric = float(classifier_main.main_train_accuracy.result().numpy())
+                best_train_main_metric = float(classifier_main.main_train_accuracy.result().numpy())
                 best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
                 best_valid_main_acc = float(classifier_main.main_valid_accuracy.result().numpy())
                 best_valid_metric=current_valid_metric
@@ -5798,7 +5807,7 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
     del classifier_main
 
     #Returning the best prediction from ERM
-    return best_valid_prob_dict,best_valid_main_metric,best_train_main_random_metric,best_valid_main_acc
+    return best_valid_prob_dict,best_train_main_metric,best_train_main_random_metric,best_valid_main_acc
 
 
 def nbow_inv_stage2_trainer(data_args,model_args):
