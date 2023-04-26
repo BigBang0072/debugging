@@ -2508,6 +2508,8 @@ class DataHandleTransformer():
         df = tfds.as_dataframe(ds["train"].take(10*self.data_args["num_sample"]),)
         #Filtering the number 3 and 4 from the dataframe
         df34 = df[(df["label"]==3) | (df["label"]==4)]
+        print("Number of label 3: ",df[df["label"]==3].shape)
+        print("Number of label 4: ",df[df["label"]==4].shape)
 
 
         #Generating the dataset and the topic labels along with the counterfactuals
@@ -2515,8 +2517,9 @@ class DataHandleTransformer():
 
         for yidx in range(df34.shape[0]):
             #Getting the data out first
-            ex_image = df.iloc[yidx]["image"]*1.0
-            ex_num_label = df.iloc[yidx]["label"]
+            ex_image = df34.iloc[yidx]["image"]*1.0
+            ex_num_label = 1 if df34.iloc[yidx]["label"]==4 else 0
+            assert df34.iloc[yidx]["label"]==4 or df34.iloc[yidx]["label"]==3, "diff labels"
 
 
 
@@ -2605,6 +2608,8 @@ class DataHandleTransformer():
         positive_df = all_example_df[all_example_df["main_label"]==1]
         negative_df = all_example_df[all_example_df["main_label"]==0]
         num_sample_pclass = min(positive_df.shape[0],negative_df.shape[0],self.data_args["num_sample"]//2)
+        print("num positive:",positive_df.shape)
+        print("num negative:",negative_df.shape)
         print("num sample pclass:",num_sample_pclass)
         #Merging the balanced dataset
         all_example_df = pd.concat(
