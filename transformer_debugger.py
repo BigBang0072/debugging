@@ -986,6 +986,8 @@ class SimpleNBOW(keras.Model):
                 self.data_args["dtype"]=="civilcomments" or\
                 self.data_args["dtype"]=="aae":
             self.pre_encoder_layer = self.get_nbow_avg_layer()
+        elif self.data_args["dtype"]=="mnist":
+            self.pre_encoder_layer = self.get_vgg_layer()
         else:
             raise NotImplementedError()
         
@@ -1006,7 +1008,8 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
             elif self.data_args["dtype"]=="cebab" or\
                  self.data_args["dtype"]=="civilcomments" or\
-                 self.data_args["dtype"]=="aae":
+                 self.data_args["dtype"]=="aae" or\
+                 self.data_args["dtype"]=="mnist":
                 self.hlayer_dim = 50
         else:
             if self.model_args["bert_as_encoder"]==True:
@@ -1017,7 +1020,8 @@ class SimpleNBOW(keras.Model):
                 self.hlayer_dim = self.data_args["inv_dims"]+self.data_args["sp_dims"]
             elif self.data_args["dtype"]=="cebab" or\
                  self.data_args["dtype"]=="civilcomments" or\
-                 self.data_args["dtype"]=="aae":
+                 self.data_args["dtype"]=="aae" or\
+                 self.data_args["dtype"]=="mnist":
                 self.hlayer_dim = 50
         
         for _ in range(self.model_args["num_hidden_layer"]):
@@ -1408,6 +1412,51 @@ class SimpleNBOW(keras.Model):
 
         return nbow_avg_layer
     
+    def get_vgg_layer(self,):
+        '''
+        '''
+        class VGGLayer(keras.layers.Layer):
+            '''
+            '''
+            def __init__(self,model_args,data_args):
+                super(VGGLayer,self).__init__()
+                self.model_args=model_args
+                self.data_args=data_args
+
+                #Creating the layers
+                self.conv1 = layers.Conv2D(64,(3,3),activation="relu",input_shape=(28,28,3),data_format="channels_last")
+                self.conv2 = layers.Conv2D(128,(3,3),activation="relu",data_format="channels_last")
+                self.mpool1 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
+                self.conv3 = layers.Conv2D(128,(3,3),activation="relu",data_format="channels_last")
+                self.conv4 = layers.Conv2D(128,(3,3),activation="relu",data_format="channels_last")
+                self.mpool2 =  layers.MaxPooling2D((2, 2))
+                self.conv5 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                self.conv6 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                self.mpool3 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
+                self.conv7 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                self.conv8 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                self.avgpool = layers.GlobalAveragePooling2D(data_format="channels_last")
+
+                self.all_layer_list = [
+                            self.conv1,self.conv2,self.mpool1,
+                            self.conv3,self.conv4,self.mpool2,
+                            self.conv5,self.conv6,self.mpool3,
+                            self.conv7,self.conv8,self.avgpool,
+                ]
+
+            def call(self,X,input_mask):
+                #Passing X through all the layers
+                for layer in self.all_layer_list:
+                    X = layer(X)
+                return X
+        
+        #Creating the VGG layer for vision datasets
+        vgg_layer = VGGLayer(
+                            model_args=self.model_args,
+                            data_args=self.data_args,
+        )
+        return vgg_layer
+
     def _initialize_embedding_layer(self,):
         '''
         '''
@@ -5520,6 +5569,31 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
     This fucntion will be used to get the treatment effect from the Mouli's method of 
     using the predictive accuracy's drop to judge whether there is an arrow from a node or not.
     '''
+    def create_cat_dataset_dict(topic_list,data_handler,data_args):
+        '''
+        '''
+        cat_dataset_dict = {}
+        for topic_name in topic_list:
+            #Updating the topic name to generate the counterfactual for
+            data_handler.data_args["topic_name"]=topic_name
+            if "nlp_toy3" in data_args["path"]:
+                #Generating the simple dataset like a simple man (we will run ERM multiple times to feel the wind)
+                cat_dataset_normal,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+                #Generating the counterfactual dataset for this task
+                cat_dataset_cad, _ = data_handler.toy_nlp_dataset_handler3(return_cf=True,add_mouli_cad=True)
+            elif "mnist" in data_args["path"]:
+                #Generating the simple dataset like a simple man (we will run ERM multiple times to feel the wind)
+                cat_dataset_normal,label_corr_dict = data_handler._mnist_dataset_handler(return_cf=True)
+                #Generating the counterfactual dataset for this task
+                cat_dataset_cad, _ = data_handler._mnist_dataset_handler(return_cf=True,add_mouli_cad=True)
+            #Adding the dataset to the dict
+            cat_dataset_dict[topic_name]=dict(
+                                cat_dataset_normal=cat_dataset_normal,
+                                cat_dataset_cad=cat_dataset_cad,
+            )
+        
+        return cat_dataset_dict,label_corr_dict
+
     #Getting the normal and cad dataset
     label_corr_dict=None
     print("Creating the dataset")
@@ -5531,19 +5605,14 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         print("Creating the TOY-STORY3")
         #Generating all the topic dataset independently
         topic_list = ["causal","spurious"]
-        cat_dataset_dict = {}
-        for topic_name in topic_list:
-            #Updating the topic name to generate the counterfactual for
-            data_handler.data_args["topic_name"]=topic_name
-            #Generating the simple dataset like a simple man (we will run ERM multiple times to feel the wind)
-            cat_dataset_normal,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
-            #Generating the counterfactual dataset for this task
-            cat_dataset_cad, _ = data_handler.toy_nlp_dataset_handler3(return_cf=True,add_mouli_cad=True)
-            #Adding the dataset to the dict
-            cat_dataset_dict[topic_name]=dict(
-                                cat_dataset_normal=cat_dataset_normal,
-                                cat_dataset_cad=cat_dataset_cad,
-            )
+        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args)
+        #Using the spuriou dataset as the topic for erm dataset since we will need to get smin later on this only
+        erm_cat_dataset_normal =  cat_dataset_dict["spurious"]["cat_dataset_normal"]
+    elif "mnist" in data_args["path"]:
+        topic_list = ["color","rotation"]
+        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args)
+        #Using the spuriou dataset as the topic for erm dataset since we will need to get smin later on this only
+        erm_cat_dataset_normal =  cat_dataset_dict["rotation"]["cat_dataset_normal"]
     elif "cebab" in data_args["path"]:
         raise NotImplementedError()
         nbow_mode = False if model_args["bert_as_encoder"] else True
@@ -5576,7 +5645,6 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         raise NotImplementedError()
 
     #First of all we will train the erm classifier to get the base predictive accuracy (the no invarance setting)
-    erm_cat_dataset_normal =  cat_dataset_dict["spurious"]["cat_dataset_normal"]
     print("Training the ERM model. The base invariant model i.e without invariance!")
     erm_best_valid_prob_dict,erm_best_train_main_metric,erm_best_train_main_random_metric,erm_best_valid_main_acc = \
                                 _get_prediction_from_erm(
@@ -6201,6 +6269,9 @@ if __name__=="__main__":
     elif "nlp_toy3" in data_args["path"]:
         data_args["noise_ratio"]=args.noise_ratio
         data_args["main_topic"]=args.main_topic
+        data_args["dtype"]=args.dtype
+    elif "mnist" in data_args["path"]:
+        data_args["noise_ratio"]=args.noise_ratio
         data_args["dtype"]=args.dtype
     elif "nlp_toy" in data_args["path"]:
         data_args["cat_list"]=["gender","race","orientation"]

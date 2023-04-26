@@ -2014,7 +2014,7 @@ class DataHandleTransformer():
             cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
         return cat_dataset,label_corr_dict
-    
+   
     def _prepare_cad_data_dict_for_mouli(self,data_dict,return_cf):
         '''
         Since mouli requires counterfactual data augmentation for learning a invariant classifier,
@@ -2046,6 +2046,8 @@ class DataHandleTransformer():
                 data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],1-data_dict["tcf_label"]],axis=0)
             else:
                 data_dict["tcf_label"] = np.concatenate([data_dict["tcf_label"],data_dict["tcf_label"]],axis=0)
+        elif "mnist" in self.data_args["path"]:
+            pass
         else:
             #Rest of the dataset also have attentaion mask. Expand them too
             init_attn_mask = data_dict["attn_mask"].copy()
@@ -2492,6 +2494,180 @@ class DataHandleTransformer():
         cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
 
         return cat_dataset
+    
+    def _mnist_dataset_handler(self,return_causal=False,return_cf=False,add_mouli_cad=False):
+        '''
+        This dataset will ahve classification over numbers 3/4 with multiple other topics
+        1. Digit
+        2. Rotation     : This along with the digit will be causal using XOR + some noise
+        3. Color        : Let this be spurious --> also easy to learn signal
+
+        '''
+        import tensorflow_datasets as tfds
+        ds = tfds.load("mnist")
+        df = tfds.as_dataframe(ds["train"].take(10*self.data_args["num_sample"]),)
+        #Filtering the number 3 and 4 from the dataframe
+        df34 = df[(df["label"]==3) | (df["label"]==4)]
+
+
+        #Generating the dataset and the topic labels along with the counterfactuals
+        example_dict_list = []
+
+        for yidx in range(df34.shape[0]):
+            #Getting the data out first
+            ex_image = df.iloc[yidx]["image"]*1.0
+            ex_num_label = df.iloc[yidx]["label"]
+
+
+
+
+            #Adding the other causal topic to the digit
+            #Getting the color label with 50% probability
+            color_point_sample = np.random.uniform(0.0,1.0,1)
+            color_label = 1 if color_point_sample<0.5 else 0
+
+            #Adding color to the image
+            color_channel_a = np.zeros(ex_image.shape)
+            color_channel_b = np.zeros(ex_image.shape)
+            #Creating the image
+            ex_image_color = None
+            if color_label==1:
+                ex_image_color = np.concatenate(
+                                        [ex_image,color_channel_a,color_channel_b],
+                                        axis=-1,
+                )
+            else:
+                ex_image_color = np.concatenate(
+                                        [color_channel_a,ex_image,color_channel_b],
+                                        axis=-1,
+                )
+            
+
+
+
+            #Creating the final label
+            task_label = None
+            if (ex_num_label==0 and color_label==0) \
+                or (ex_num_label==1 and color_label==1):
+                task_label = 0
+            else:
+                task_label = 1
+
+
+
+
+
+            #Adding the spuriouly corelated topic based on both the causal topic
+            rotation_point_sample = np.random.uniform(0.0,1.0,1)
+            rotation_label = None
+            #We will keep the rotation label same as the task label 
+            if rotation_point_sample<self.data_args["sp_topic_pval"]:
+                rotation_label = task_label
+            else:
+                rotation_label = 1-task_label
+            #Now we will create rotation on the image based on the label
+            ex_image_final = None
+            if rotation_label==0:
+                ex_image_final = np.transpose(ex_image_color.copy(),axes=[1,0,2])
+            else:
+                #Here no rotation is applied
+                ex_image_final = ex_image_color.copy()
+            
+
+            #Creating the counterfactuals for the images
+            ex_image_final_cf = None 
+            if self.data_args["topic_name"]=="rotation":
+                #Here we will change the rotation again
+                ex_image_final_cf = np.transpose(ex_image_final.copy(),axes=[1,0,2])
+            elif self.data_args["topic_name"]=="color":
+                ex_image_final_cf = np.stack(
+                                        [ex_image_final[:,:,1],ex_image_final[:,:,0],ex_image_final[:,:,2]],
+                                        axis=-1
+                )
+            else:
+                raise NotImplementedError()
+
+
+            example_dict = dict(
+                        image = ex_image_final,
+                        image_cf = ex_image_final_cf,
+                        main_label = task_label,
+                        num_label = ex_num_label,
+                        color_label = color_label,
+                        rotation_label = rotation_label,
+            )
+            example_dict_list.append(example_dict)
+        
+
+        #Creating the dataframe and rebalancing them
+        all_example_df = pd.DataFrame(example_dict_list)
+        #Rebalancing the dataframe
+        positive_df = all_example_df[all_example_df["main_label"]==1]
+        negative_df = all_example_df[all_example_df["main_label"]==0]
+        num_sample_pclass = min(positive_df.shape[0],negative_df.shape[0],self.data_args["num_sample"]//2)
+        print("num sample pclass:",num_sample_pclass)
+        #Merging the balanced dataset
+        all_example_df = pd.concat(
+                                [
+                                    positive_df.iloc[0:num_sample_pclass],
+                                    negative_df.iloc[0:num_sample_pclass]
+                                ],
+                                axis=0,
+        )
+
+        #Next we will create the label array with appropriate noise
+        all_label_arr = np.stack([
+                            all_example_df["main_label"].to_numpy(),
+                            all_example_df["color_label"].to_numpy(),
+                            all_example_df["rotation_label"].to_numpy(),
+        ],axis=1)
+        self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"],only_main=True)
+        #Lets first measure the correlation between the topics
+        label_corr_dict = self._print_label_correlation(all_label_arr)
+
+
+
+        #Selecting the topic to keep as second
+        if self.data_args["topic_name"]=="color":
+            topic_idx = 1 # 1: color 2: rotation
+        elif self.data_args["topic_name"]=="rotation":
+            topic_idx = 2
+        else:
+            raise NotImplementedError()
+        
+        #Creating the datadict 
+        data_dict = dict(
+                        label = all_label_arr[:,0],
+                        label_denoise = all_label_arr[:,0],
+                        input_idx = np.array(all_example_df["image"].tolist()),
+                        topic_label = all_label_arr[:,[topic_idx]],
+                        topic_label_denoise = all_label_arr[:,[topic_idx]],
+        )
+        #Adding the counterfactual data
+        if return_cf==True:
+            data_dict["input_idx_t0_cf"] = np.expand_dims(np.array(all_example_df["image_cf"].tolist()),axis=1)
+            data_dict["input_idx_t0_flip"] = np.array(all_example_df["image_cf"].tolist())
+
+        #Adding the CAD if we want to use mouli expt
+        if add_mouli_cad==True:
+            data_dict = self._prepare_cad_data_dict_for_mouli(data_dict,return_cf)
+        
+
+
+        #Creating randomized labels to be used by mouli's complexity scoring function
+        y_randomized = data_dict["label"].copy()
+        assert len(y_randomized.shape)==1,"Lables are multidimensional"
+        np.random.shuffle(y_randomized)
+        data_dict["y_randomized"]=y_randomized
+
+        # pdb.set_trace()
+
+
+        #Creating the tensorflow dataset
+        cat_dataset = tf.data.Dataset.from_tensor_slices(data_dict)
+        cat_dataset = cat_dataset.batch(self.data_args["batch_size"])
+
+        return cat_dataset,label_corr_dict
     
     def _print_label_distribution(self,all_label_arr):
         '''
