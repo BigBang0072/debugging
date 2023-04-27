@@ -47,10 +47,10 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
     
     for idx in range(len(probe_metric_list)):
         #Loading the correlaion dict if available
-        if probe_metric_list[idx]["label_corr_dict"]!=None:
-            pdict["y-tcausal"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["1"])
-            pdict["y-tconfound"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["2"])
-            pdict["y-tspurious"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["3"])
+        # if probe_metric_list[idx]["label_corr_dict"]!=None:
+        #     pdict["y-tcausal"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["1"])
+        #     pdict["y-tconfound"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["2"])
+        #     pdict["y-tspurious"].append(probe_metric_list[idx]["label_corr_dict"]["0"]["3"])
 
         # pdict["angle:m-t0"].append(probe_metric_list[idx]["conv_angle_dict"]["main"]["topic0"])
         pdict["acc:main"].append(probe_metric_list[idx]["classifier_acc_dict"]["main"])

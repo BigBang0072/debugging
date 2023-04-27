@@ -1,5 +1,5 @@
 #STAGE2-METHOD2 EXPT
-mainepoch=2
+mainepoch=20
 main_mode="non_causal"
 cbsize=1
 max_len=20

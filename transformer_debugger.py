@@ -5646,7 +5646,8 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
 
     #First of all we will train the erm classifier to get the base predictive accuracy (the no invarance setting)
     print("Training the ERM model. The base invariant model i.e without invariance!")
-    erm_best_valid_prob_dict,erm_best_train_main_metric,erm_best_train_main_random_metric,erm_best_valid_main_acc = \
+    erm_best_valid_prob_dict,erm_best_train_main_metric,erm_best_train_main_random_metric,\
+    erm_best_valid_main_acc,erm_best_valid_main_smin_acc,erm_best_valid_main_pdelta = \
                                 _get_prediction_from_erm(
                                                     data_args=data_args,
                                                     model_args=model_args,
@@ -5663,6 +5664,8 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
     pred_tv_data = dict(
                     best_train_main_metric = erm_best_train_main_metric,
                     best_valid_main_acc = erm_best_valid_main_acc,
+                    best_valid_main_smin_acc=erm_best_valid_main_smin_acc,
+                    best_valid_main_pdelta=erm_best_valid_main_pdelta,
                     best_train_main_random_metric = erm_best_train_main_random_metric,
     )
     pred_tv_savename = "{}/mouli_erm_data.json".format(data_args["expt_meta_path"])
@@ -5693,7 +5696,8 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                     merged_cat_dataset_cad += [cad_batch for cad_batch in inv_topic_cat_dataset_cad]
             print("Training the invariant model on subset of topics: {}".format(topic_subset))
             #Now we will train the invariant classifier on all the merged dataset
-            cad_best_valid_prob_dict,cad_best_train_main_metric,cad_best_train_main_random_metric,cad_best_valid_main_acc = \
+            cad_best_valid_prob_dict,cad_best_train_main_metric,cad_best_train_main_random_metric,\
+            cad_best_valid_main_acc,cad_best_valid_main_smin_acc,cad_best_valid_main_pdelta = \
                                         _get_prediction_from_erm(
                                                                 data_args=data_args,
                                                                 model_args=model_args,
@@ -5729,6 +5733,8 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                             tv_val = float(tv_val),
                             best_train_main_metric = cad_best_train_main_metric,
                             best_valid_main_acc = cad_best_valid_main_acc,
+                            best_valid_main_smin_acc=cad_best_valid_main_smin_acc,
+                            best_valid_main_pdelta=cad_best_valid_main_pdelta,
                             best_train_main_random_metric = cad_best_train_main_random_metric,
             )
             pred_tv_savename = "{}/mouli_({})_data.json".format(data_args["expt_meta_path"],",".join(topic_subset))
@@ -5757,8 +5763,10 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
     #Initializing the best and current prediction has dict
     best_valid_prob_dict={}
     best_valid_metric=None
-    best_valid_main_metric = None
-    best_valid_main_acc = None 
+    best_train_main_metric = None
+    best_valid_main_acc = None
+    best_valid_main_smin_acc = None
+    best_valid_main_pdelta = None 
     best_train_main_random_metric = None 
     if model_args["mouli_valid_sel_mode"]=="loss":
         best_valid_metric = float("inf")
@@ -5833,6 +5841,8 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                 best_train_main_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy())
                 best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
                 best_valid_main_acc = float(classifier_main.main_valid_accuracy.result().numpy())
+                best_valid_main_smin_acc = float(classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result())
+                best_valid_main_pdelta = float(classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result())
                 update_best_valid_prob_flag=True
         elif model_args["mouli_valid_sel_mode"]=="acc":
             raise NotImplementedError()
@@ -5842,6 +5852,8 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                 best_train_main_metric = float(classifier_main.main_train_accuracy.result().numpy())
                 best_train_main_random_metric = float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
                 best_valid_main_acc = float(classifier_main.main_valid_accuracy.result().numpy())
+                best_valid_main_smin_acc = float(classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result())
+                best_valid_main_pdelta = float(classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result())
                 best_valid_metric=current_valid_metric
                 update_best_valid_prob_flag=True
         else:
@@ -5875,7 +5887,8 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
     del classifier_main
 
     #Returning the best prediction from ERM
-    return best_valid_prob_dict,best_train_main_metric,best_train_main_random_metric,best_valid_main_acc
+    return best_valid_prob_dict,best_train_main_metric,best_train_main_random_metric,\
+            best_valid_main_acc,best_valid_main_smin_acc,best_valid_main_pdelta
 
 
 def nbow_inv_stage2_trainer(data_args,model_args):
