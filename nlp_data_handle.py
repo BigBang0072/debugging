@@ -2517,7 +2517,7 @@ class DataHandleTransformer():
 
         for yidx in range(df34.shape[0]):
             #Getting the data out first
-            ex_image = df34.iloc[yidx]["image"]*1.0
+            ex_image = df34.iloc[yidx]["image"]/255.0
             ex_num_label = 1 if df34.iloc[yidx]["label"]==4 else 0
             assert df34.iloc[yidx]["label"]==4 or df34.iloc[yidx]["label"]==3, "diff labels"
 
@@ -2619,6 +2619,7 @@ class DataHandleTransformer():
                                 ],
                                 axis=0,
         )
+        all_example_df = all_example_df.sample(frac=1).reset_index()
 
         #Next we will create the label array with appropriate noise
         all_label_arr = np.stack([

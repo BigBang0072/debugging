@@ -1424,24 +1424,33 @@ class SimpleNBOW(keras.Model):
                 self.data_args=data_args
 
                 #Creating the layers
-                self.conv1 = layers.Conv2D(64,(3,3),activation="relu",input_shape=(28,28,3),data_format="channels_last")
-                self.conv2 = layers.Conv2D(128,(3,3),activation="relu",data_format="channels_last")
+                self.conv1 = layers.Conv2D(32,(3,3),activation="relu",input_shape=(28,28,3),data_format="channels_last")
                 self.mpool1 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
+                self.conv2 = layers.Conv2D(64,(3,3),activation="relu",data_format="channels_last")
+                self.mpool2 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
                 self.conv3 = layers.Conv2D(128,(3,3),activation="relu",data_format="channels_last")
-                self.conv4 = layers.Conv2D(128,(3,3),activation="relu",data_format="channels_last")
-                self.mpool2 =  layers.MaxPooling2D((2, 2))
-                self.conv5 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
-                self.conv6 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
-                self.mpool3 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
-                self.conv7 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
-                self.conv8 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
-                self.avgpool = layers.GlobalAveragePooling2D(data_format="channels_last")
+                # self.conv4 = layers.Conv2D(128,(3,3),activation="relu",data_format="channels_last")
+                # self.mpool2 =  layers.MaxPooling2D((2, 2))
+                # self.conv5 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                # self.conv6 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                # self.mpool3 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
+                # self.conv7 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                # self.conv8 = layers.Conv2D(128,(3,3),padding="same",activation="relu",data_format="channels_last")
+                # self.avgpool = layers.GlobalAveragePooling2D(data_format="channels_last")
+                self.flatten = layers.Flatten()
 
                 self.all_layer_list = [
-                            self.conv1,self.conv2,self.mpool1,
-                            self.conv3,self.conv4,self.mpool2,
-                            self.conv5,self.conv6,self.mpool3,
-                            self.conv7,self.conv8,self.avgpool,
+                            self.conv1,
+                            self.mpool1,
+                            self.conv2,
+                            self.mpool2,
+                            self.conv3,
+                            # self.conv4,
+                            #self.mpool2,
+                            #self.conv5,self.conv6,self.mpool3,
+                            #self.conv7,self.conv8,
+                            # self.avgpool,
+                            self.flatten,
                 ]
 
             def call(self,X,input_mask):
@@ -5704,7 +5713,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                                 data_handler=data_handler,
                                                                 cat_dataset=merged_cat_dataset_cad,
                                                                 label_corr_dict=label_corr_dict,
-                                                                fname_suffix="_({})_cad".format("".join(topic_subset)),
+                                                                fname_suffix="_({})_cad".format(",".join(topic_subset)),
                                                                 cat_dataset_topred=erm_cat_dataset_normal,
             )
 
@@ -5794,6 +5803,11 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
             )
         
         #Resetting the metrics to capture the metric on the to pred data
+        print("=======================")
+        print("Full Dataset:")
+        print("xloss:{:0.3f}".format(classifier_main.main_pred_xentropy.result()))
+        print("acc:{:0.3f}".format(classifier_main.main_train_accuracy.result()))
+        print("=======================")
         classifier_main.reset_all_metrics()
 
         #Initializing the current prediction dict
@@ -5809,6 +5823,7 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                                             inv_idx=None,
                                             task="main_mouli",
                                             cf_tidx=None,
+                                            grad_update=False,
             )
 
             #Validating the dataset also on this evaluation dataset
@@ -5860,13 +5875,17 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
             raise NotImplementedError()
         
         #Printing the logs for this training setp
-        log_format="epoch:{:}\nxloss:{:0.4f}\nvxloss:{:0.3f}\nvacc:{:0.3f}\n"\
+        log_format="epoch:{:}\nxloss_sum:{:0.4f}\n"\
+                        + "xloss:{:0.3f}\n"\
+                        + "vxloss:{:0.3f}\n"\
+                        + "vacc:{:0.3f}\n"\
                         + "trandxloss:{:0.3f}\n"\
                         + "Acc(smin):{:0.3f}\n"\
                         + "pdelta:{:0.3f}"
         print(log_format.format(
                             eidx,
                             classifier_main.main_pred_xentropy_sum.result(),
+                            classifier_main.main_pred_xentropy.result(),
                             classifier_main.main_valid_pred_xentropy.result(),
                             classifier_main.main_valid_accuracy.result(),
                             classifier_main.main_random_pred_xentropy_sum.result(),
