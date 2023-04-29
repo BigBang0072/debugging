@@ -5585,10 +5585,11 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
     This fucntion will be used to get the treatment effect from the Mouli's method of 
     using the predictive accuracy's drop to judge whether there is an arrow from a node or not.
     '''
-    def create_cat_dataset_dict(topic_list,data_handler,data_args):
+    def create_cat_dataset_dict(topic_list,data_handler,data_args,model_args):
         '''
         '''
         cat_dataset_dict = {}
+        label_corr_dict = None 
         for topic_name in topic_list:
             #Updating the topic name to generate the counterfactual for
             data_handler.data_args["topic_name"]=topic_name
@@ -5602,6 +5603,28 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                 cat_dataset_normal,label_corr_dict = data_handler._mnist_dataset_handler(return_cf=True)
                 #Generating the counterfactual dataset for this task
                 cat_dataset_cad, _ = data_handler._mnist_dataset_handler(return_cf=True,add_mouli_cad=True)
+            elif "civil" in data_args["path"]:
+                nbow_mode = False if model_args["bert_as_encoder"] else True
+                cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",
+                                                                                return_cf=True,
+                                                                                nbow_mode=nbow_mode)
+                cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
+                                                                        dataset="civilcomments",
+                                                                        return_cf=True,
+                                                                        nbow_mode=nbow_mode,
+                                                                        add_mouli_cad=True,
+                )
+            elif "aae" in data_args["path"]:
+                nbow_mode = False if model_args["bert_as_encoder"] else True
+                cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="aae",
+                                                                                return_cf=True,
+                                                                                nbow_mode=nbow_mode)
+                cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
+                                                                        dataset="aae",
+                                                                        return_cf=True,
+                                                                        nbow_mode=nbow_mode,
+                                                                        add_mouli_cad=True,
+                )
             #Adding the dataset to the dict
             cat_dataset_dict[topic_name]=dict(
                                 cat_dataset_normal=cat_dataset_normal,
@@ -5621,12 +5644,12 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         print("Creating the TOY-STORY3")
         #Generating all the topic dataset independently
         topic_list = ["causal","spurious"]
-        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args)
+        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args,model_args)
         #Using the spuriou dataset as the topic for erm dataset since we will need to get smin later on this only
         erm_cat_dataset_normal =  cat_dataset_dict["spurious"]["cat_dataset_normal"]
     elif "mnist" in data_args["path"]:
         topic_list = ["color","rotation"]
-        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args)
+        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args,model_args)
         #Using the spuriou dataset as the topic for erm dataset since we will need to get smin later on this only
         erm_cat_dataset_normal =  cat_dataset_dict["rotation"]["cat_dataset_normal"]
     elif "cebab" in data_args["path"]:
@@ -5638,25 +5661,17 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         if model_args["separate_cebab_de"]==True:
             cat_dataset_full_cebab = data_handler.get_cebab_sentiment_only_dataset(nbow_mode=nbow_mode)
     elif "civilcomments" in data_args["path"]:
-        raise NotImplementedError()
-        nbow_mode = False if model_args["bert_as_encoder"] else True
-        cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",return_cf=True,nbow_mode=nbow_mode)
-        cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
-                                                                dataset="civilcomments",
-                                                                return_cf=True,
-                                                                nbow_mode=nbow_mode,
-                                                                add_mouli_cad=True,
-        )
+        #We have only one topic here which will be given as input
+        topic_list = [data_handler.data_args["topic_name"],]
+        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args,model_args)
+        #Using the spuriou dataset as the topic for erm dataset since we will need to get smin later on this only
+        erm_cat_dataset_normal =  cat_dataset_dict[data_handler.data_args["topic_name"]]["cat_dataset_normal"]
     elif "aae" in data_args["path"]:
-        raise NotImplementedError()
-        nbow_mode = False if model_args["bert_as_encoder"] else True
-        cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="aae",return_cf=True,nbow_mode=nbow_mode)
-        cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
-                                                                dataset="aae",
-                                                                return_cf=True,
-                                                                nbow_mode=nbow_mode,
-                                                                add_mouli_cad=True,
-        )
+        #We have only one topic here which will be given as input
+        topic_list = [data_handler.data_args["topic_name"],]
+        cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args,model_args)
+        #Using the spuriou dataset as the topic for erm dataset since we will need to get smin later on this only
+        erm_cat_dataset_normal =  cat_dataset_dict[data_handler.data_args["topic_name"]]["cat_dataset_normal"]
     else:
         raise NotImplementedError()
 
