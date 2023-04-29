@@ -3514,6 +3514,14 @@ class DataHandleTransformer():
         if add_mouli_cad==True: 
             data_dict = self._prepare_cad_data_dict_for_mouli(data_dict,return_cf)
 
+
+        #Creating randomized labels to be used by mouli's complexity scoring function
+        y_randomized = data_dict["label"].copy()
+        assert len(y_randomized.shape)==1,"Lables are multidimensional"
+        np.random.shuffle(y_randomized)
+        data_dict["y_randomized"]=y_randomized
+
+
         #Creating the dataset object ready for consumption
         cat_dataset=tf.data.Dataset.from_tensor_slices(data_dict)
         cat_dataset=cat_dataset.batch(self.data_args["batch_size"])
