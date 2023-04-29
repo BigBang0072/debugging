@@ -10,7 +10,7 @@ max_len=20
 # batch_size=32
 batch_size=32
 lr=5e-3
-hlayer=0
+hlayer=1
 
 
 

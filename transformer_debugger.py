@@ -1422,9 +1422,10 @@ class SimpleNBOW(keras.Model):
                 super(VGGLayer,self).__init__()
                 self.model_args=model_args
                 self.data_args=data_args
+                self.mnist_input_shape=(28,28,3)
 
                 #Creating the layers
-                self.conv1 = layers.Conv2D(32,(3,3),activation="relu",input_shape=(28,28,3),data_format="channels_last")
+                self.conv1 = layers.Conv2D(32,(3,3),activation="relu",input_shape=self.mnist_input_shape,data_format="channels_last")
                 self.mpool1 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
                 self.conv2 = layers.Conv2D(64,(3,3),activation="relu",data_format="channels_last")
                 self.mpool2 =  layers.MaxPooling2D((2, 2),data_format="channels_last")
@@ -2913,8 +2914,12 @@ class SimpleNBOW(keras.Model):
         extd_input_prob = tf.expand_dims(input_prob,axis=1)
 
         #Next encoding the counterfactual sample for this indexes
-        flat_shape = [-1,self.data_args["max_len"]]
+        if self.data_args["dtype"]=="mnist":
+            flat_shape = [-1,] + list(self.pre_encoder_layer.mnist_input_shape)
+        else:
+            flat_shape = [-1,self.data_args["max_len"]]
         flat_tidx_cf_idx = tf.reshape(tidx_cf_idx_train,flat_shape)
+        
         flat_tidx_attn_mask_cf_train = None
         if self.model_args["bert_as_encoder"]==True:
             flat_tidx_attn_mask_cf_train = tf.reshape(tidx_cf_attn_mask_cf_train,flat_shape)
@@ -5397,6 +5402,8 @@ def nbow_riesznet_stage1_trainer(data_args,model_args):
     elif "nlp_toy3" in data_args["path"]:
         print("Creating the TOY-STORY3")
         cat_dataset,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+    elif "mnist" in data_args["path"]:
+        cat_dataset,label_corr_dict = data_handler._mnist_dataset_handler(return_cf=True)
     elif "cebab" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
         cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
@@ -5909,7 +5916,6 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
     return best_valid_prob_dict,best_train_main_metric,best_train_main_random_metric,\
             best_valid_main_acc,best_valid_main_smin_acc,best_valid_main_pdelta
 
-
 def nbow_inv_stage2_trainer(data_args,model_args):
     '''
     Given we have the treatment effect for all the topic we will impose the invariance when learning
@@ -5935,6 +5941,9 @@ def nbow_inv_stage2_trainer(data_args,model_args):
     elif "nlp_toy3" in data_args["path"]:
         print("Creating the TOY-STORY3")
         cat_dataset,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "mnist" in data_args["path"]:
+        cat_dataset,label_corr_dict = data_handler._mnist_dataset_handler(return_cf=True)
         cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
     elif "cebab_all" in data_args["path"]:
         nbow_mode = False if model_args["bert_as_encoder"] else True
