@@ -38,7 +38,7 @@ do
         do
             for hlayer in 1 
             do 
-                for dcf in 1.0 #0.5 1.0
+                for dcf in 0.0 #0.5 1.0
                 do
                     for pvaltsp in 0.5 0.6 0.7 0.8 0.9 0.95 0.99
                     do
@@ -51,4 +51,12 @@ do
             done
         done
     done 
+done
+
+
+
+#Waiting for the jobs to complete. Cannot handle so many parallel background jobs
+for job in `jobs -p`
+do
+    wait $job
 done

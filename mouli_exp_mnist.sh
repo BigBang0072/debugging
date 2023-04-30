@@ -1,5 +1,5 @@
 #STAGE2-METHOD2 EXPT
-mainepoch=10
+mainepoch=20
 main_mode="non_causal"
 cbsize=1
 max_len=20
@@ -24,7 +24,7 @@ out_path="dataset/mnist"
 dtype="mnist"
 num_topics=1
 # topic_name="" #causal or spurious --> based on them the dataset will be created
-sample=1000
+sample=10000
 dcf=0.0
 pos_size=1
 

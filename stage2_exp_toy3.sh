@@ -33,19 +33,19 @@ sample=1000
 
 #13,14,15 with increased probabilty 0.99,0.30,0.70,0.01
 #10,11,12 with previou probabiltiy 0.9,0.4,0.6,0.1
-for run_num in 13 #14 15 #10 11 12 #1 2
+for run_num in 13 14 15 #14 15 #10 11 12 #1 2
 do
     for dcf in 1.0
     do 
         for hwidth in 0.0 #DONT not registered as fname #0.0 #0.05 0.1 0.2 0.5 1.0
         do 
-            for te_lambda in  10 #100 4000 #100 4000 #10 100 1000 4000 10000 #0 10 100 1000 4000 10000 #0 10 100
+            for te_lambda in  0 1 10 100 1000 4000 10000 #100 4000 #10 100 1000 4000 10000 #0 10 100 1000 4000 10000 #0 10 100
             do
                 for pos_size in 1
                 do
                     for noise in 0.0
                     do
-                        for pvaltsp in 0.5 0.7 0.9 0.99
+                        for pvaltsp in 0.6 0.8 #0.5 0.6 0.7 0.8 0.9 0.99
                         do
                             for t0_ate in -1.0 -0.7 -0.5 -0.3 -0.1 0.0 0.1 0.3 0.5 0.7 1.0 #-20.0 -10.0 -5.0 -1.0 -0.5 -0.1 0.0 0.1 0.5 1.0 5.0  10.0 20.0 #-0.8 
                             do 
@@ -54,6 +54,13 @@ do
                         done
                     done
                 done
+
+                #Waiting for the jobs to complete. Cannot handle so many parallel background jobs
+                for job in `jobs -p`
+                do
+                    wait $job
+                done 
+
             done
         done
     done

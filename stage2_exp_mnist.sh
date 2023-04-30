@@ -38,7 +38,7 @@ do
     do 
         for hwidth in 0.0 #DONT not registered as fname #0.0 #0.05 0.1 0.2 0.5 1.0
         do 
-            for te_lambda in 0 10 100 1000 4000 10000 #10 100 1000 4000 10000
+            for te_lambda in 1 #0 10 100 1000 4000 10000 #10 100 1000 4000 10000
             do 
                 for pos_size in 1
                 do
