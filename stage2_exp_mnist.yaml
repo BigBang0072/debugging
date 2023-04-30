@@ -1,0 +1,109 @@
+description: Testing the job sumbmission via amlt
+
+target:
+  # service: amlk8s
+  # # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  # name: itpeusp40cl
+  # vc: resrchvc
+
+  service: sing
+  #run amlt tl sing to list all the names in singularity
+  name: msrresrchvc
+  workspace_name: msrresrchws
+
+environment:
+  image: tensorflow/tensorflow:2.7.1-gpu
+  registry: docker.io # any public registry can be specified here
+  setup:
+    - bash experiment_setup_cad.sh
+
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  local_dir: $CONFIG_DIR/
+
+data:
+  # You need to run "python src/download_data.py" beforehand
+  # to generate the dataset to be uploaded
+  # don't forget to run with --upload-data
+  # local_dir: $CONFIG_DIR/data/
+
+  # The data will be uploaded to your default storage.
+  #   Check ``multi_storage.yaml'' for more flexibility.
+  # remote_dir: dataset/twitter_pan16_mention_gender/
+  # remote_dir: dataset/twitter_aae_sentiment_race/
+  # remote_dir: dataset/multinli_1.0/
+  remote_dir: dataset/mnist/
+
+
+# Training all the configuration as hyperparam sweep
+search:
+  job_template:
+    name: search_{experiment_name:s}
+    sku: G1
+    command:
+    - python transformer_debugger.py -expt_num "cad.mnists2.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).t0_ate({t0_ate}).telambda({te_lambda}).hwidth({hwidth})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv"  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -batch_size {batch_size} -dtype {dtype} -loss_type {loss_type} -teloss_type {teloss_type} -cfactuals_bsize {cfactuals_bsize}  -num_pos_sample {pos_size} -num_neg_sample {pos_size} -te_lambda {te_lambda} -run_num {run_num} -dropout_rate {dropout_rate} -t0_ate {t0_ate} -debug_tidx {debug_tidx} -stage_mode {stage_mode} -topic_name {topic_name} -sp_topic_pval {pval} -hinge_width {hwidth}
+  type: grid
+  max_trials: 100000
+  params:
+    - name: run_num
+      values: [1,2]
+    - name: sample
+      values: [10000,]
+    - name: batch_size
+      values: [32,]
+    - name: debug_tidx
+      values: [0,]
+    - name: noise
+      values: [0.3,]
+    - name: dtype
+      values: ["mnist"]
+    - name: num_topics
+      values: [1,]
+    - name: topic_name
+      values: ["rotation"]
+    - name: mainepoch
+      values: [20]
+    - name: loss_type
+      values: ["x_entropy"]
+    - name: dropout_rate
+      values: ["0.0"]
+    - name: main_mode
+      values: ["non_causal",]
+    - name: cfactuals_bsize
+      values: [1,]
+    - name: hlayer
+      values: [1,]
+    - name: stage_mode
+      values: ["stage2_te_reg_strong",] #stage2_te_reg_strong_with_width
+    - name: teloss_type
+      values: ["mse",]
+    - name: pos_size
+      values: [1,]
+    - name: te_lambda
+      values: [0,1,10,100,1000,10000] #1,10,100,1000,10000]
+    - name: pval
+      # values: [0.5]
+      # values: [0.6]
+      # values: [0.7]
+      # values: [0.8]
+      # values: [0.9]
+      # values: [0.99]
+      values: [0.5,0.6,0.7,0.8,0.9,0.99]
+    - name: t0_ate
+      # values: [-0.017,]
+      # values: [0.001,0.07,]
+      # values: [0.16,0.12,]
+      # values: [0.21,]
+      # values: [0.3,]
+      # values: [0.29,0.26,]
+      values: [-1.0,-0.7,-0.5,-0.3,-0.1,0.0,0.1,0.3,0.5,0.7,1.0]
+    - name: hwidth
+      values: [0.0] #0.1,0.5,1.0]
+    - name: lr
+      values: ["5e-3",]
+
+
+#roberta-base      : lr=1e-5
+#bert-base-uncased : lr=5e-5
