@@ -1082,6 +1082,7 @@ class SimpleNBOW(keras.Model):
         self.topic_flip_main_logprob_delta_list = [] #Keeps the difference between the logprob of the output
         self.topic_flip_emb_diff_list = []   #Keep track of absolute change in the embedding 
         self.topic_smin_main_valid_accuracy_list = []
+        self.topic_smaj_main_valid_accuracy_list = []
         #For testing if the probing classifier is wrong
         self.main_smin_topic_valid_accuracy_list = [] #here the smin is defined wrt to main label and we get topic accuracy
         for tidx in range(self.data_args["num_topics"]):
@@ -1102,6 +1103,7 @@ class SimpleNBOW(keras.Model):
             #To keep the main accuracy when we flip the features in the input
             self.topic_flip_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_flip_main_vacc".format(tidx)))
             self.topic_smin_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_smin_main_vacc".format(tidx)))
+            self.topic_smaj_main_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="topic_{}_smaj_main_vacc".format(tidx)))
             self.main_smin_topic_valid_accuracy_list.append(tf.keras.metrics.SparseCategoricalAccuracy(name="main_smin_topic_{}_vacc".format(tidx)))
             self.topic_flip_main_prob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_prob_delta".format(tidx)))
             self.topic_flip_main_logprob_delta_list.append(keras.metrics.Mean(name="topic_{}_flip_main_logprob_delta".format(tidx)))
@@ -1321,6 +1323,7 @@ class SimpleNBOW(keras.Model):
             self.topic_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_valid_accuracy_list[tidx].reset_states()
             self.topic_smin_main_valid_accuracy_list[tidx].reset_states()
+            self.topic_smaj_main_valid_accuracy_list[tidx].reset_states()
             self.main_smin_topic_valid_accuracy_list[tidx].reset_states()
             self.topic_flip_main_prob_delta_list[tidx].reset_states()
             self.topic_flip_main_logprob_delta_list[tidx].reset_states()
@@ -1961,17 +1964,15 @@ class SimpleNBOW(keras.Model):
 
 
 
-        #Getting the Smin group mask for this topic
-        smin_mask = tf.math.logical_or(
-                                    tf.math.logical_and(
-                                                            label_valid==1,
-                                                            topic_label_valid==0,
-                                    ),
-                                    tf.math.logical_and(
-                                                            label_valid==0,
-                                                            topic_label_valid==1,
-                                    ),
+        #Getting the Smin and Smaj group mask for this topic
+        subgroup_mask_dict = self._generate_all_subgroup_mask_dict(
+                                                        main_label_valid=label_valid,
+                                                        topic_label_valid=topic_label_valid
         )
+        smin_mask = subgroup_mask_dict["smin"]
+        smaj_mask = subgroup_mask_dict["smaj"]
+        
+
 
         if self.model_args["loss_type"]=="x_entropy":
             #Getting the validation accuracy of the main task
@@ -1984,6 +1985,10 @@ class SimpleNBOW(keras.Model):
             self.topic_smin_main_valid_accuracy_list[cidx].update_state(
                                                         label_valid[smin_mask],
                                                         main_valid_prob[smin_mask]
+            )
+            self.topic_smaj_main_valid_accuracy_list[cidx].update_state(
+                                                        label_valid[smaj_mask],
+                                                        main_valid_prob[smaj_mask]
             )
             # pdb.set_trace()
 
@@ -3270,6 +3275,7 @@ class SimpleNBOW(keras.Model):
             classifier_accuracy["topic{}".format(tidx)]=float(self.topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main".format(tidx)]=float(self.topic_flip_main_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_smin_main".format(tidx)]=float(self.topic_smin_main_valid_accuracy_list[tidx].result().numpy())
+            classifier_accuracy["topic{}_smaj_main".format(tidx)]=float(self.topic_smaj_main_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["main_smin_topic{}".format(tidx)]=float(self.main_smin_topic_valid_accuracy_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_pdelta".format(tidx)]=float(self.topic_flip_main_prob_delta_list[tidx].result().numpy())
             classifier_accuracy["topic{}_flip_main_logpdelta".format(tidx)]=float(self.topic_flip_main_logprob_delta_list[tidx].result().numpy())
@@ -5903,6 +5909,7 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                         + "vacc:{:0.3f}\n"\
                         + "trandxloss:{:0.3f}\n"\
                         + "Acc(smin):{:0.3f}\n"\
+                        + "Acc(smaj):{:0.3f}\n"\
                         + "pdelta:{:0.3f}"
         print(log_format.format(
                             eidx,
@@ -5912,6 +5919,7 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                             classifier_main.main_valid_accuracy.result(),
                             classifier_main.main_random_pred_xentropy_sum.result(),
                             classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                            classifier_main.topic_smaj_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
                             classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result(),
         ))
         #Saving all the probe metrics
@@ -6077,7 +6085,8 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                             +"t0_pos_closs:{:0.4f}\nt0_neg_closs:{:0.4f}\nt0_emb_norm:{:0.4f}\n"\
                             +"t1_pos_closs:{:0.4f}\nt1_neg_closs:{:0.4f}\nt1_emb_norm:{:0.4f}\n"\
                             +"emb_norm:{:0.4f}\n"\
-                            +"Acc(Smin):{:0.3f}\n"
+                            +"Acc(Smin):{:0.3f}\n"\
+                            +"Acc(Smaj):{:0.3f}\n"
             print(log_format.format(
                                 eidx,
                                 classifier_main.main_pred_xentropy.result(),
@@ -6089,7 +6098,8 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                                 classifier_main.neg_con_loss_list[1].result(),
                                 classifier_main.last_emb_norm_list[1].result(),
                                 classifier_main.embedding_norm.result(),
-                                classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result()
+                                classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                                classifier_main.topic_smaj_main_valid_accuracy_list[data_args["debug_tidx"]].result()
             ))
         elif "stage2_te_reg" in model_args["stage_mode"]:
             log_format="epoch:{:}\txloss:{:0.4f}\tvacc:{:0.3f}\n"
@@ -6113,11 +6123,13 @@ def nbow_inv_stage2_trainer(data_args,model_args):
                 topic_log_format = "\ntopic:{}\n"\
                                     +"te_closs:{:0.4f}\n"\
                                     +"Acc(Smin):{:0.3f}\n"\
+                                    +"Acc(Smaj):{:0.3f}\n"\
                                     +"pdelta:{:0.3f}"
                 print(topic_log_format.format(
                                 tidx,
                                 classifier_main.te_error_list[tidx].result(),
                                 classifier_main.topic_smin_main_valid_accuracy_list[tidx].result(),
+                                classifier_main.topic_smaj_main_valid_accuracy_list[tidx].result(),
                                 classifier_main.topic_flip_main_prob_delta_ldict[tidx]["all"].result()
                 ))
 
@@ -6137,10 +6149,12 @@ def nbow_inv_stage2_trainer(data_args,model_args):
             for tidx in range(classifier_main.data_args["num_topics"]):
                 topic_log_format = "\ntopic:{}\n"\
                                     +"Acc(Smin):{:0.3f}\n"\
+                                    +"Acc(Smaj):{:0.3f}\n"\
                                     +"pdelta:{:0.3f}"
                 print(topic_log_format.format(
                                 tidx,
                                 classifier_main.topic_smin_main_valid_accuracy_list[tidx].result(),
+                                classifier_main.topic_smaj_main_valid_accuracy_list[tidx].result(),
                                 classifier_main.topic_flip_main_prob_delta_ldict[tidx]["all"].result()
                 ))
 
