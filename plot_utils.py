@@ -74,6 +74,8 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
 
         pdict["main_smin_topic0"].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic0"])
         pdict["topic0_smin"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_smin_main"])
+        if "topic0_smaj_main" in probe_metric_list[idx]["classifier_acc_dict"]:
+            pdict["topic0_smaj"].append(probe_metric_list[idx]["classifier_acc_dict"]["topic0_smaj_main"])
         
         
         #Adding the stage2 specific metrics
@@ -137,6 +139,8 @@ def load_probe_metric_list(fname,only_one=False,epoch=None):
                 
                 pdict["main_smin_topic{}".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["main_smin_topic{}".format(tidx)])
                 pdict["topic{}_smin".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_smin_main".format(tidx)])
+                if "topic{}_smaj_main".format(tidx) in probe_metric_list[idx]["classifier_acc_dict"]:
+                    pdict["topic{}_smaj".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_smaj_main".format(tidx)])
 
                 pdict["topic{}_logpdelta".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_logpdelta".format(tidx)])
                 pdict["topic{}_pdelta_m1t0".format(tidx)].append(probe_metric_list[idx]["classifier_acc_dict"]["topic{}_flip_main_pdelta_m1t0".format(tidx)])
