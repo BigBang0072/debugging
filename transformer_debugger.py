@@ -5682,33 +5682,36 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         raise NotImplementedError()
 
     #First of all we will train the erm classifier to get the base predictive accuracy (the no invarance setting)
-    print("Training the ERM model. The base invariant model i.e without invariance!")
-    erm_best_valid_prob_dict,erm_best_train_main_metric,erm_best_train_main_random_metric,\
-    erm_best_valid_main_acc,erm_best_valid_main_smin_acc,erm_best_valid_main_pdelta = \
-                                _get_prediction_from_erm(
-                                                    data_args=data_args,
-                                                    model_args=model_args,
-                                                    data_handler=data_handler,
-                                                    cat_dataset=erm_cat_dataset_normal,
-                                                    label_corr_dict=label_corr_dict,
-                                                    fname_suffix="_erm",
-                                                    cat_dataset_topred=erm_cat_dataset_normal,
-    )
-    print("{}-Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_metric))
-    print("{}-Random Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_random_metric))
+    if model_args["skip_erm"]==True:
+        print("Skipping ERM!")
+    else:
+        print("Training the ERM model. The base invariant model i.e without invariance!")
+        erm_best_valid_prob_dict,erm_best_train_main_metric,erm_best_train_main_random_metric,\
+        erm_best_valid_main_acc,erm_best_valid_main_smin_acc,erm_best_valid_main_pdelta = \
+                                    _get_prediction_from_erm(
+                                                        data_args=data_args,
+                                                        model_args=model_args,
+                                                        data_handler=data_handler,
+                                                        cat_dataset=erm_cat_dataset_normal,
+                                                        label_corr_dict=label_corr_dict,
+                                                        fname_suffix="_erm",
+                                                        cat_dataset_topred=erm_cat_dataset_normal,
+        )
+        print("{}-Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_metric))
+        print("{}-Random Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_random_metric))
 
-    #Saving the TV value to a file for this run
-    pred_tv_data = dict(
-                    best_train_main_metric = erm_best_train_main_metric,
-                    best_valid_main_acc = erm_best_valid_main_acc,
-                    best_valid_main_smin_acc=erm_best_valid_main_smin_acc,
-                    best_valid_main_pdelta=erm_best_valid_main_pdelta,
-                    best_train_main_random_metric = erm_best_train_main_random_metric,
-    )
-    pred_tv_savename = "{}/mouli_erm_data.json".format(data_args["expt_meta_path"])
-    print("Dumping the ERM data in: {}".format(pred_tv_savename))
-    with open(pred_tv_savename,"w") as whandle:
-        json.dump(pred_tv_data,whandle,indent="\t")
+        #Saving the TV value to a file for this run
+        pred_tv_data = dict(
+                        best_train_main_metric = erm_best_train_main_metric,
+                        best_valid_main_acc = erm_best_valid_main_acc,
+                        best_valid_main_smin_acc=erm_best_valid_main_smin_acc,
+                        best_valid_main_pdelta=erm_best_valid_main_pdelta,
+                        best_train_main_random_metric = erm_best_train_main_random_metric,
+        )
+        pred_tv_savename = "{}/mouli_erm_data.json".format(data_args["expt_meta_path"])
+        print("Dumping the ERM data in: {}".format(pred_tv_savename))
+        with open(pred_tv_savename,"w") as whandle:
+            json.dump(pred_tv_data,whandle,indent="\t")
     
 
 
@@ -5745,29 +5748,38 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                                 cat_dataset_topred=erm_cat_dataset_normal,
             )
 
+
+            #Saving only selectively
+            tv_val = None
+            erm_best_valid_prob_dict_denumpy = None
+            cad_best_valid_prob_dict_denumpy = None
             #Now is the time to get the proxy for the treatment effect
-            all_pred_tv_list = []
-            for bidx in erm_best_valid_prob_dict.keys():
-                #Getting the tv for the prediction
-                pred_tv = np.absolute(erm_best_valid_prob_dict[bidx]-cad_best_valid_prob_dict[bidx])
-                all_pred_tv_list.append(pred_tv)
-            tv_val = np.mean(np.concatenate(all_pred_tv_list,axis=0))
-            print("mean TV value = {}".format(tv_val))
+            if model_args["skip_erm"]==False:
+                all_pred_tv_list = []
+                for bidx in erm_best_valid_prob_dict.keys():
+                    #Getting the tv for the prediction
+                    pred_tv = np.absolute(erm_best_valid_prob_dict[bidx]-cad_best_valid_prob_dict[bidx])
+                    all_pred_tv_list.append(pred_tv)
+                tv_val = float(np.mean(np.concatenate(all_pred_tv_list,axis=0)))
+                print("mean TV value = {}".format(tv_val))
+
+                #Converting all the numpy array to list to get ready to save things
+                erm_best_valid_prob_dict_denumpy = {}
+                cad_best_valid_prob_dict_denumpy = {}
+                for bidx in erm_best_valid_prob_dict.keys():
+                    erm_best_valid_prob_dict_denumpy[bidx] = [(float(val[0]),float(val[1])) for val in erm_best_valid_prob_dict[bidx].tolist()]
+                    cad_best_valid_prob_dict_denumpy[bidx] = [(float(val[0]),float(val[1])) for val in cad_best_valid_prob_dict[bidx].tolist()]
+
+
             print("{}-Prediction Metric = {:0.3f}".format(topic_subset,cad_best_train_main_metric))
             print("{}-Random Prediction Metric = {:0.3f}".format(topic_subset,cad_best_train_main_random_metric))
-
-            #Converting all the numpy array to list to get ready to save things
-            erm_best_valid_prob_dict_denumpy = {}
-            for bidx in erm_best_valid_prob_dict.keys():
-                erm_best_valid_prob_dict_denumpy[bidx] = [(float(val[0]),float(val[1])) for val in erm_best_valid_prob_dict[bidx].tolist()]
-                cad_best_valid_prob_dict[bidx] = [(float(val[0]),float(val[1])) for val in cad_best_valid_prob_dict[bidx].tolist()]
 
             #TODO: do it indepentenly for all the topic and save independently.
             #Saving the TV value to a file for this run
             pred_tv_data = dict(
                             erm_best_valid_prob_dict = erm_best_valid_prob_dict_denumpy,
-                            cad_best_valid_prob_dict = cad_best_valid_prob_dict,
-                            tv_val = float(tv_val),
+                            cad_best_valid_prob_dict = cad_best_valid_prob_dict_denumpy,
+                            tv_val = tv_val,
                             best_train_main_metric = cad_best_train_main_metric,
                             best_valid_main_acc = cad_best_valid_main_acc,
                             best_valid_main_smin_acc=cad_best_valid_main_smin_acc,
@@ -6247,6 +6259,7 @@ if __name__=="__main__":
 
     #Arguments related to Stage1 using Mouli's predictive accuracy method
     parser.add_argument('-mouli_valid_sel_mode',dest="mouli_valid_sel_mode",type=str,default=None)
+    parser.add_argument('--skip_erm',default=False,action="store_true")
     
 
     #Argument related to TE estimation for the transformations
@@ -6524,6 +6537,7 @@ if __name__=="__main__":
     model_args["select_best_gval"]=args.select_best_gval
     model_args["best_gval_selection_metric"]=args.best_gval_selection_metric
     model_args["mouli_valid_sel_mode"]=args.mouli_valid_sel_mode
+    model_args["skip_erm"]=args.skip_erm
 
 
     #Setting up the gpu
