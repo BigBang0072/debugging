@@ -39,15 +39,15 @@ do
     do 
         for hwidth in 0.0 #DONT not registered as fname #0.0 #0.05 0.1 0.2 0.5 1.0
         do 
-            for te_lambda in  0 1 10 100 1000 4000 10000 #100 4000 #10 100 1000 4000 10000 #0 10 100 1000 4000 10000 #0 10 100
+            for te_lambda in  100 #0 1 10 100 1000 4000 10000 #100 4000 #10 100 1000 4000 10000 #0 10 100 1000 4000 10000 #0 10 100
             do
                 for pos_size in 1
                 do
                     for noise in 0.0
                     do
-                        for pvaltsp in 0.5 0.6 0.7 0.8 0.9 0.99
+                        for pvaltsp in 0.99 #0.5 0.6 0.7 0.8 0.9 0.99
                         do
-                            for t0_ate in -1.0 -0.7 -0.5 -0.3 -0.1 0.0 0.1 0.3 0.5 0.7 1.0 #-20.0 -10.0 -5.0 -1.0 -0.5 -0.1 0.0 0.1 0.5 1.0 5.0  10.0 20.0 #-0.8 
+                            for t0_ate in -0.7 -0.3 #-1.0 -0.7 -0.5 -0.3 -0.1 0.0 0.1 0.3 0.5 0.7 1.0 #-20.0 -10.0 -5.0 -1.0 -0.5 -0.1 0.0 0.1 0.5 1.0 5.0  10.0 20.0 #-0.8 
                             do 
                                 python transformer_debugger.py -expt_num "cad.civils2.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pvaltsp($pvaltsp).t0_ate($t0_ate).telambda($te_lambda).dcf($dcf)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy" -teloss_type $teloss_type -cfactuals_bsize $cbsize  -num_pos_sample $pos_size -num_neg_sample $pos_size -te_lambda $te_lambda -run_num $run_num -dropout_rate 0.0 -t0_ate $t0_ate -debug_tidx $debug_tidx -stage_mode $stage_mode -sp_topic_pval $pvaltsp -degree_confoundedness $dcf  -topic_name $topic_name -hinge_width $hwidth & #--bert_as_encoder -transformer $transformer --train_bert
                             done
@@ -56,10 +56,10 @@ do
                 done
 
                 #Waiting for the jobs to complete. Cannot handle so many parallel background jobs
-                for job in `jobs -p`
-                do
-                    wait $job
-                done 
+                # for job in `jobs -p`
+                # do
+                #     wait $job
+                # done 
 
             done
         done
