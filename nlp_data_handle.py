@@ -3494,7 +3494,7 @@ class DataHandleTransformer():
         )
         #Adding the noise to the labels
         if self.data_args["noise_ratio"]!=None:
-            all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"])
+            all_label_arr = self._add_noise_to_labels(all_label_arr,self.data_args["noise_ratio"],only_main=True)
 
         #Creating the dataset dict
         data_dict=dict(
