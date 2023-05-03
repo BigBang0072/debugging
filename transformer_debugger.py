@@ -5594,6 +5594,16 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
     def create_cat_dataset_dict(topic_list,data_handler,data_args,model_args):
         '''
         '''
+        #Now we will be training the invariant model using two method
+        add_mouli_cad=None
+        if "stage1_mouli_te_reg_strong" == model_args["stage_mode"]:
+            add_mouli_cad=False
+        elif "stage1_mouli_cad" == model_args["stage_mode"]:
+            add_mouli_cad=True
+        else:
+            raise NotImplementedError()
+
+
         cat_dataset_dict = {}
         label_corr_dict = None 
         for topic_name in topic_list:
@@ -5603,12 +5613,12 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                 #Generating the simple dataset like a simple man (we will run ERM multiple times to feel the wind)
                 cat_dataset_normal,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
                 #Generating the counterfactual dataset for this task
-                cat_dataset_cad, _ = data_handler.toy_nlp_dataset_handler3(return_cf=True,add_mouli_cad=True)
+                cat_dataset_cad, _ = data_handler.toy_nlp_dataset_handler3(return_cf=True,add_mouli_cad=add_mouli_cad)
             elif "mnist" in data_args["path"]:
                 #Generating the simple dataset like a simple man (we will run ERM multiple times to feel the wind)
                 cat_dataset_normal,label_corr_dict = data_handler._mnist_dataset_handler(return_cf=True)
                 #Generating the counterfactual dataset for this task
-                cat_dataset_cad, _ = data_handler._mnist_dataset_handler(return_cf=True,add_mouli_cad=True)
+                cat_dataset_cad, _ = data_handler._mnist_dataset_handler(return_cf=True,add_mouli_cad=add_mouli_cad)
             elif "civil" in data_args["path"]:
                 nbow_mode = False if model_args["bert_as_encoder"] else True
                 cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",
@@ -5618,7 +5628,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                                         dataset="civilcomments",
                                                                         return_cf=True,
                                                                         nbow_mode=nbow_mode,
-                                                                        add_mouli_cad=True,
+                                                                        add_mouli_cad=add_mouli_cad,
                 )
             elif "aae" in data_args["path"]:
                 nbow_mode = False if model_args["bert_as_encoder"] else True
@@ -5629,7 +5639,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                                         dataset="aae",
                                                                         return_cf=True,
                                                                         nbow_mode=nbow_mode,
-                                                                        add_mouli_cad=True,
+                                                                        add_mouli_cad=add_mouli_cad,
                 )
             #Adding the dataset to the dict
             cat_dataset_dict[topic_name]=dict(
@@ -5831,6 +5841,25 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset)))
 
+        #Deciding which mode we need to train the model
+        main_train_task_mode = None
+        cf_tidx = None  
+        if "stage1_mouli_te_reg_strong" == model_args["stage_mode"]:
+            #anyway we are resetting themetric so it doesn't matter we run in different mode
+            main_train_task_mode = "stage2_te_reg_strong"
+            #Initializing the te list with zero te effect for the topic
+            classifier_main.model_args["topic_ate_list"]=[0.0]
+            classifier_main.model_args["teloss_type"]="mse"
+            #All the dataset are individual --> so the counterfactual are in tidx =0 location
+            cf_tidx = 0 
+        elif "stage1_mouli_cad" == model_args["stage_mode"]:
+            main_train_task_mode = "main_mouli"
+        else:
+            raise NotImplementedError()
+        
+        print(main_train_task_mode)
+        print(model_args["stage_mode"])
+
         #Training the full stage2 together 
         print("Training the Mouli-Stage1-full with: \t{}".format(model_args["stage_mode"]))
         for bidx,data_batch in zip(tbar,cat_dataset):
@@ -5838,8 +5867,8 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
             classifier_main.train_step_mouli(
                                             dataset_batch=data_batch,
                                             inv_idx=None,
-                                            task="main_mouli",
-                                            cf_tidx=None,
+                                            task=main_train_task_mode,
+                                            cf_tidx=cf_tidx,
             )
         
         #Resetting the metrics to capture the metric on the to pred data
