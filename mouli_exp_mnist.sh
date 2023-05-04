@@ -30,7 +30,7 @@ pos_size=1
 
 
 
-for run_num in 0 1 2  #1 2 #1 2 #1 2 #14 15 #10 11 12 #1 2
+for run_num in 0  #1 2 #1 2 #1 2 #14 15 #10 11 12 #1 2
 do
     for topic_name in "all" # for mouli expt we internally give topic name
     do 
@@ -40,9 +40,9 @@ do
             do 
                 for dcf in 0.0 #0.5 1.0
                 do
-                    for te_lambda in 1 10 100 1000 
+                    for te_lambda in 1000 #1 10 100 1000 
                     do 
-                        for pvaltsp in 0.5 0.6 0.7 0.8 0.9 0.95 0.99
+                        for pvaltsp in 0.9 #0.5 0.6 0.7 0.8 0.9 0.95 0.99
                         do
                             for mvsel_mode in "loss" #"acc"
                             do 
@@ -54,10 +54,10 @@ do
             done
         done
     done 
-    #Pausing for the te lambads
-    for job in `jobs -p`
-    do
-        wait $job
-    done
+    # #Pausing for the te lambads
+    # for job in `jobs -p`
+    # do
+    #     wait $job
+    # done
 done
 
