@@ -5705,6 +5705,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                         cat_dataset=erm_cat_dataset_normal,
                                                         label_corr_dict=label_corr_dict,
                                                         fname_suffix="_erm",
+                                                        erm_mode=True,
                                                         cat_dataset_topred=erm_cat_dataset_normal,
         )
         print("{}-Prediction Metric = {:0.3f}".format("ERM",erm_best_train_main_metric))
@@ -5801,7 +5802,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
             with open(pred_tv_savename,"w") as whandle:
                 json.dump(pred_tv_data,whandle,indent="\t")
 
-def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label_corr_dict,fname_suffix,cat_dataset_topred=None):
+def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label_corr_dict,fname_suffix,erm_mode=False,cat_dataset_topred=None):
     '''
     Here we will train normal ERM classifier to get the baseline accuracy
     '''
@@ -5843,8 +5844,10 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
 
         #Deciding which mode we need to train the model
         main_train_task_mode = None
-        cf_tidx = None  
-        if "stage1_mouli_te_reg_strong" == model_args["stage_mode"]:
+        cf_tidx = None
+        if erm_mode==True or "stage1_mouli_cad" == model_args["stage_mode"]:
+            main_train_task_mode = "main_mouli"  
+        elif "stage1_mouli_te_reg_strong" == model_args["stage_mode"]:
             #anyway we are resetting themetric so it doesn't matter we run in different mode
             main_train_task_mode = "stage2_te_reg_strong"
             #Initializing the te list with zero te effect for the topic
@@ -5852,14 +5855,9 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
             classifier_main.model_args["teloss_type"]="mse"
             #All the dataset are individual --> so the counterfactual are in tidx =0 location
             cf_tidx = 0 
-        elif "stage1_mouli_cad" == model_args["stage_mode"]:
-            main_train_task_mode = "main_mouli"
         else:
             raise NotImplementedError()
         
-        print(main_train_task_mode)
-        print(model_args["stage_mode"])
-
         #Training the full stage2 together 
         print("Training the Mouli-Stage1-full with: \t{}".format(model_args["stage_mode"]))
         for bidx,data_batch in zip(tbar,cat_dataset):
