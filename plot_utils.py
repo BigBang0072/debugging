@@ -290,6 +290,7 @@ def get_all_result_timeline_stage2(run_list,pval_list,ate_list,fname_pattern,cle
         prdict_list = []
         for ridx in run_list:
             fname = fname_pattern.format(pval,ridx,ate)
+            print(fname)
             # print("Loading file: {}".format(fname))
             prdict = load_probe_metric_list(fname)
             prdict_list.append(prdict)
