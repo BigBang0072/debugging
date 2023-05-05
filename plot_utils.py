@@ -192,7 +192,7 @@ def aggregate_random_runs(rdict_list):
     
     return rdict_agg
 
-def aggregate_random_runs_timeline(prdict_list):
+def aggregate_random_runs_timeline(prdict_list,epoch_upto=None):
     '''
     '''
     rdict_agg = defaultdict(dict)
@@ -201,7 +201,10 @@ def aggregate_random_runs_timeline(prdict_list):
         #Getting the aggregate for this key
         timeline_run_list = []
         for ridx in range(len(prdict_list)):
-            timeline_run_list.append(prdict_list[ridx][key])
+            if epoch_upto!=None:
+                timeline_run_list.append(prdict_list[ridx][key][0:epoch_upto])
+            else:
+                timeline_run_list.append(prdict_list[ridx][key])
         timeline_run_matrix = np.array(timeline_run_list)
         #Getting the aggreget acorss axis =0 [[timeline_run1],[timeline_run2]...]
         rdict_agg[key]["mean"] = np.mean(timeline_run_matrix,axis=0)
@@ -284,18 +287,17 @@ def get_all_result_timeline(run_list,pval_list,fname_pattern,clean_smin_acc_list
     return all_result_timeline
 
 
-def get_all_result_timeline_stage2(run_list,pval_list,ate_list,fname_pattern,clean_smin_acc_list_dict=None):
+def get_all_result_timeline_stage2(run_list,pval_list,ate_list,fname_pattern,epoch_upto=None,clean_smin_acc_list_dict=None):
     all_result_timeline={}
     for pval,ate in zip(pval_list,ate_list):
         prdict_list = []
         for ridx in run_list:
             fname = fname_pattern.format(pval,ridx,ate)
-            print(fname)
             # print("Loading file: {}".format(fname))
             prdict = load_probe_metric_list(fname)
             prdict_list.append(prdict)
         #Getting the aggregate list
-        prdict_agg = aggregate_random_runs_timeline(prdict_list)
+        prdict_agg = aggregate_random_runs_timeline(prdict_list,epoch_upto)
         #Getting the degree of spuriousness score for every timestep
         if clean_smin_acc_list_dict!=None:
             for metric_name in clean_smin_acc_list_dict.keys():
