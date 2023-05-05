@@ -5611,19 +5611,49 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
             data_handler.data_args["topic_name"]=topic_name
             if "nlp_toy3" in data_args["path"]:
                 #Generating the simple dataset like a simple man (we will run ERM multiple times to feel the wind)
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_normal,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+                
+                
                 #Generating the counterfactual dataset for this task
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_cad, _ = data_handler.toy_nlp_dataset_handler3(return_cf=True,add_mouli_cad=add_mouli_cad)
             elif "mnist" in data_args["path"]:
                 #Generating the simple dataset like a simple man (we will run ERM multiple times to feel the wind)
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_normal,label_corr_dict = data_handler._mnist_dataset_handler(return_cf=True)
+
+
                 #Generating the counterfactual dataset for this task
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_cad, _ = data_handler._mnist_dataset_handler(return_cf=True,add_mouli_cad=add_mouli_cad)
             elif "civil" in data_args["path"]:
                 nbow_mode = False if model_args["bert_as_encoder"] else True
+                
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",
                                                                                 return_cf=True,
                                                                                 nbow_mode=nbow_mode)
+                
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
                                                                         dataset="civilcomments",
                                                                         return_cf=True,
@@ -5632,9 +5662,18 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                 )
             elif "aae" in data_args["path"]:
                 nbow_mode = False if model_args["bert_as_encoder"] else True
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_normal = data_handler.controlled_cda_dataset_handler(dataset="aae",
                                                                                 return_cf=True,
                                                                                 nbow_mode=nbow_mode)
+                
+                #Overwriting data handler so that we use same random seed both the dataset. Create them equal
+                data_handler = DataHandleTransformer(data_args)
+                #Updating the topic name to generate the counterfactual for
+                data_handler.data_args["topic_name"]=topic_name
                 cat_dataset_cad = data_handler.controlled_cda_dataset_handler(
                                                                         dataset="aae",
                                                                         return_cf=True,
