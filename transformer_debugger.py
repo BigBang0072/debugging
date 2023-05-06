@@ -5697,6 +5697,8 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
     elif "nlp_toy3" in data_args["path"]:
         print("Creating the TOY-STORY3")
+        #Loading the embedding model for word2vec explicitely, internally different object is called
+        data_handler._load_full_gensim_word_embedding()
         #Generating all the topic dataset independently
         topic_list = ["causal","spurious"]
         cat_dataset_dict,label_corr_dict = create_cat_dataset_dict(topic_list,data_handler,data_args,model_args)
