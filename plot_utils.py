@@ -186,7 +186,7 @@ def aggregate_random_runs(rdict_list):
     for key,val in rdict_agg_list.items():
         rdict_agg[key] = dict(
                             mean = np.mean(val),
-                            std  = np.std(val),
+                            std  = np.std(val)/np.sqrt(val.shape[0]),
                             val_list = val,
         )
     
@@ -208,7 +208,7 @@ def aggregate_random_runs_timeline(prdict_list,epoch_upto=None):
         timeline_run_matrix = np.array(timeline_run_list)
         #Getting the aggreget acorss axis =0 [[timeline_run1],[timeline_run2]...]
         rdict_agg[key]["mean"] = np.mean(timeline_run_matrix,axis=0)
-        rdict_agg[key]["std"]  = np.std(timeline_run_matrix,axis=0)
+        rdict_agg[key]["std"]  = np.std(timeline_run_matrix,axis=0)/(np.sqrt(timeline_run_matrix.shape[0]))
         rdict_agg[key]["val_mat"] = timeline_run_matrix
     return rdict_agg
 
@@ -239,7 +239,7 @@ def get_all_result_dict(run_list,pval_list,enum,fname_pattern,clean_smin_acc_lis
                 #Adding the result to the the aggregate dict
                 prdict_agg[metric_name+"_sp_score"]=dict(
                                             mean=np.mean(sp_score_estm_list),
-                                            std=np.std(sp_score_estm_list),
+                                            std=np.std(sp_score_estm_list)/np.sqrt(sp_score_estm_list.shape[0]),
                                             val_list=sp_score_estm_list,
                 )
         #Adding the aggregate dict to al result dict
@@ -277,7 +277,7 @@ def get_all_result_timeline(run_list,pval_list,fname_pattern,clean_smin_acc_list
                 #Now saving the aggregate
                 prdict_agg[metric_name+"_sp_score"]=dict(
                                             mean=np.mean(timestep_mean_sp_score_mat,axis=0),
-                                            std=np.std(timestep_mean_sp_score_mat,axis=0),
+                                            std=np.std(timestep_mean_sp_score_mat,axis=0)/np.sqrt(timestep_mean_sp_score_mat.shape[0]),
                                             val_mat=timestep_mean_sp_score_mat,
                 )
 
@@ -317,7 +317,7 @@ def get_all_result_timeline_stage2(run_list,pval_list,ate_list,fname_pattern,epo
                 #Now saving the aggregate
                 prdict_agg[metric_name+"_sp_score"]=dict(
                                             mean=np.mean(timestep_mean_sp_score_mat,axis=0),
-                                            std=np.std(timestep_mean_sp_score_mat,axis=0),
+                                            std=np.std(timestep_mean_sp_score_mat,axis=0)/np.sqrt(timestep_mean_sp_score_mat.shape[0]),
                                             val_mat=timestep_mean_sp_score_mat,
                 )
 
