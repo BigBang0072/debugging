@@ -14,7 +14,7 @@ lr=5e-3
 
 
 # stage_mode="stage2_te_reg_strong_with_width"
-stage_mode="stage1_mouli_te_reg_strong" # stage1_mouli_te_reg_strong     stage1_mouli_cad
+stage_mode="stage1_mouli_cad" # stage1_mouli_te_reg_strong     stage1_mouli_cad
 debug_tidx=0
 
 
@@ -39,7 +39,7 @@ do
             do 
                 for dcf in 1.0 #0.5 1.0
                 do
-                    for te_lambda in 1 10 100 1000 
+                    for te_lambda in 0 #1 10 100 1000 
                     do 
                         for pvaltsp in 0.5 0.6 0.7 0.8 0.9 0.95 0.99
                         do
@@ -53,17 +53,17 @@ do
             done
         done
     done 
-    #Pausing for the te lambads
-    for job in `jobs -p`
-    do
-        wait $job
-    done
+    # #Pausing for the te lambads
+    # for job in `jobs -p`
+    # do
+    #     wait $job
+    # done
 done
 
 
 
-#Waiting for the jobs to complete. Cannot handle so many parallel background jobs
-# for job in `jobs -p`
-# do
-#     wait $job
-# done
+# Waiting for the jobs to complete. Cannot handle so many parallel background jobs
+for job in `jobs -p`
+do
+    wait $job
+done

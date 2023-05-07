@@ -184,6 +184,7 @@ def aggregate_random_runs(rdict_list):
     #Now taking the mean of the experiments
     rdict_agg = defaultdict(list)
     for key,val in rdict_agg_list.items():
+        val = np.array(val)
         rdict_agg[key] = dict(
                             mean = np.mean(val),
                             std  = np.std(val)/np.sqrt(val.shape[0]),
@@ -384,3 +385,127 @@ def plot_one_timeline(pval_list,all_result_timeline,plot_item_list):
             ax[iidx].set_title(item_name)
             ax[iidx].set_xticks(x_val)
     plt.show()
+
+
+
+
+#UTILS for MOULI's EXPERIMENT
+def read_tv_json_file(tv_fname):
+    with open(tv_fname,"r") as rhandle:
+        pred_tv_data = json.load(rhandle)
+    return pred_tv_data
+
+def get_avg_tv_pred(run_list,pval_list,tv_fname_pattern,item_list):
+    avg_tv_pval_dict = defaultdict(dict)
+    #Going over the pval
+    for pval in pval_list:
+        #Going over the runs to get the average
+        for item_name in item_list:
+            avg_tv_pval_dict[pval][item_name]={}
+            avg_tv_pval_dict[pval][item_name]["val_list"]=[]
+            if item_name=="mouli_score":
+                continue
+            
+            for rnum in run_list:
+                pred_tv_data = read_tv_json_file(
+                                            tv_fname_pattern.format(pval,rnum)
+                )
+                avg_tv_pval_dict[pval][item_name]["val_list"].append(pred_tv_data[item_name])
+            #Getting the avarge over the pval
+            avg_tv_pval_dict[pval][item_name]["mean"]=np.mean(avg_tv_pval_dict[pval][item_name]["val_list"])
+            avg_tv_pval_dict[pval][item_name]["std"]=np.std(avg_tv_pval_dict[pval][item_name]["val_list"])\
+                                                        /(np.sqrt(len(avg_tv_pval_dict[pval][item_name]["val_list"])))
+        
+    return avg_tv_pval_dict
+
+def sort_topic_tuple(topic_tuple):
+    topic_list = list(topic_tuple)
+    topic_list.sort()
+    return tuple(topic_list)
+
+def get_topic_complement(topic_tuple,all_topic_list):
+    topic_set = set(topic_tuple)
+    all_topic_set = set(all_topic_list)
+    
+    return sort_topic_tuple(all_topic_set - topic_set)
+
+def get_model_mouli_score(topic_list,avg_mouli_selec_metric,model,pval):
+    '''
+    '''    
+    model_mouli_score = avg_mouli_selec_metric[model][pval]["best_train_main_metric"]["mean"]\
+                        - avg_mouli_selec_metric[model][pval]["best_train_main_random_metric"]["mean"]\
+                        + 2**(len(topic_list)-len(model))-1
+    return model_mouli_score
+
+def ges_minimize(pval,topic_list,avg_mouli_selec_metric_dict):
+    '''
+    Here we will implement the GES for selecting edge in the Mouli's graph.
+    Since large part of the graph is already made, the only thig we have to decide is
+    whether there is an arrow from  topic --> Y. 
+    
+    There cannot be reverse arrow since it will create cycle :  Y --> topic --> X --> X_dagger
+    '''
+    edge_list = []
+    #Forward phase
+    model = get_topic_complement((),topic_list)
+    min_score = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
+    print("Initial Edge List:{}, initial score:{}".format(edge_list,min_score))
+    print("Starting the addition phase")
+    while True:
+        #Adding the edge one by one to see if furthur edge addition is possible or not
+        new_topic = None
+        new_topic_score = float("inf")
+        
+        for topic in topic_list:
+            #If edge is already there
+            if topic in edge_list:
+                continue
+            #Now lets check if adding this
+            model = get_topic_complement(sort_topic_tuple(edge_list+[topic]),topic_list)
+            added_new_score = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
+            print("Candidate topic:{}\t score:{}".format(topic,added_new_score))
+            
+            if added_new_score<new_topic_score:
+                new_topic_score = added_new_score
+                new_topic=topic
+        #Now check if the nely added topic will be better than min_score
+        if new_topic_score<min_score:
+            print("\nAdding edge:",new_topic)
+            print("Score after adding edge:",new_topic_score)
+            edge_list.append(new_topic)
+            min_score = new_topic_score
+        else:
+            break
+        print("========================================================")
+    
+    
+    
+    #Now we will do the backward phase (deleting edge)
+    print("Starting the removal phase")
+    while True:
+        remove_topic = None
+        remove_topic_score = float("inf")
+        for topic in edge_list:
+            #Check the score removing this edge
+            model=edge_list.copy()
+            model.remove(topic)
+            model = get_topic_complement(sort_topic_tuple(model),topic_list)
+            remove_new_score = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
+            print("Candidate topic:{}\t score:{}".format(topic,remove_new_score))
+            
+            if remove_new_score<remove_topic_score:
+                remove_topic = topic
+                remove_topic_score = remove_new_score
+        #If after removal we get better score
+        if remove_topic_score<min_score:
+            print("\nRemoving edge:",remove_topic)
+            print("Score after removing edge:",remove_topic_score)
+            edge_list.remove(remove_topic)
+            min_score = remove_topic_score
+        else:
+            break
+        print("========================================================")
+    
+    
+    print("Final Invariance List:",get_topic_complement(edge_list,topic_list))
+    return edge_list
