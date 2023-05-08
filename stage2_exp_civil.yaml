@@ -48,10 +48,10 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [1,2,3,]
+      values: [5,6,7]
     - name: sample
-      # values: [5000,]
-      values: [4000,]
+      values: [5000,]
+      # values: [4000,]
     - name: batch_size
       values: [32,]
     - name: debug_tidx
@@ -63,8 +63,8 @@ search:
     - name: num_topics
       values: [1,]
     - name: topic_name
-      # values: ["gender",] #"race" "gender"
-      values: ["religion",]
+      values: ["race",] #"race" "gender"
+      # values: ["religion",]
     - name: replace_strategy
       values: ["remove"]
     - name: max_len
