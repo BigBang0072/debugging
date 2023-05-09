@@ -5982,8 +5982,13 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
         
         #Now we will decide if we have to update the best prediction hash or not
         if model_args["mouli_valid_sel_mode"]=="loss":
-            current_valid_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy()) \
-                                    +float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
+            if model_args["mouli_yrandom_mode"]=="train":
+                current_valid_metric = float(classifier_main.main_random_pred_xentropy_sum.result().numpy())
+            elif model_args["mouli_yrandom_mode"]=="notrain":
+                current_valid_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy())
+            else:
+                raise NotImplementedError()
+            
             if current_valid_metric<best_valid_metric:
                 best_valid_metric = current_valid_metric
                 best_train_main_metric = float(classifier_main.main_pred_xentropy_sum.result().numpy())
