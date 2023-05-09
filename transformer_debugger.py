@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -2368,6 +2368,15 @@ class SimpleNBOW(keras.Model):
         elif "stage2_te_reg" in task and self.model_args["teloss_type"]=="mse":
             all_topic_label_train = all_topic_label[0:valid_idx]
             with tf.GradientTape() as tape:
+                #Taking out the randomized labels for getting the model complexity result
+                label_randomized_train = dataset_batch["y_randomized"][0:valid_idx]
+                scxentropy_loss_random = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+                scxentropy_loss_random_sum = keras.losses.SparseCategoricalCrossentropy(
+                                                                    from_logits=False,
+                                                                    reduction=tf.keras.losses.Reduction.SUM,
+                )
+
+
                 total_loss = 0.0
                 #Encoding the input first
                 input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
@@ -2381,8 +2390,19 @@ class SimpleNBOW(keras.Model):
                 self.main_pred_xentropy.update_state(main_xentropy_loss) 
                 total_loss += main_xentropy_loss
 
-                # if self.eidx==18:
-                #     pdb.set_trace()
+                #Getting the random label prediction loss (to get the maximum complexity)
+                random_main_xentropy_loss = scxentropy_loss_random(label_randomized_train,main_task_prob)
+                random_main_xentropy_loss_sum = scxentropy_loss_random_sum(label_randomized_train,main_task_prob)
+
+                self.main_random_pred_xentropy.update_state(random_main_xentropy_loss)
+                self.main_random_pred_xentropy_sum.update_state(random_main_xentropy_loss_sum)
+                #Now we will add the random loss if we have to
+                if self.model_args["mouli_yrandom_mode"]=="train":
+                    total_loss += random_main_xentropy_loss
+                elif self.model_args["mouli_yrandom_mode"]=="notrain":
+                    pass
+                else:
+                    raise NotImplementedError()
 
                 #Getting the topic TE loss for each topic
                 if "strong" in task:
@@ -2513,7 +2533,12 @@ class SimpleNBOW(keras.Model):
                 self.main_random_pred_xentropy.update_state(random_main_xentropy_loss)
                 self.main_random_pred_xentropy_sum.update_state(random_main_xentropy_loss_sum)
 
-                combined_main_random_loss = main_xentropy_loss + random_main_xentropy_loss
+                if self.model_args["mouli_yrandom_mode"]=="train":
+                    combined_main_random_loss = main_xentropy_loss + random_main_xentropy_loss
+                elif self.model_args["mouli_yrandom_mode"]=="notrain":
+                    combined_main_random_loss = main_xentropy_loss
+                else:
+                    raise NotImplementedError()
             
             if grad_update==True:
                 #Training the head parameters of the main classifier
@@ -6328,6 +6353,7 @@ if __name__=="__main__":
     #Arguments related to Stage1 using Mouli's predictive accuracy method
     parser.add_argument('-mouli_valid_sel_mode',dest="mouli_valid_sel_mode",type=str,default=None)
     parser.add_argument('--skip_erm',default=False,action="store_true")
+    parser.add_argument('-mouli_yrandom_mode',dest="mouli_yrandom_mode",type=str,default=None)
     
 
     #Argument related to TE estimation for the transformations
@@ -6606,6 +6632,7 @@ if __name__=="__main__":
     model_args["best_gval_selection_metric"]=args.best_gval_selection_metric
     model_args["mouli_valid_sel_mode"]=args.mouli_valid_sel_mode
     model_args["skip_erm"]=args.skip_erm
+    model_args["mouli_yrandom_mode"]=args.mouli_yrandom_mode
 
 
     #Setting up the gpu
