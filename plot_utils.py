@@ -431,9 +431,12 @@ def get_topic_complement(topic_tuple,all_topic_list):
 
 def get_model_mouli_score(topic_list,avg_mouli_selec_metric,model,pval):
     '''
+    we will use 
+    myrandmode = "notrain" mode to get the best main task loss
+    myrandmode = "train" mode to get the best random task loss
     '''    
-    model_mouli_score = avg_mouli_selec_metric[model][pval]["best_train_main_metric"]["mean"]\
-                        - avg_mouli_selec_metric[model][pval]["best_train_main_random_metric"]["mean"]\
+    model_mouli_score = avg_mouli_selec_metric["notrain"][model][pval]["best_train_main_metric"]["mean"]\
+                        - avg_mouli_selec_metric["train"][model][pval]["best_train_main_random_metric"]["mean"]\
                         + 2**(len(topic_list)-len(model))-1
     return model_mouli_score
 
