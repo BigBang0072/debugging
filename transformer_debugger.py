@@ -1,7 +1,7 @@
 from email.policy import default
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import pathlib
 
 import numpy as np
@@ -2195,7 +2195,7 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
-    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None,grad_update=True):
+    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None,grad_update=True,mouli_erm_mode=False):
         '''
         bidx            : the batch index which could be used to hash certain things about the example
         te_tidx         : this tidx is used by stage 1 for the topic/treatment index
@@ -2398,7 +2398,7 @@ class SimpleNBOW(keras.Model):
                 self.main_random_pred_xentropy_sum.update_state(random_main_xentropy_loss_sum)
                 #Now we will add the random loss if we have to
                 if self.model_args["mouli_yrandom_mode"]=="train":
-                    total_loss += random_main_xentropy_loss
+                    total_loss = random_main_xentropy_loss
                 elif self.model_args["mouli_yrandom_mode"]=="notrain":
                     pass
                 else:
@@ -2534,7 +2534,12 @@ class SimpleNBOW(keras.Model):
                 self.main_random_pred_xentropy_sum.update_state(random_main_xentropy_loss_sum)
 
                 if self.model_args["mouli_yrandom_mode"]=="train":
-                    combined_main_random_loss = main_xentropy_loss + random_main_xentropy_loss
+                    if mouli_erm_mode==True:
+                        #Here we just have to train the random label loss, no need to impose inv through CAD
+                        combined_main_random_loss = random_main_xentropy_loss
+                    else:
+                        #Since we are not in ERM we have to enforce invariance which is done by CAD
+                        combined_main_random_loss = main_xentropy_loss + random_main_xentropy_loss
                 elif self.model_args["mouli_yrandom_mode"]=="notrain":
                     combined_main_random_loss = main_xentropy_loss
                 else:
@@ -5933,6 +5938,7 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
                                             inv_idx=None,
                                             task=main_train_task_mode,
                                             cf_tidx=cf_tidx,
+                                            mouli_erm_mode=erm_mode,
             )
         
         #Resetting the metrics to capture the metric on the to pred data
