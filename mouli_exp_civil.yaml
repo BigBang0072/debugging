@@ -50,8 +50,8 @@ search:
     - name: run_num
       values: [0,1,2]
     - name: sample
-      # values: [5000,]
-      values: [4000,]
+      values: [5000,]
+      # values: [4000,]
     - name: batch_size
       values: [32,]
     - name: debug_tidx
@@ -63,8 +63,8 @@ search:
     - name: num_topics
       values: [1,]
     - name: topic_name
-      # values: ["race","gender"]
-      values: ["religion",]
+      values: ["gender",]  #"gender" "race"
+      # values: ["religion",]
     - name: replace_strategy
       values: ["remove"]
     - name: max_len
@@ -82,9 +82,9 @@ search:
     - name: hlayer
       values: [0,]
     - name: stage_mode
-      values: ["stage1_mouli_te_reg_strong",] #stage1_mouli_te_reg_strong   stage1_mouli_cad
+      values: ["stage1_mouli_cad",] #stage1_mouli_te_reg_strong   stage1_mouli_cad
     - name: te_lambda
-      values: [10000]  #1,10,100,1000
+      values: [0,]  #1,10,100,1000
     - name: pos_size
       values: [1,]
     - name: pval

@@ -2,25 +2,25 @@
 	{
 		"classifier_acc_dict": {
 			"main": 0.5077838897705078,
-			"pp_emb_norm": 10.826502799987793,
-			"main_xent": 0.6927266716957092,
-			"main_random_xent": 0.6990131139755249,
-			"emb_norm": 10.802544593811035,
+			"pp_emb_norm": 10.458778381347656,
+			"main_xent": 0.6909083724021912,
+			"main_random_xent": 0.697597086429596,
+			"emb_norm": 10.435297966003418,
 			"topic0": 0.5009157657623291,
 			"topic0_flip_main": 0.5077838897705078,
 			"topic0_smin_main": 0.5111111402511597,
 			"topic0_smaj_main": 0.5062955617904663,
 			"main_smin_topic0": 0.4888888895511627,
-			"topic0_flip_main_pdelta": 0.01836768165230751,
-			"topic0_flip_main_logpdelta": 0.0371648371219635,
-			"topic0_flip_emb_diff": 0.3213467299938202,
-			"topic0_flip_main_pdelta_m1t1": 0.01883940026164055,
-			"topic0_flip_main_pdelta_m0t1": 0.018690915778279305,
-			"topic0_flip_main_pdelta_m0t0": 0.01762929931282997,
-			"topic0_flip_main_pdelta_m1t0": 0.0180291086435318,
-			"topic0_flip_main_pdelta_smin": 0.01845739409327507,
-			"topic0_flip_main_pdelta_smaj": 0.018223658204078674,
-			"topic0_flip_main_pdelta_all": 0.01836768165230751,
+			"topic0_flip_main_pdelta": 0.019733324646949768,
+			"topic0_flip_main_logpdelta": 0.03981715440750122,
+			"topic0_flip_emb_diff": 0.31344687938690186,
+			"topic0_flip_main_pdelta_m1t1": 0.019924670457839966,
+			"topic0_flip_main_pdelta_m0t1": 0.020105592906475067,
+			"topic0_flip_main_pdelta_m0t0": 0.01913042739033699,
+			"topic0_flip_main_pdelta_m1t0": 0.01945154182612896,
+			"topic0_flip_main_pdelta_smin": 0.019918708130717278,
+			"topic0_flip_main_pdelta_smaj": 0.019514862447977066,
+			"topic0_flip_main_pdelta_all": 0.019733324646949768,
 			"topic0_pos_con_loss": 0.0,
 			"topic0_neg_con_loss": 0.0,
 			"topic0_last_emb_norm": 0.0,
@@ -38,26 +38,285 @@
 	},
 	{
 		"classifier_acc_dict": {
-			"main": 0.5096153616905212,
-			"pp_emb_norm": 6.762955665588379,
-			"main_xent": 0.6861860752105713,
-			"main_random_xent": 0.6966812014579773,
-			"emb_norm": 6.7469000816345215,
+			"main": 0.5077838897705078,
+			"pp_emb_norm": 7.123116493225098,
+			"main_xent": 0.6866742372512817,
+			"main_random_xent": 0.6975394487380981,
+			"emb_norm": 7.1063079833984375,
 			"topic0": 0.5009157657623291,
-			"topic0_flip_main": 0.5073260068893433,
-			"topic0_smin_main": 0.5096296072006226,
-			"topic0_smaj_main": 0.5096089839935303,
+			"topic0_flip_main": 0.5077838897705078,
+			"topic0_smin_main": 0.5111111402511597,
+			"topic0_smaj_main": 0.5062955617904663,
 			"main_smin_topic0": 0.4888888895511627,
-			"topic0_flip_main_pdelta": 0.030567046254873276,
-			"topic0_flip_main_logpdelta": 0.06153436377644539,
-			"topic0_flip_emb_diff": 0.28704240918159485,
-			"topic0_flip_main_pdelta_m1t1": 0.03078567422926426,
-			"topic0_flip_main_pdelta_m0t1": 0.03140949457883835,
-			"topic0_flip_main_pdelta_m0t0": 0.029484709724783897,
-			"topic0_flip_main_pdelta_m1t0": 0.030177414417266846,
-			"topic0_flip_main_pdelta_smin": 0.031024692580103874,
-			"topic0_flip_main_pdelta_smaj": 0.030128182843327522,
-			"topic0_flip_main_pdelta_all": 0.030567046254873276,
+			"topic0_flip_main_pdelta": 0.0314021073281765,
+			"topic0_flip_main_logpdelta": 0.06331878155469894,
+			"topic0_flip_emb_diff": 0.29672983288764954,
+			"topic0_flip_main_pdelta_m1t1": 0.031702686101198196,
+			"topic0_flip_main_pdelta_m0t1": 0.03212130814790726,
+			"topic0_flip_main_pdelta_m0t0": 0.03030555695295334,
+			"topic0_flip_main_pdelta_m1t0": 0.03097236342728138,
+			"topic0_flip_main_pdelta_smin": 0.031782183796167374,
+			"topic0_flip_main_pdelta_smaj": 0.03099762834608555,
+			"topic0_flip_main_pdelta_all": 0.0314021073281765,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5082417726516724,
+			"pp_emb_norm": 4.923731327056885,
+			"main_xent": 0.6857226490974426,
+			"main_random_xent": 0.7008296251296997,
+			"emb_norm": 4.913010120391846,
+			"topic0": 0.5009157657623291,
+			"topic0_flip_main": 0.5077838897705078,
+			"topic0_smin_main": 0.5111111402511597,
+			"topic0_smaj_main": 0.5069582462310791,
+			"main_smin_topic0": 0.4888888895511627,
+			"topic0_flip_main_pdelta": 0.042841095477342606,
+			"topic0_flip_main_logpdelta": 0.08688907325267792,
+			"topic0_flip_emb_diff": 0.3221781849861145,
+			"topic0_flip_main_pdelta_m1t1": 0.04344797879457474,
+			"topic0_flip_main_pdelta_m0t1": 0.0437597893178463,
+			"topic0_flip_main_pdelta_m0t0": 0.0412520132958889,
+			"topic0_flip_main_pdelta_m1t0": 0.04219050705432892,
+			"topic0_flip_main_pdelta_smin": 0.0432686023414135,
+			"topic0_flip_main_pdelta_smaj": 0.04235876351594925,
+			"topic0_flip_main_pdelta_all": 0.042841095477342606,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.529304027557373,
+			"pp_emb_norm": 3.6595757007598877,
+			"main_xent": 0.6803159713745117,
+			"main_random_xent": 0.7013545632362366,
+			"emb_norm": 3.651592254638672,
+			"topic0": 0.5009157657623291,
+			"topic0_flip_main": 0.48672160506248474,
+			"topic0_smin_main": 0.43111109733581543,
+			"topic0_smaj_main": 0.5732272863388062,
+			"main_smin_topic0": 0.4888888895511627,
+			"topic0_flip_main_pdelta": 0.05848350375890732,
+			"topic0_flip_main_logpdelta": 0.11860200762748718,
+			"topic0_flip_emb_diff": 0.3953734040260315,
+			"topic0_flip_main_pdelta_m1t1": 0.05925506353378296,
+			"topic0_flip_main_pdelta_m0t1": 0.05942223221063614,
+			"topic0_flip_main_pdelta_m0t0": 0.05647486448287964,
+			"topic0_flip_main_pdelta_m1t0": 0.05767306685447693,
+			"topic0_flip_main_pdelta_smin": 0.05888963118195534,
+			"topic0_flip_main_pdelta_smaj": 0.057940904051065445,
+			"topic0_flip_main_pdelta_all": 0.05848350375890732,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.4922161102294922,
+			"pp_emb_norm": 6.736621379852295,
+			"main_xent": 0.6950947046279907,
+			"main_random_xent": 0.6952186226844788,
+			"emb_norm": 6.733407974243164,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4922161102294922,
+			"topic0_smin_main": 0.4888888895511627,
+			"topic0_smaj_main": 0.4937044382095337,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.0008209141669794917,
+			"topic0_flip_main_logpdelta": 0.0016484600491821766,
+			"topic0_flip_emb_diff": 0.06037488952279091,
+			"topic0_flip_main_pdelta_m1t1": 0.0007796871359460056,
+			"topic0_flip_main_pdelta_m0t1": 0.0008352115983143449,
+			"topic0_flip_main_pdelta_m0t0": 0.0008780998177826405,
+			"topic0_flip_main_pdelta_m1t0": 0.0008308804826810956,
+			"topic0_flip_main_pdelta_smin": 0.0008364123641513288,
+			"topic0_flip_main_pdelta_smaj": 0.0008152964292094111,
+			"topic0_flip_main_pdelta_all": 0.0008209141669794917,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.4922161102294922,
+			"pp_emb_norm": 6.747573375701904,
+			"main_xent": 0.693611204624176,
+			"main_random_xent": 0.6936817169189453,
+			"emb_norm": 6.744665622711182,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4922161102294922,
+			"topic0_smin_main": 0.4888888895511627,
+			"topic0_smaj_main": 0.4937044382095337,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.000676412251777947,
+			"topic0_flip_main_logpdelta": 0.0013541773660108447,
+			"topic0_flip_emb_diff": 0.05346029996871948,
+			"topic0_flip_main_pdelta_m1t1": 0.0006382052670232952,
+			"topic0_flip_main_pdelta_m0t1": 0.0006841056747362018,
+			"topic0_flip_main_pdelta_m0t0": 0.000714598223567009,
+			"topic0_flip_main_pdelta_m1t0": 0.0007035514572635293,
+			"topic0_flip_main_pdelta_smin": 0.0006953906849958003,
+			"topic0_flip_main_pdelta_smaj": 0.0006699269870296121,
+			"topic0_flip_main_pdelta_all": 0.000676412251777947,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.49358972907066345,
+			"pp_emb_norm": 6.664140701293945,
+			"main_xent": 0.6931626200675964,
+			"main_random_xent": 0.693277895450592,
+			"emb_norm": 6.661150932312012,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.49358972907066345,
+			"topic0_smin_main": 0.48444443941116333,
+			"topic0_smaj_main": 0.49768057465553284,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.0007152006728574634,
+			"topic0_flip_main_logpdelta": 0.0014307183446362615,
+			"topic0_flip_emb_diff": 0.049074314534664154,
+			"topic0_flip_main_pdelta_m1t1": 0.0006813107756897807,
+			"topic0_flip_main_pdelta_m0t1": 0.0007558198412880301,
+			"topic0_flip_main_pdelta_m0t0": 0.0007238112157210708,
+			"topic0_flip_main_pdelta_m1t0": 0.0007319560390897095,
+			"topic0_flip_main_pdelta_smin": 0.0007468085386790335,
+			"topic0_flip_main_pdelta_smaj": 0.000701886776369065,
+			"topic0_flip_main_pdelta_all": 0.0007152006728574634,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5027472376823425,
+			"pp_emb_norm": 6.47633171081543,
+			"main_xent": 0.6929608583450317,
+			"main_random_xent": 0.693175733089447,
+			"emb_norm": 6.473544120788574,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.47847986221313477,
+			"topic0_smin_main": 0.44148147106170654,
+			"topic0_smaj_main": 0.530152440071106,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.0009204045054502785,
+			"topic0_flip_main_logpdelta": 0.0018408707110211253,
+			"topic0_flip_emb_diff": 0.04517388716340065,
+			"topic0_flip_main_pdelta_m1t1": 0.0009027739870361984,
+			"topic0_flip_main_pdelta_m0t1": 0.0009790523909032345,
+			"topic0_flip_main_pdelta_m0t0": 0.0008997787954285741,
+			"topic0_flip_main_pdelta_m1t0": 0.0009322452824562788,
+			"topic0_flip_main_pdelta_smin": 0.00095825718017295,
+			"topic0_flip_main_pdelta_smaj": 0.000901507621165365,
+			"topic0_flip_main_pdelta_all": 0.0009204045054502785,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5302197933197021,
+			"pp_emb_norm": 6.19655179977417,
+			"main_xent": 0.6928352117538452,
+			"main_random_xent": 0.6931758522987366,
+			"emb_norm": 6.1940202713012695,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4981684982776642,
+			"topic0_smin_main": 0.4681481420993805,
+			"topic0_smaj_main": 0.5579854249954224,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.00123528519179672,
+			"topic0_flip_main_logpdelta": 0.0024706916883587837,
+			"topic0_flip_emb_diff": 0.04246489331126213,
+			"topic0_flip_main_pdelta_m1t1": 0.001226974418386817,
+			"topic0_flip_main_pdelta_m0t1": 0.0012879505520686507,
+			"topic0_flip_main_pdelta_m0t0": 0.0011928996536880732,
+			"topic0_flip_main_pdelta_m1t0": 0.0012370350304991007,
+			"topic0_flip_main_pdelta_smin": 0.0012658064952120185,
+			"topic0_flip_main_pdelta_smaj": 0.0012114099226891994,
+			"topic0_flip_main_pdelta_all": 0.00123528519179672,
 			"topic0_pos_con_loss": 0.0,
 			"topic0_neg_con_loss": 0.0,
 			"topic0_last_emb_norm": 0.0,
@@ -76,25 +335,25 @@
 	{
 		"classifier_acc_dict": {
 			"main": 0.5091575384140015,
-			"pp_emb_norm": 4.1030144691467285,
-			"main_xent": 0.6845735311508179,
-			"main_random_xent": 0.6978183388710022,
-			"emb_norm": 4.093663215637207,
-			"topic0": 0.5009157657623291,
-			"topic0_flip_main": 0.5054945349693298,
-			"topic0_smin_main": 0.5037037134170532,
-			"topic0_smaj_main": 0.5115970969200134,
-			"main_smin_topic0": 0.4888888895511627,
-			"topic0_flip_main_pdelta": 0.03771894425153732,
-			"topic0_flip_main_logpdelta": 0.07607303559780121,
-			"topic0_flip_emb_diff": 0.2911306619644165,
-			"topic0_flip_main_pdelta_m1t1": 0.038089703768491745,
-			"topic0_flip_main_pdelta_m0t1": 0.03856830671429634,
-			"topic0_flip_main_pdelta_m0t0": 0.03640399128198624,
-			"topic0_flip_main_pdelta_m1t0": 0.03719792515039444,
-			"topic0_flip_main_pdelta_smin": 0.03814643248915672,
-			"topic0_flip_main_pdelta_smaj": 0.03726295754313469,
-			"topic0_flip_main_pdelta_all": 0.03771894425153732,
+			"pp_emb_norm": 5.839629173278809,
+			"main_xent": 0.6927155256271362,
+			"main_random_xent": 0.6931975483894348,
+			"emb_norm": 5.837465286254883,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.5004578828811646,
+			"topic0_smin_main": 0.482962965965271,
+			"topic0_smaj_main": 0.5208747386932373,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.0016072803409770131,
+			"topic0_flip_main_logpdelta": 0.003214907133951783,
+			"topic0_flip_emb_diff": 0.04190656915307045,
+			"topic0_flip_main_pdelta_m1t1": 0.0016104468377307057,
+			"topic0_flip_main_pdelta_m0t1": 0.0016617430374026299,
+			"topic0_flip_main_pdelta_m0t0": 0.00154876708984375,
+			"topic0_flip_main_pdelta_m1t0": 0.0015927429776638746,
+			"topic0_flip_main_pdelta_smin": 0.00163064815569669,
+			"topic0_flip_main_pdelta_smaj": 0.0015819304389879107,
+			"topic0_flip_main_pdelta_all": 0.0016072803409770131,
 			"topic0_pos_con_loss": 0.0,
 			"topic0_neg_con_loss": 0.0,
 			"topic0_last_emb_norm": 0.0,
@@ -112,26 +371,26 @@
 	},
 	{
 		"classifier_acc_dict": {
-			"main": 0.5503662824630737,
-			"pp_emb_norm": 3.607884645462036,
-			"main_xent": 0.6781679391860962,
-			"main_random_xent": 0.700795590877533,
-			"emb_norm": 3.6001858711242676,
-			"topic0": 0.5009157657623291,
-			"topic0_flip_main": 0.4555860757827759,
-			"topic0_smin_main": 0.36592593789100647,
-			"topic0_smaj_main": 0.6328694224357605,
-			"main_smin_topic0": 0.4888888895511627,
-			"topic0_flip_main_pdelta": 0.06304514408111572,
-			"topic0_flip_main_logpdelta": 0.1276552975177765,
-			"topic0_flip_emb_diff": 0.4272993505001068,
-			"topic0_flip_main_pdelta_m1t1": 0.06382711231708527,
-			"topic0_flip_main_pdelta_m0t1": 0.06407959014177322,
-			"topic0_flip_main_pdelta_m0t0": 0.06087348982691765,
-			"topic0_flip_main_pdelta_m1t0": 0.062136437743902206,
-			"topic0_flip_main_pdelta_smin": 0.06354601681232452,
-			"topic0_flip_main_pdelta_smaj": 0.06242883950471878,
-			"topic0_flip_main_pdelta_all": 0.06304514408111572,
+			"main": 0.5050366520881653,
+			"pp_emb_norm": 5.42140007019043,
+			"main_xent": 0.6925719380378723,
+			"main_random_xent": 0.6932055950164795,
+			"emb_norm": 5.41964864730835,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.5032051205635071,
+			"topic0_smin_main": 0.4888888895511627,
+			"topic0_smaj_main": 0.5122597813606262,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.002015872858464718,
+			"topic0_flip_main_logpdelta": 0.00403229147195816,
+			"topic0_flip_emb_diff": 0.04457990452647209,
+			"topic0_flip_main_pdelta_m1t1": 0.00202865619212389,
+			"topic0_flip_main_pdelta_m0t1": 0.0020749010145664215,
+			"topic0_flip_main_pdelta_m0t0": 0.0019411870744079351,
+			"topic0_flip_main_pdelta_m1t0": 0.0019891730044037104,
+			"topic0_flip_main_pdelta_smin": 0.0020350287668406963,
+			"topic0_flip_main_pdelta_smaj": 0.001987420953810215,
+			"topic0_flip_main_pdelta_all": 0.002015872858464718,
 			"topic0_pos_con_loss": 0.0,
 			"topic0_neg_con_loss": 0.0,
 			"topic0_last_emb_norm": 0.0,
@@ -149,26 +408,26 @@
 	},
 	{
 		"classifier_acc_dict": {
-			"main": 0.6282051205635071,
-			"pp_emb_norm": 2.4635233879089355,
-			"main_xent": 0.6683140993118286,
-			"main_random_xent": 0.699001669883728,
-			"emb_norm": 2.4597630500793457,
-			"topic0": 0.5009157657623291,
-			"topic0_flip_main": 0.3759157657623291,
-			"topic0_smin_main": 0.1688888818025589,
-			"topic0_smaj_main": 0.8336646556854248,
-			"main_smin_topic0": 0.4888888895511627,
-			"topic0_flip_main_pdelta": 0.08405841141939163,
-			"topic0_flip_main_logpdelta": 0.16926783323287964,
-			"topic0_flip_emb_diff": 0.5586773157119751,
-			"topic0_flip_main_pdelta_m1t1": 0.08551395684480667,
-			"topic0_flip_main_pdelta_m0t1": 0.08543215692043304,
-			"topic0_flip_main_pdelta_m0t0": 0.08093740791082382,
-			"topic0_flip_main_pdelta_m1t0": 0.08241276443004608,
-			"topic0_flip_main_pdelta_smin": 0.08427951484918594,
-			"topic0_flip_main_pdelta_smaj": 0.08344996720552444,
-			"topic0_flip_main_pdelta_all": 0.08405841141939163,
+			"main": 0.5068681240081787,
+			"pp_emb_norm": 4.960016250610352,
+			"main_xent": 0.6923975348472595,
+			"main_random_xent": 0.6931930184364319,
+			"emb_norm": 4.958726406097412,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.5009157657623291,
+			"topic0_smin_main": 0.47999998927116394,
+			"topic0_smaj_main": 0.5188866853713989,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.00246598687954247,
+			"topic0_flip_main_logpdelta": 0.004932546988129616,
+			"topic0_flip_emb_diff": 0.05126083642244339,
+			"topic0_flip_main_pdelta_m1t1": 0.002483597258105874,
+			"topic0_flip_main_pdelta_m0t1": 0.0025334791280329227,
+			"topic0_flip_main_pdelta_m0t0": 0.0023751845583319664,
+			"topic0_flip_main_pdelta_m1t0": 0.0024296760093420744,
+			"topic0_flip_main_pdelta_smin": 0.0024872173089534044,
+			"topic0_flip_main_pdelta_smaj": 0.002431512111797929,
+			"topic0_flip_main_pdelta_all": 0.00246598687954247,
 			"topic0_pos_con_loss": 0.0,
 			"topic0_neg_con_loss": 0.0,
 			"topic0_last_emb_norm": 0.0,
@@ -186,26 +445,285 @@
 	},
 	{
 		"classifier_acc_dict": {
-			"main": 0.6341575384140015,
-			"pp_emb_norm": 2.21484637260437,
-			"main_xent": 0.6598743796348572,
-			"main_random_xent": 0.7035866975784302,
-			"emb_norm": 2.2133893966674805,
-			"topic0": 0.3173076808452606,
-			"topic0_flip_main": 0.36538460850715637,
-			"topic0_smin_main": 0.14370369911193848,
-			"topic0_smaj_main": 0.8535453677177429,
-			"main_smin_topic0": 0.29629629850387573,
-			"topic0_flip_main_pdelta": 0.11730257421731949,
-			"topic0_flip_main_logpdelta": 0.23722465336322784,
-			"topic0_flip_emb_diff": 0.7864799499511719,
-			"topic0_flip_main_pdelta_m1t1": 0.11915593594312668,
-			"topic0_flip_main_pdelta_m0t1": 0.11831862479448318,
-			"topic0_flip_main_pdelta_m0t0": 0.11435835808515549,
-			"topic0_flip_main_pdelta_m1t0": 0.11527124047279358,
-			"topic0_flip_main_pdelta_smin": 0.11717036366462708,
-			"topic0_flip_main_pdelta_smaj": 0.11703258752822876,
-			"topic0_flip_main_pdelta_all": 0.11730257421731949,
+			"main": 0.5288461446762085,
+			"pp_emb_norm": 4.47287130355835,
+			"main_xent": 0.6921878457069397,
+			"main_random_xent": 0.693169116973877,
+			"emb_norm": 4.472097873687744,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4890109896659851,
+			"topic0_smin_main": 0.43259260058403015,
+			"topic0_smaj_main": 0.5719019174575806,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.0030112932436168194,
+			"topic0_flip_main_logpdelta": 0.006023027002811432,
+			"topic0_flip_emb_diff": 0.06243854761123657,
+			"topic0_flip_main_pdelta_m1t1": 0.00302816997282207,
+			"topic0_flip_main_pdelta_m0t1": 0.003093889681622386,
+			"topic0_flip_main_pdelta_m0t0": 0.0029060570523142815,
+			"topic0_flip_main_pdelta_m1t0": 0.0029581012204289436,
+			"topic0_flip_main_pdelta_smin": 0.003037305548787117,
+			"topic0_flip_main_pdelta_smaj": 0.002968576969578862,
+			"topic0_flip_main_pdelta_all": 0.0030112932436168194,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5741758346557617,
+			"pp_emb_norm": 3.9737470149993896,
+			"main_xent": 0.6919156312942505,
+			"main_random_xent": 0.693149745464325,
+			"emb_norm": 3.9735629558563232,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.42628204822540283,
+			"topic0_smin_main": 0.2933333218097687,
+			"topic0_smaj_main": 0.6998012065887451,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.003799008671194315,
+			"topic0_flip_main_logpdelta": 0.007598303258419037,
+			"topic0_flip_emb_diff": 0.07915794104337692,
+			"topic0_flip_main_pdelta_m1t1": 0.0038082015234977007,
+			"topic0_flip_main_pdelta_m0t1": 0.003909558057785034,
+			"topic0_flip_main_pdelta_m0t0": 0.003674677573144436,
+			"topic0_flip_main_pdelta_m1t0": 0.00372006231918931,
+			"topic0_flip_main_pdelta_smin": 0.003835247131064534,
+			"topic0_flip_main_pdelta_smaj": 0.003741394728422165,
+			"topic0_flip_main_pdelta_all": 0.003799008671194315,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.593406617641449,
+			"pp_emb_norm": 3.4808189868927,
+			"main_xent": 0.691499650478363,
+			"main_random_xent": 0.6931448578834534,
+			"emb_norm": 3.4813344478607178,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4143773019313812,
+			"topic0_smin_main": 0.256296306848526,
+			"topic0_smaj_main": 0.7442014813423157,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.005164752714335918,
+			"topic0_flip_main_logpdelta": 0.010329834185540676,
+			"topic0_flip_emb_diff": 0.10385105013847351,
+			"topic0_flip_main_pdelta_m1t1": 0.005151608493179083,
+			"topic0_flip_main_pdelta_m0t1": 0.005338843446224928,
+			"topic0_flip_main_pdelta_m0t0": 0.005005642306059599,
+			"topic0_flip_main_pdelta_m1t0": 0.005048767197877169,
+			"topic0_flip_main_pdelta_smin": 0.005230692680925131,
+			"topic0_flip_main_pdelta_smaj": 0.005075959954410791,
+			"topic0_flip_main_pdelta_all": 0.005164752714335918,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5755494236946106,
+			"pp_emb_norm": 3.0110177993774414,
+			"main_xent": 0.6907255053520203,
+			"main_random_xent": 0.693161129951477,
+			"emb_norm": 3.0124096870422363,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4336080551147461,
+			"topic0_smin_main": 0.29185184836387634,
+			"topic0_smaj_main": 0.7024519443511963,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.007926395162940025,
+			"topic0_flip_main_logpdelta": 0.01585380733013153,
+			"topic0_flip_emb_diff": 0.14252421259880066,
+			"topic0_flip_main_pdelta_m1t1": 0.007864680141210556,
+			"topic0_flip_main_pdelta_m0t1": 0.00826376210898161,
+			"topic0_flip_main_pdelta_m0t0": 0.007692575454711914,
+			"topic0_flip_main_pdelta_m1t0": 0.007724008057266474,
+			"topic0_flip_main_pdelta_smin": 0.008061104454100132,
+			"topic0_flip_main_pdelta_smaj": 0.007769346237182617,
+			"topic0_flip_main_pdelta_all": 0.007926395162940025,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5773809552192688,
+			"pp_emb_norm": 2.494232416152954,
+			"main_xent": 0.6883543133735657,
+			"main_random_xent": 0.6933193802833557,
+			"emb_norm": 2.496826171875,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4377289414405823,
+			"topic0_smin_main": 0.2859259247779846,
+			"topic0_smaj_main": 0.7077534794807434,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.017013080418109894,
+			"topic0_flip_main_logpdelta": 0.034035757184028625,
+			"topic0_flip_emb_diff": 0.21766386926174164,
+			"topic0_flip_main_pdelta_m1t1": 0.016795435920357704,
+			"topic0_flip_main_pdelta_m0t1": 0.017817093059420586,
+			"topic0_flip_main_pdelta_m0t0": 0.016553085297346115,
+			"topic0_flip_main_pdelta_m1t0": 0.0165497325360775,
+			"topic0_flip_main_pdelta_smin": 0.017326509580016136,
+			"topic0_flip_main_pdelta_smaj": 0.01665646955370903,
+			"topic0_flip_main_pdelta_all": 0.017013080418109894,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5915750861167908,
+			"pp_emb_norm": 1.9743552207946777,
+			"main_xent": 0.6825891733169556,
+			"main_random_xent": 0.6946377158164978,
+			"emb_norm": 1.9794995784759521,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.4253663122653961,
+			"topic0_smin_main": 0.29629629850387573,
+			"topic0_smaj_main": 0.72365802526474,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.042845290154218674,
+			"topic0_flip_main_logpdelta": 0.08586067706346512,
+			"topic0_flip_emb_diff": 0.41045114398002625,
+			"topic0_flip_main_pdelta_m1t1": 0.042369209229946136,
+			"topic0_flip_main_pdelta_m0t1": 0.04514066129922867,
+			"topic0_flip_main_pdelta_m0t0": 0.04165121912956238,
+			"topic0_flip_main_pdelta_m1t0": 0.04150918498635292,
+			"topic0_flip_main_pdelta_smin": 0.04372303932905197,
+			"topic0_flip_main_pdelta_smaj": 0.04194003343582153,
+			"topic0_flip_main_pdelta_all": 0.042845290154218674,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.5879120826721191,
+			"pp_emb_norm": 1.7120195627212524,
+			"main_xent": 0.6748634576797485,
+			"main_random_xent": 0.6979511976242065,
+			"emb_norm": 1.7202221155166626,
+			"topic0": 0.49862638115882874,
+			"topic0_flip_main": 0.42216116189956665,
+			"topic0_smin_main": 0.28296294808387756,
+			"topic0_smaj_main": 0.7243207693099976,
+			"main_smin_topic0": 0.5096296072006226,
+			"topic0_flip_main_pdelta": 0.07990490645170212,
+			"topic0_flip_main_logpdelta": 0.160629004240036,
+			"topic0_flip_emb_diff": 0.7080017924308777,
+			"topic0_flip_main_pdelta_m1t1": 0.0792587548494339,
+			"topic0_flip_main_pdelta_m0t1": 0.08401357382535934,
+			"topic0_flip_main_pdelta_m0t0": 0.07770591229200363,
+			"topic0_flip_main_pdelta_m1t0": 0.0772450864315033,
+			"topic0_flip_main_pdelta_smin": 0.08153912425041199,
+			"topic0_flip_main_pdelta_smaj": 0.07830534875392914,
+			"topic0_flip_main_pdelta_all": 0.07990490645170212,
+			"topic0_pos_con_loss": 0.0,
+			"topic0_neg_con_loss": 0.0,
+			"topic0_last_emb_norm": 0.0,
+			"topic0_te_loss": 0.0
+		},
+		"label_corr_dict": {
+			"0": {
+				"1": 0.511,
+				"2": 0.6935
+			},
+			"1": {
+				"2": 0.5105
+			}
+		}
+	},
+	{
+		"classifier_acc_dict": {
+			"main": 0.6016483306884766,
+			"pp_emb_norm": 2.829984664916992,
+			"main_xent": 0.6682112812995911,
+			"main_random_xent": 0.7065037488937378,
+			"emb_norm": 2.8377883434295654,
+			"topic0": 0.4990842342376709,
+			"topic0_flip_main": 0.40934064984321594,
+			"topic0_smin_main": 0.2459259331226349,
+			"topic0_smaj_main": 0.760768711566925,
+			"main_smin_topic0": 0.5111111402511597,
+			"topic0_flip_main_pdelta": 0.11039794981479645,
+			"topic0_flip_main_logpdelta": 0.22454090416431427,
+			"topic0_flip_emb_diff": 0.9030250310897827,
+			"topic0_flip_main_pdelta_m1t1": 0.11102066934108734,
+			"topic0_flip_main_pdelta_m0t1": 0.113461934030056,
+			"topic0_flip_main_pdelta_m0t0": 0.10690958797931671,
+			"topic0_flip_main_pdelta_m1t0": 0.10773806273937225,
+			"topic0_flip_main_pdelta_smin": 0.11148440837860107,
+			"topic0_flip_main_pdelta_smaj": 0.10881952196359634,
+			"topic0_flip_main_pdelta_all": 0.11039794981479645,
 			"topic0_pos_con_loss": 0.0,
 			"topic0_neg_con_loss": 0.0,
 			"topic0_last_emb_norm": 0.0,
