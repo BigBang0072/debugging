@@ -5809,13 +5809,22 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
             merged_cat_dataset_cad=None
             if sidx==1:
                 assert len(topic_subset)==1,"Number of topic exceeds one for one invariance imposition"
-                merged_cat_dataset_cad = cat_dataset_dict[topic_subset[-1]]["cat_dataset_cad"]
+                inv_topic_cat_dataset_cad = cat_dataset_dict[topic_subset[-1]]["cat_dataset_cad"]
+                merged_cat_dataset_cad = [cad_batch for cad_batch in inv_topic_cat_dataset_cad]
             else:
                 merged_cat_dataset_cad=[]
                 #Getting all the topic name and adding them as one
                 for inv_topic_name in topic_subset:
                     inv_topic_cat_dataset_cad = cat_dataset_dict[inv_topic_name]["cat_dataset_cad"]
                     merged_cat_dataset_cad += [cad_batch for cad_batch in inv_topic_cat_dataset_cad]
+                
+            #Adding the functionality to skip some portion of the dataset
+            #Assumption: The dataset is well shuffled, so that randomly removing some batch doesnt introduce any bias
+            random.shuffle(merged_cat_dataset_cad)
+            #Taking the first 1/(sidx+1) half. Cuz these many extra dataset is added
+            num_batch_tokeep = len(merged_cat_dataset_cad)//(sidx+1)
+            merged_cat_dataset_cad = merged_cat_dataset_cad[0:num_batch_tokeep]
+
             print("Training the invariant model on subset of topics: {}".format(topic_subset))
             #Now we will train the invariant classifier on all the merged dataset
             cad_best_valid_prob_dict,cad_best_train_main_metric,cad_best_train_main_random_metric,\
