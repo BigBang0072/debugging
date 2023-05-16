@@ -47,7 +47,7 @@ search:
   max_trials: 100000
   params:
     - name: run_num
-      values: [2,]
+      values: [0,1,2,]
     - name: sample
       values: [10000,]
     - name: batch_size
@@ -77,11 +77,11 @@ search:
     - name: hlayer
       values: [0,]
     - name: stage_mode
-      values: ["stage1_mouli_te_reg_strong",] #stage1_mouli_te_reg_strong   stage1_mouli_cad
+      values: ["stage1_mouli_cad",] #stage1_mouli_te_reg_strong   stage1_mouli_cad
     - name: mouli_yrandom_mode
       values: ["train", "notrain"]
     - name: te_lambda
-      values: [1,10,100,1000] #0 with cad mode ;  1,10,100,100 with reg mode
+      values: [0,] #0 with cad mode ;  1,10,100,100 with reg mode
     - name: pos_size
       values: [1,]
     - name: pval
