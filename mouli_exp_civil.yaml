@@ -43,15 +43,15 @@ search:
     name: search_{experiment_name:s}
     sku: G1
     command:
-    - python transformer_debugger.py -expt_num "cad.moulis1civil.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).mvsel({mouli_valid_sel_mode}).telambda({te_lambda})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -batch_size {batch_size} -dtype {dtype} -loss_type {loss_type} -cfactuals_bsize {cfactuals_bsize}  -num_pos_sample {pos_size} -num_neg_sample {pos_size} -run_num {run_num} -dropout_rate {dropout_rate} -debug_tidx {debug_tidx} -stage_mode {stage_mode} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert -replace_strategy {replace_strategy} -mouli_valid_sel_mode {mouli_valid_sel_mode} -te_lambda {te_lambda}
+    - python transformer_debugger.py -expt_num "cad.moulis1civil.rnum({run_num}).topic({topic_name}).sample({sample}).noise({noise}).pval({pval}).mvsel({mouli_valid_sel_mode}).telambda({te_lambda}).myrandmode({mouli_yrandom_mode})" -num_sample {sample} -num_topics {num_topics} -num_epochs {mainepoch} -path $$AMLT_DATA_DIR  -out_path $$AMLT_DATA_DIR -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len {max_len}  -noise_ratio {noise} -num_hidden_layer {hlayer}  -main_model_mode {main_mode} --normalize_emb -lr {lr} -batch_size {batch_size} -dtype {dtype} -loss_type {loss_type} -cfactuals_bsize {cfactuals_bsize}  -num_pos_sample {pos_size} -num_neg_sample {pos_size} -run_num {run_num} -dropout_rate {dropout_rate} -debug_tidx {debug_tidx} -stage_mode {stage_mode} -topic_name {topic_name} -topic_pval {pval} --bert_as_encoder -transformer {transformer} --train_bert -replace_strategy {replace_strategy} -mouli_valid_sel_mode {mouli_valid_sel_mode} -te_lambda {te_lambda} -mouli_yrandom_mode {mouli_yrandom_mode}
   type: grid
   max_trials: 100000
   params:
     - name: run_num
       values: [0,1,2]
     - name: sample
-      values: [5000,]
-      # values: [4000,]
+      # values: [5000,]
+      values: [4000,]
     - name: batch_size
       values: [32,]
     - name: debug_tidx
@@ -63,8 +63,8 @@ search:
     - name: num_topics
       values: [1,]
     - name: topic_name
-      values: ["gender",]  #"gender" "race"
-      # values: ["religion",]
+      # values: ["race", "gender"]  #"gender" "race"
+      values: ["religion",]
     - name: replace_strategy
       values: ["remove"]
     - name: max_len
@@ -83,6 +83,8 @@ search:
       values: [0,]
     - name: stage_mode
       values: ["stage1_mouli_cad",] #stage1_mouli_te_reg_strong   stage1_mouli_cad
+    - name: mouli_yrandom_mode
+      values: ["train", "notrain"]
     - name: te_lambda
       values: [0,]  #1,10,100,1000
     - name: pos_size
