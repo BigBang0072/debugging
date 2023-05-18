@@ -415,7 +415,7 @@ def get_avg_tv_pred(run_list,pval_list,tv_fname_pattern,item_list):
             avg_tv_pval_dict[pval][item_name]["mean"]=np.mean(avg_tv_pval_dict[pval][item_name]["val_list"])
             avg_tv_pval_dict[pval][item_name]["std"]=np.std(avg_tv_pval_dict[pval][item_name]["val_list"])\
                                                         /(np.sqrt(len(avg_tv_pval_dict[pval][item_name]["val_list"])))
-        
+            avg_tv_pval_dict[pval][item_name]["val_mat"]=np.array(avg_tv_pval_dict[pval][item_name]["val_list"])
     return avg_tv_pval_dict
 
 def sort_topic_tuple(topic_tuple):
@@ -435,10 +435,18 @@ def get_model_mouli_score(topic_list,avg_mouli_selec_metric,model,pval):
     myrandmode = "notrain" mode to get the best main task loss
     myrandmode = "train" mode to get the best random task loss
     '''    
-    model_mouli_score = avg_mouli_selec_metric["notrain"][model][pval]["best_train_main_metric"]["mean"]\
-                        - avg_mouli_selec_metric["train"][model][pval]["best_train_main_random_metric"]["mean"]\
+    # model_mouli_score = avg_mouli_selec_metric["notrain"][model][pval]["best_train_main_metric"]["mean"]\
+    #                     - avg_mouli_selec_metric["train"][model][pval]["best_train_main_random_metric"]["mean"]\
+    #                     + 2**(len(topic_list)-len(model))-1
+    
+    #We will calculate the standard deviation separately now, not changing the score which is calculate from direct mean
+    model_mouli_score_all = avg_mouli_selec_metric["notrain"][model][pval]["best_train_main_metric"]["val_mat"]\
+                        - avg_mouli_selec_metric["train"][model][pval]["best_train_main_random_metric"]["val_mat"]\
                         + 2**(len(topic_list)-len(model))-1
-    return model_mouli_score
+    model_mouli_score = np.mean(model_mouli_score_all)
+    model_mouli_std = np.std(model_mouli_score_all)/(np.sqrt(len(model_mouli_score_all)))
+
+    return model_mouli_score,model_mouli_std
 
 def ges_minimize(pval,topic_list,avg_mouli_selec_metric_dict):
     '''
@@ -451,7 +459,7 @@ def ges_minimize(pval,topic_list,avg_mouli_selec_metric_dict):
     edge_list = []
     #Forward phase
     model = get_topic_complement((),topic_list)
-    min_score = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
+    min_score,_ = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
     print("Initial Edge List:{}, initial score:{}".format(edge_list,min_score))
     print("Starting the addition phase")
     while True:
@@ -465,7 +473,7 @@ def ges_minimize(pval,topic_list,avg_mouli_selec_metric_dict):
                 continue
             #Now lets check if adding this
             model = get_topic_complement(sort_topic_tuple(edge_list+[topic]),topic_list)
-            added_new_score = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
+            added_new_score,_ = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
             print("Candidate topic:{}\t score:{}".format(topic,added_new_score))
             
             if added_new_score<new_topic_score:
@@ -493,7 +501,7 @@ def ges_minimize(pval,topic_list,avg_mouli_selec_metric_dict):
             model=edge_list.copy()
             model.remove(topic)
             model = get_topic_complement(sort_topic_tuple(model),topic_list)
-            remove_new_score = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
+            remove_new_score,_ = get_model_mouli_score(topic_list,avg_mouli_selec_metric_dict,model,pval)
             print("Candidate topic:{}\t score:{}".format(topic,remove_new_score))
             
             if remove_new_score<remove_topic_score:
