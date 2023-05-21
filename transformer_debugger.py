@@ -5627,7 +5627,7 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
         #Now we will be training the invariant model using two method
         add_mouli_cad=None
         if "stage1_mouli_te_reg_strong" == model_args["stage_mode"]:
-            add_mouli_cad=False
+            add_mouli_cad = model_args["force_add_mouli_cad"]
         elif "stage1_mouli_cad" == model_args["stage_mode"]:
             add_mouli_cad=True
         else:
@@ -5773,7 +5773,8 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                         data_args=data_args,
                                                         model_args=model_args,
                                                         data_handler=data_handler,
-                                                        cat_dataset=erm_cat_dataset_normal,
+                                                        cat_dataset_full=erm_cat_dataset_normal,
+                                                        num_inv_topic=0,
                                                         label_corr_dict=label_corr_dict,
                                                         fname_suffix="_erm",
                                                         erm_mode=True,
@@ -5818,12 +5819,6 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                     inv_topic_cat_dataset_cad = cat_dataset_dict[inv_topic_name]["cat_dataset_cad"]
                     merged_cat_dataset_cad += [cad_batch for cad_batch in inv_topic_cat_dataset_cad]
                 
-            #Adding the functionality to skip some portion of the dataset
-            #Assumption: The dataset is well shuffled, so that randomly removing some batch doesnt introduce any bias
-            random.shuffle(merged_cat_dataset_cad)
-            #Taking the first 1/(sidx+1) half. Cuz these many extra dataset is added
-            num_batch_tokeep = len(merged_cat_dataset_cad)//(sidx+1)
-            merged_cat_dataset_cad = merged_cat_dataset_cad[0:num_batch_tokeep]
 
             print("Training the invariant model on subset of topics: {}".format(topic_subset))
             #Now we will train the invariant classifier on all the merged dataset
@@ -5833,7 +5828,8 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
                                                                 data_args=data_args,
                                                                 model_args=model_args,
                                                                 data_handler=data_handler,
-                                                                cat_dataset=merged_cat_dataset_cad,
+                                                                cat_dataset_full=merged_cat_dataset_cad,
+                                                                num_inv_topic=sidx,
                                                                 label_corr_dict=label_corr_dict,
                                                                 fname_suffix="_({})_cad".format(",".join(topic_subset)),
                                                                 cat_dataset_topred=erm_cat_dataset_normal,
@@ -5882,9 +5878,11 @@ def nbow_mouli_stage1_trainer(data_args,model_args):
             with open(pred_tv_savename,"w") as whandle:
                 json.dump(pred_tv_data,whandle,indent="\t")
 
-def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label_corr_dict,fname_suffix,erm_mode=False,cat_dataset_topred=None):
+def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset_full,label_corr_dict,fname_suffix,num_inv_topic,erm_mode=False,cat_dataset_topred=None):
     '''
     Here we will train normal ERM classifier to get the baseline accuracy
+    
+    num_inv_topic : number of topics we are imposing invarinace to. 0 for ERM and then 1, 2, 3 .. 
     '''
     #Creating the classifier
     # print("\n\n\n\nCreating the ERM model for stage 1")
@@ -5914,13 +5912,15 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
         best_valid_metric = 0.0
 
 
+    #Converting the cat dataset to a list for consistency
+    cat_dataset_full = [full_batch for full_batch in cat_dataset_full]
+
     #Running the training loop
     print("Starting the training steps!")
     for eidx in range(model_args["epochs"]):
         classifier_main.eidx = eidx
         print("==========================================")
         classifier_main.reset_all_metrics()
-        tbar = tqdm(range(len(cat_dataset)))
 
         #Deciding which mode we need to train the model
         main_train_task_mode = None
@@ -5937,9 +5937,22 @@ def _get_prediction_from_erm(data_args,model_args,data_handler,cat_dataset,label
             cf_tidx = 0 
         else:
             raise NotImplementedError()
+
+        #Adding the functionality to skip some portion of the dataset
+        #Now this subsampling is random for every iteration. So, we are not subsetting completely a partion of dataset
+        #Assumption: The dataset is well shuffled, so that randomly removing some batch doesnt introduce any bias
+        cat_dataset = None
+        if model_args["equalize_cad_numsamples"]==True:
+            random.shuffle(cat_dataset_full)
+            #Taking the first 1/(sidx+1) half. Cuz these many extra dataset is added
+            num_batch_tokeep = len(cat_dataset_full)//(num_inv_topic+1)
+            cat_dataset = cat_dataset_full[0:num_batch_tokeep]
+        else:
+            cat_dataset = cat_dataset_full
         
         #Training the full stage2 together 
         print("Training the Mouli-Stage1-full with: \t{}".format(model_args["stage_mode"]))
+        tbar = tqdm(range(len(cat_dataset)))
         for bidx,data_batch in zip(tbar,cat_dataset):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset),bidx))
             classifier_main.train_step_mouli(
@@ -6374,6 +6387,8 @@ if __name__=="__main__":
     parser.add_argument('-mouli_valid_sel_mode',dest="mouli_valid_sel_mode",type=str,default=None)
     parser.add_argument('--skip_erm',default=False,action="store_true")
     parser.add_argument('-mouli_yrandom_mode',dest="mouli_yrandom_mode",type=str,default=None)
+    parser.add_argument('--equalize_cad_numsamples',default=False,action="store_true")
+    parser.add_argument('--force_add_mouli_cad',default=False,action="store_true")
     
 
     #Argument related to TE estimation for the transformations
@@ -6653,6 +6668,8 @@ if __name__=="__main__":
     model_args["mouli_valid_sel_mode"]=args.mouli_valid_sel_mode
     model_args["skip_erm"]=args.skip_erm
     model_args["mouli_yrandom_mode"]=args.mouli_yrandom_mode
+    model_args["equalize_cad_numsamples"]=args.equalize_cad_numsamples
+    model_args["force_add_mouli_cad"]=args.force_add_mouli_cad
 
 
     #Setting up the gpu
