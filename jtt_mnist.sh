@@ -35,15 +35,15 @@ sample=10000
 #10,11,12 with previou probabiltiy 0.9,0.4,0.6,0.1
 for run_num in 0 1 2 #14 15 #10 11 12 #1 2
 do
-    for s1epoch in 5 #5 10
+    for s1epoch in 4 8 #5 10
     do
-        for oslambda in 10 #2 6
+        for oslambda in 2 4 8 #2 6
         do  
             for dcf in 1.0
             do 
                 for noise in 0.3
                 do
-                    for pvaltsp in 0.9 #0.5 0.6 0.7 0.8 0.9 0.99
+                    for pvaltsp in 0.5 0.6 0.7 0.8 0.9 0.99
                     do
                         python transformer_debugger.py -expt_num "cad.mnistjtt.rnum($run_num).topic($topic_name).sample($sample).noise($noise).pvaltsp($pvaltsp).dcf($dcf).s1epoch($s1epoch).oslambda($oslambda)" -num_sample $sample -num_topics $num_topics -num_epochs $mainepoch -cfactuals_bsize $cbsize -path $path  -out_path $out_path -emb_path "glove-wiki-gigaword-100" -vocab_path "assets/word2vec_10000_200d_labels.tsv" -max_len $max_len  -noise_ratio $noise -num_hidden_layer $hlayer  -main_model_mode $main_mode --normalize_emb -lr $lr -batch_size $batch_size -dtype $dtype -loss_type "x_entropy"  -run_num $run_num -dropout_rate 0.0 -debug_tidx $debug_tidx -stage_mode $stage_mode -sp_topic_pval $pvaltsp -degree_confoundedness $dcf  -topic_name $topic_name -jtt_s1_epochs $s1epoch -os_lambda $oslambda  #--bert_as_encoder -transformer $transformer --train_bert
 
