@@ -6361,7 +6361,7 @@ def nbow_inv_stage2_trainer(data_args,model_args):
         #Saving all the probe metrics
         classifier_main.save_the_probe_metric_list()           
 
-def jtt_baseline_trainer(data_args,model_args):
+def nbow_jtt_baseline_trainer(data_args,model_args):
     '''
     This function will run the Just Train Twice baseline that 
     doesnt need the access to the attribute label for learning the 
@@ -6443,7 +6443,7 @@ def jtt_baseline_trainer(data_args,model_args):
 
     #Starting the first step of training
     print("Training the Stage1 of JTT!")
-    for feidx in range(model_args["jtt_s1_epochs"]):
+    for feidx in range(model_args["epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset_list)))
@@ -6457,6 +6457,37 @@ def jtt_baseline_trainer(data_args,model_args):
                                     task="main",
                                     bidx=bidx,
             )
+
+            #Next we will start the validation step
+            classifier_main.valid_step_stage2(
+                                            dataset_batch=batch_dict["batch"],
+                                            P_matrix=P_Identity,
+                                            cidx=data_args["debug_tidx"],
+            )
+            classifier_main.valid_step_stage2_flip_topic(
+                                    dataset_batch=batch_dict["batch"],
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],
+            )
+
+        #Printing the logs for this training setp
+        log_format="epoch:{:}\nxloss_sum:{:0.4f}\n"\
+                        + "xloss:{:0.3f}\n"\
+                        + "vxloss:{:0.3f}\n"\
+                        + "vacc:{:0.3f}\n"\
+                        + "Acc(smin):{:0.3f}\n"\
+                        + "Acc(smaj):{:0.3f}\n"\
+                        + "pdelta:{:0.3f}"
+        print(log_format.format(
+                            feidx,
+                            classifier_main.main_pred_xentropy_sum.result(),
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+                            classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                            classifier_main.topic_smaj_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                            classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result(),
+        ))
     
     #Now we need to find the idx's where the current ERM is making mistake
     batch_oversample_flag_dict = {
@@ -6914,6 +6945,10 @@ if __name__=="__main__":
     model_args["force_add_mouli_cad"]=args.force_add_mouli_cad
 
 
+    model_args["jtt_s1_epochs"]=args.jtt_s1_epochs
+    model_args["os_lambda"]=args.os_lambda
+
+
     #Setting up the gpu
     if "nlp_toy3" in data_args["path"]:
         print("Disabling GPU")
@@ -6935,6 +6970,8 @@ if __name__=="__main__":
     #                   CAD JOBS                    #
     #################################################
     # nbow_trainer_mouli(data_args,model_args)
+    if "jtt" in model_args["stage_mode"]:
+        nbow_jtt_baseline_trainer(data_args,model_args)
     if "mouli" in model_args["stage_mode"]:
         nbow_mouli_stage1_trainer(data_args,model_args)
     elif "stage2" in model_args["stage_mode"] or "main" in model_args["stage_mode"]:
