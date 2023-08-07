@@ -1236,6 +1236,9 @@ class SimpleNBOW(keras.Model):
                         self.alpha_val_dict["t{}{}".format(tidx,ttidx)]["tcf{}".format(xidx)]=keras.metrics.Mean(name="alpha_t{}{}_tcf{}".format(tidx,ttidx,xidx))
 
             # Next set of params
+        
+        #Adding the JTT realted params
+        self.batch_oversample_flag_dict = {}
 
     def get_all_head_init_weights(self,):
         '''
@@ -2030,7 +2033,7 @@ class SimpleNBOW(keras.Model):
         #                 topic_label = topic_label_valid
         # )
         return main_valid_prob
-    
+
     def valid_step_stage2_flip_topic(self,dataset_batch,P_matrix,cidx):
         '''
         This function will calculate the main classifier accuracy given we flip the topic cidx
@@ -2195,7 +2198,8 @@ class SimpleNBOW(keras.Model):
 
         return X_proj
     
-    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None,grad_update=True,mouli_erm_mode=False):
+    def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None,
+                        grad_update=True,mouli_erm_mode=False):
         '''
         bidx            : the batch index which could be used to hash certain things about the example
         te_tidx         : this tidx is used by stage 1 for the topic/treatment index
@@ -2496,12 +2500,54 @@ class SimpleNBOW(keras.Model):
                 main_task_prob = self.get_main_task_pred_prob(input_enc)
                 main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
                 self.main_pred_xentropy.update_state(main_xentropy_loss)
+
+                #Hashing the oversample flag for the JTT
+                #TODO: Make it optional later for gain in performance
+                self._get_jtt_oversample_flags(label_train,main_task_prob,bidx)
             
             #Training the head parameters of the main classifier
             grads = tape.gradient(main_xentropy_loss,self.trainable_weights)
             self.optimizer.apply_gradients(
                         zip(grads,self.trainable_weights)
             )
+        elif task=="jtt_oversample":
+            #This mode will be used to train the jtt method with oversampleing the 
+            #incorrect example hashed in the previous step
+
+            #Oversampling the examples from batch with mistake in first model
+            os_idx_train = idx_train[self.batch_oversample_flag_dict[bidx]]
+            if os_idx_train.shape[0]!=0:
+                idx_train = tf.concat([idx_train]+[os_idx_train]*(self.model_args["os_lambda"]-1),axis=0)
+            
+            if attn_mask_train!=None:
+                os_attn_mask_train = attn_mask_train[self.batch_oversample_flag_dict[bidx]]
+                if os_attn_mask_train.shape[0]!=0:
+                    attn_mask_train = tf.concat([attn_mask_train]+[os_attn_mask_train]*(self.model_args["os_lambda"]-1),axis=0)
+            
+            os_label_train = label_train[self.batch_oversample_flag_dict[bidx]]
+            if os_label_train.shape[0]!=0:
+                label_train = tf.concat([label_train]+[os_label_train]*(self.model_args["os_lambda"]-1),axis=0)
+
+
+            #This will train simple ERM model without any regularization
+            with tf.GradientTape() as tape:
+                #Encoding the input first
+                input_enc = self._encoder(idx_train,attn_mask=attn_mask_train,training=True)
+                #Tracking the embedding norm (this will increase as per nagarajan paper)
+                emb_norm = tf.reduce_mean(tf.norm(input_enc,axis=-1))
+                self.embedding_norm.update_state(emb_norm)
+
+                #Getting the main task loss
+                main_task_prob = self.get_main_task_pred_prob(input_enc)
+                main_xentropy_loss = scxentropy_loss(label_train,main_task_prob)
+                self.main_pred_xentropy.update_state(main_xentropy_loss)
+            
+            #Training the head parameters of the main classifier
+            grads = tape.gradient(main_xentropy_loss,self.trainable_weights)
+            self.optimizer.apply_gradients(
+                        zip(grads,self.trainable_weights)
+            )
+
         elif task=="main_mouli":
             #Taking out the randomized labels for getting the model complexity result
             label_randomized_train = dataset_batch["y_randomized"][0:valid_idx]
@@ -2576,6 +2622,22 @@ class SimpleNBOW(keras.Model):
             )
         else:
             raise NotImplementedError()
+    
+    def _get_jtt_oversample_flags(self,label_train,main_task_prob,bidx):
+        '''
+        This function will hash the batch and examples where the model is giving
+        wrong prediction. This is required in the second step of JTT paper to
+        oversample the examples!
+        label_train : is in the sparse mode
+        main_task_prob : is in the full vector mode
+        '''
+        predicted_label = tf.argmax(main_task_prob,axis=-1)
+        oversample_flag = (predicted_label==label_train) 
+
+        #Hashing this flag to oversample later
+        self.batch_oversample_flag_dict[bidx]=oversample_flag
+
+        return
     
     def track_group_wise_alpha(self,input_alpha,all_topic_label,tcf_label,tidx):
         '''
@@ -6299,6 +6361,181 @@ def nbow_inv_stage2_trainer(data_args,model_args):
         #Saving all the probe metrics
         classifier_main.save_the_probe_metric_list()           
 
+def jtt_baseline_trainer(data_args,model_args):
+    '''
+    This function will run the Just Train Twice baseline that 
+    doesnt need the access to the attribute label for learning the 
+    invariant classifier. But we do need the attribute label, but we need
+    not know which of the attribute is causal or spurious.
+    '''
+    #Function to flatten the cat dataset so that we could handle multiple topic in interleved faishon
+    def flatten_cat_dataset(cat_dataset,tidx):
+        cat_dataset_list = []
+        for bidx,batch in enumerate(cat_dataset):
+            cat_dataset_list.append(dict(
+                                    tidx=tidx,
+                                    bidx=bidx,
+                                    batch=batch,
+            ))
+        return cat_dataset_list
+
+    label_corr_dict = None
+    print("Creating the dataset")
+    data_handler = DataHandleTransformer(data_args)
+    if "nlp_toy2" in data_args["path"]:
+        cat_dataset = data_handler.toy_nlp_dataset_handler2(return_cf=True)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "nlp_toy3" in data_args["path"]:
+        print("Creating the TOY-STORY3")
+        cat_dataset,label_corr_dict = data_handler.toy_nlp_dataset_handler3(return_cf=True)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "mnist" in data_args["path"]:
+        cat_dataset,label_corr_dict = data_handler._mnist_dataset_handler(return_cf=True)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "cebab_all" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        #Getting all the individual cat dataset for all the topic
+        cat_dataset_list=[]
+        for tpidx,topic in enumerate(data_args["cat_list"]):
+            #setting the appropriate data args
+            data_args["cebab_topic_name"]=topic 
+            data_args["num_sample"]=data_args["num_sample_list"][tpidx]
+            data_args["topic_pval"]=data_args["topic_pval_list"][tpidx]
+            data_handler.data_args = data_args
+            #Next we will generate the topic dataset
+            topic_cat_dataset = data_handler.controlled_cebab_dataset_handler(
+                                                                    return_cf=True,
+                                                                    nbow_mode=nbow_mode,
+                                                                    topic_idx=tpidx,
+            )
+            cat_dataset_list += flatten_cat_dataset(topic_cat_dataset,tpidx)
+
+            #We will shuffle this list to ensure no topic is trained in one go, for distributed update
+            random.shuffle(cat_dataset_list)
+
+    elif "cebab" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cebab_dataset_handler(return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "civilcomments" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="civilcomments",return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+    elif "aae" in data_args["path"]:
+        nbow_mode = False if model_args["bert_as_encoder"] else True
+        cat_dataset = data_handler.controlled_cda_dataset_handler(dataset="aae",return_cf=True,nbow_mode=nbow_mode)
+        cat_dataset_list = flatten_cat_dataset(cat_dataset=cat_dataset,tidx=0)
+
+    ########################################################
+    ## Step 1 of JTT: Train the ERM for few steps
+    ########################################################
+    #Creating the classifier
+    print("Creating the model")
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Adding the label correlation dict to the classifier
+    classifier_main.label_corr_dict = label_corr_dict
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+    #Getting a dummy projection matrix to use the previous stage 2 validators
+    P_Identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+
+    #Starting the first step of training
+    print("Training the Stage1 of JTT!")
+    for feidx in range(model_args["jtt_s1_epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        tbar = tqdm(range(len(cat_dataset_list)))
+        print("Training the JTT-Stage1")
+        for bidx,batch_dict in zip(tbar,cat_dataset_list):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset_list),bidx))
+
+            #Training the classifier using ERM
+            classifier_main.train_step_mouli(
+                                    dataset_batch=batch_dict["batch"],
+                                    task="main",
+                                    bidx=bidx,
+            )
+    
+    #Now we need to find the idx's where the current ERM is making mistake
+    batch_oversample_flag_dict = {
+        bidx:tf.identity(oversample_flag) for bidx,oversample_flag 
+            in classifier_main.batch_oversample_flag_dict.items()
+    }
+
+
+    ########################################################
+    ## Step 2 of JTT: Upsample the misclassified points and retrain ERM
+    ########################################################
+    #Deleting the previous classifier and starting fresh
+    del classifier_main
+    #Creating the classifier
+    print("Creating the model")
+    classifier_main = SimpleNBOW(data_args,model_args,data_handler)
+    #Adding the label correlation dict to the classifier
+    classifier_main.label_corr_dict = label_corr_dict
+    #Adding the oversample dict flag
+    classifier_main.batch_oversample_flag_dict=batch_oversample_flag_dict
+
+    #Now we will compile the model
+    classifier_main.compile(
+        keras.optimizers.Adam(learning_rate=model_args["lr"])
+    )
+    #Getting a dummy projection matrix to use the previous stage 2 validators
+    P_Identity = np.eye(classifier_main.hlayer_dim,classifier_main.hlayer_dim)
+    
+    
+    print("Training the Stage2 of JTT!")
+    for seidx in range(model_args["jtt_s1_epochs"]):
+        print("==========================================")
+        classifier_main.reset_all_metrics()
+        tbar = tqdm(range(len(cat_dataset_list)))
+        print("Training the JTT-Stage1")
+        for bidx,batch_dict in zip(tbar,cat_dataset_list):
+            tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset_list),bidx))
+
+            #Training the classifier using ERM
+            classifier_main.train_step_mouli(
+                                    dataset_batch=batch_dict["batch"],
+                                    task="jtt_oversample",
+                                    bidx=bidx,
+            )
+
+            #Next we will start the validation step
+            classifier_main.valid_step_stage2(
+                                            dataset_batch=batch_dict["batch"],
+                                            P_matrix=P_Identity,
+                                            cidx=data_args["debug_tidx"],
+            )
+            classifier_main.valid_step_stage2_flip_topic(
+                                    dataset_batch=batch_dict["batch"],
+                                    P_matrix=P_Identity,
+                                    cidx=data_args["debug_tidx"],
+            )
+
+        #Printing the logs for this training setp
+        log_format="epoch:{:}\nxloss_sum:{:0.4f}\n"\
+                        + "xloss:{:0.3f}\n"\
+                        + "vxloss:{:0.3f}\n"\
+                        + "vacc:{:0.3f}\n"\
+                        + "Acc(smin):{:0.3f}\n"\
+                        + "Acc(smaj):{:0.3f}\n"\
+                        + "pdelta:{:0.3f}"
+        print(log_format.format(
+                            seidx,
+                            classifier_main.main_pred_xentropy_sum.result(),
+                            classifier_main.main_pred_xentropy.result(),
+                            classifier_main.main_valid_pred_xentropy.result(),
+                            classifier_main.main_valid_accuracy.result(),
+                            classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                            classifier_main.topic_smaj_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
+                            classifier_main.topic_flip_main_prob_delta_ldict[data_args["debug_tidx"]]["all"].result(),
+        ))
+
+        #Saving all the probe metrics
+        classifier_main.save_the_probe_metric_list() 
+    
 
 if __name__=="__main__":
     import argparse
@@ -6398,6 +6635,11 @@ if __name__=="__main__":
     parser.add_argument('-adv_rm_epochs',dest="adv_rm_epochs",type=int,default=None)
     parser.add_argument('-rev_grad_strength',dest="rev_grad_strength",type=float,default=None)
     parser.add_argument('-adv_rm_method',dest="adv_rm_method",type=str,default=None)
+
+
+    #Arguments related to JTT baseline 
+    parser.add_argument('-jtt_s1_epochs',dest="jtt_s1_epochs",type=int,default=None)
+    parser.add_argument('-os_lambda',dest="os_lambda",type=int,default=None)
 
     parser.add_argument('-stage',dest="stage",type=int)
     #parser.add_argument('-bemb_dim',dest="bemb_dims",type=int)
