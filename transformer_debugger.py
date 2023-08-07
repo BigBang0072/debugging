@@ -2514,6 +2514,7 @@ class SimpleNBOW(keras.Model):
             #This mode will be used to train the jtt method with oversampleing the 
             #incorrect example hashed in the previous step
 
+            # print("Initial Number of examples: ",idx_train.shape[0])
             #Oversampling the examples from batch with mistake in first model
             os_idx_train = idx_train[self.batch_oversample_flag_dict[bidx]]
             if os_idx_train.shape[0]!=0:
@@ -2528,6 +2529,7 @@ class SimpleNBOW(keras.Model):
             if os_label_train.shape[0]!=0:
                 label_train = tf.concat([label_train]+[os_label_train]*(self.model_args["os_lambda"]-1),axis=0)
 
+            # print("Final Number of examples: ",idx_train.shape[0])
 
             #This will train simple ERM model without any regularization
             with tf.GradientTape() as tape:
@@ -2632,7 +2634,7 @@ class SimpleNBOW(keras.Model):
         main_task_prob : is in the full vector mode
         '''
         predicted_label = tf.argmax(main_task_prob,axis=-1)
-        oversample_flag = (predicted_label==label_train) 
+        oversample_flag = (predicted_label!=label_train) 
 
         #Hashing this flag to oversample later
         self.batch_oversample_flag_dict[bidx]=oversample_flag
@@ -6443,7 +6445,7 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
 
     #Starting the first step of training
     print("Training the Stage1 of JTT!")
-    for feidx in range(model_args["epochs"]):
+    for feidx in range(model_args["jtt_s1_epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset_list)))
@@ -6518,11 +6520,11 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
     
     
     print("Training the Stage2 of JTT!")
-    for seidx in range(model_args["jtt_s1_epochs"]):
+    for seidx in range(model_args["epochs"]):
         print("==========================================")
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset_list)))
-        print("Training the JTT-Stage1")
+        print("Training the JTT-Stage2")
         for bidx,batch_dict in zip(tbar,cat_dataset_list):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset_list),bidx))
 
