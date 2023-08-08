@@ -2200,7 +2200,7 @@ class SimpleNBOW(keras.Model):
     
     def train_step_mouli(self,dataset_batch,task,inv_idx=None,te_tidx=None,cf_tidx=None,bidx=None,
                         grad_update=True,mouli_erm_mode=False,
-                        all_env_mask=None,):
+                        all_env_mask=None,dummy_w=None):
         '''
         bidx            : the batch index which could be used to hash certain things about the example
         te_tidx         : this tidx is used by stage 1 for the topic/treatment index
@@ -2209,6 +2209,7 @@ class SimpleNBOW(keras.Model):
 
         env_mask        : used by the IRM method to train for an environment
                             (env labels: False --> 0 and True -->1) or any choice
+        dummy_w         : used by IRMv1 penalty
         '''
         #Iniitalizing the debug dict to dump things which will be used for debugging
         self.debug_dict={}
@@ -2244,7 +2245,7 @@ class SimpleNBOW(keras.Model):
         )
         scxentropy_loss_none = keras.losses.SparseCategoricalCrossentropy(
                                                                 from_logits=False,
-                                                                reduction=None,
+                                                                reduction="none",
         )
 
         #Now we are ready to train our model
@@ -2520,16 +2521,17 @@ class SimpleNBOW(keras.Model):
             )
         elif task=="eiil_irm":
             #TODO: Currently we only have 2 environment --> hand coded
-            dummy_w = tf.Variable(1.0, trainable=False)
             with tf.GradientTape() as tape1:
                 all_env_overall_loss = 0.0
                 for env_idx in [True,False]:
                     with tf.GradientTape() as tape2:
-                        curr_env_mask = (all_env_mask==env_idx) 
+                        curr_env_mask_train = (all_env_mask==env_idx)[0:valid_idx] 
                         #Getting the sample for this environment using the mas
-                        env_idx_train = idx_train[curr_env_mask]
-                        env_attn_mask_train = attn_mask_train[curr_env_mask]
-                        env_label_train = label_train[curr_env_mask]
+                        env_idx_train = idx_train[curr_env_mask_train]
+                        env_attn_mask_train=None
+                        if attn_mask_train!=None:
+                            env_attn_mask_train = attn_mask_train[curr_env_mask_train]
+                        env_label_train = label_train[curr_env_mask_train]
 
                         #Encoding the input first
                         input_enc = self._encoder(env_idx_train,attn_mask=env_attn_mask_train,training=True)
@@ -2539,18 +2541,19 @@ class SimpleNBOW(keras.Model):
 
                         #Getting the main task loss
                         main_task_prob = self.get_main_task_pred_prob(input_enc)
-                        main_task_prob = tf.stop_gradient(dummy_w)*main_task_prob
+                        main_task_prob = dummy_w*main_task_prob
                         env_main_xentropy_loss = scxentropy_loss_none(
                                                     env_label_train,
                                                     main_task_prob
                         )
                     #Getting the irm penalty loss
                     env_irm_penalty = tf.reduce_mean(
-                                tape2.gradient(env_main_xentropy_loss,[dummy_w])**2
+                                tape2.gradient(env_main_xentropy_loss,[dummy_w])[0]**2
                     )
                     env_main_xentropy_loss = tf.reduce_mean(env_main_xentropy_loss)
 
-                    all_env_overall_loss += (env_irm_penalty+env_main_xentropy_loss)
+                    all_env_overall_loss += (self.model_args["irm_lambda"]*env_irm_penalty
+                                                + env_main_xentropy_loss)
                 #Updating the overall loss
                 self.main_pred_xentropy.update_state(all_env_overall_loss)
             #Now we can update the full model with the gradient on the overall loss
@@ -6621,11 +6624,13 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
                                         bidx=bidx,
                 )
             elif model_args["stage_mode"]=="eiil_irm":
+                dummy_w = tf.Variable(1.0,)
                 classifier_main.train_step_mouli(
                                         dataset_batch=batch_dict["batch"],
                                         task=model_args["stage_mode"],
                                         bidx=bidx,
                                         all_env_mask=batch_dict["env_mask"],
+                                        dummy_w=dummy_w,
                 )
             else:
                 raise NotImplementedError()
@@ -6674,18 +6679,18 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
     for bidx,batch_dict in enumerate(cat_dataset_list):
         #Create a 1 var per example: we will use sigmoid later
         env_prob = np.random.randn(
-                                size=(batch_dict["batch"]["label"].shape[0],)
+                                batch_dict["batch"]["label"].shape[0],
         )
         #Now we are ready to create a traininable variable for this batch
-        env_prob =tf.Variable(env_prob)
+        env_prob =tf.Variable(env_prob,dtype=tf.float32)
         batch_dict["env_prob"]=env_prob
     
     
     #Creating the dummy variable to get the gradient
-    dummy_w = tf.Variable(1.0, trainable=False)
+    dummy_w = tf.Variable(1.0,)
     scxentropy_loss = keras.losses.SparseCategoricalCrossentropy(
                                                     from_logits=False,
-                                                    reduction=None,
+                                                    reduction="none",
     )
     optimizer = keras.optimizers.Adam(learning_rate=model_args["eiil_disc_lr"])
     
@@ -6694,6 +6699,7 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
         #now we will go batch by batch and update the loss
         tbar = tqdm(range(len(cat_dataset_list)))
         print("Training the EIIL-Discovery phase")
+        all_batch_loss_list = []
         for bidx,batch_dict in zip(tbar,cat_dataset_list):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset_list),bidx))
 
@@ -6706,7 +6712,7 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
             
             #Now we will create the loss and update the env prob
             with tf.GradientTape() as tape1:
-                with tf.GradientTape() as tape2:
+                with tf.GradientTape(persistent=True) as tape2:
                     #Getting the IRM loss
                     irm_pred = pred_prob*dummy_w
                     labels = batch_dict["batch"]["label"]
@@ -6717,13 +6723,17 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
                     env_b_loss = (1.0-tf.sigmoid(env_prob))*main_xentropy_loss
                     
                 #Getting the gradient with respect to w for each env
-                env_a_grads = tf.reduce_mean(tape2.gradient(env_a_loss,[dummy_w])**2)
-                env_b_grads = tf.reduce_mean(tape2.gradient(env_b_loss,[dummy_w])**2)
+                env_a_grads = tf.reduce_mean(tape2.gradient(env_a_loss,[dummy_w])[0]**2)
+                env_b_grads = tf.reduce_mean(tape2.gradient(env_b_loss,[dummy_w])[0]**2)
+                del tape2
 
                 total_loss = -1*(env_a_grads+env_b_grads)
+                all_batch_loss_list.append(total_loss)
             #Now we are ready to update the parameters of the batch
             env_prob_grads = tape1.gradient(total_loss,[env_prob])
             optimizer.apply_gradients(zip(env_prob_grads,[env_prob]))
+        
+        print("eidx:{}\nloss:{}\n\n".format(eiidx,np.mean(all_batch_loss_list)))
     
     #Getting the final environment decision for each of the variable
     for bidx,batch_dict in enumerate(cat_dataset_list):
@@ -6841,6 +6851,7 @@ if __name__=="__main__":
     #Arguments realted to EIIL baseline
     parser.add_argument('-eiil_disc_epoch',dest="eiil_disc_epoch",type=int,default=None)
     parser.add_argument('-eiil_disc_lr',dest="eiil_disc_lr",type=float,default=None)
+    parser.add_argument('-irm_lambda',dest="irm_lambda",type=float,default=None)
 
 
 
@@ -7120,6 +7131,10 @@ if __name__=="__main__":
     model_args["jtt_s1_epochs"]=args.jtt_s1_epochs
     model_args["os_lambda"]=args.os_lambda
 
+    model_args["eiil_disc_epoch"]=args.eiil_disc_epoch
+    model_args["eiil_disc_lr"]=args.eiil_disc_lr
+    model_args["irm_lambda"]=args.irm_lambda
+
 
     #Setting up the gpu
     if "nlp_toy3" in data_args["path"]:
@@ -7142,7 +7157,7 @@ if __name__=="__main__":
     #                   CAD JOBS                    #
     #################################################
     # nbow_trainer_mouli(data_args,model_args)
-    if "jtt" in model_args["stage_mode"]:
+    if "jtt" in model_args["stage_mode"] or "eiil" in model_args["stage_mode"]:
         nbow_jtt_baseline_trainer(data_args,model_args)
     if "mouli" in model_args["stage_mode"]:
         nbow_mouli_stage1_trainer(data_args,model_args)
