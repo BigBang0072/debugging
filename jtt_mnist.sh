@@ -33,11 +33,11 @@ sample=10000
 
 #13,14,15 with increased probabilty 0.99,0.30,0.70,0.01
 #10,11,12 with previou probabiltiy 0.9,0.4,0.6,0.1
-for run_num in 0 1 2 #14 15 #10 11 12 #1 2
+for s1epoch in 4 8 #5 10
 do
-    for s1epoch in 4 8 #5 10
+    for run_num in 0 1 2 #14 15 #10 11 12 #1 2
     do
-        for oslambda in 2 4 8 #2 6
+        for oslambda in 2 4 #2 6
         do  
             for dcf in 1.0
             do 
