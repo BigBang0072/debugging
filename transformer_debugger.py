@@ -6589,15 +6589,16 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
         ########################################################
         ## Step 2 of EIIL: Discover the environment based on IRM penalty
         ########################################################
-        cat_dataset_list = _get_eiil_environment_labels(
-                            reference_classifier=classifier_main,
-                            cat_dataset_list=cat_dataset_list,
-                            model_args=model_args,
-        )
-        # cat_dataset_list = _add_smaj_min_mask_to_dataset(
-        #                             classifier_main,
-        #                             cat_dataset_list,
+        # cat_dataset_list = _get_eiil_environment_labels(
+        #                     reference_classifier=classifier_main,
+        #                     cat_dataset_list=cat_dataset_list,
+        #                     model_args=model_args,
         # )
+        #Using the ground truth groups for upper bound check
+        cat_dataset_list = _add_smaj_min_mask_to_dataset(
+                                    classifier_main,
+                                    cat_dataset_list,
+        )
     else:
         raise NotImplementedError()
     

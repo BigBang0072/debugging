@@ -1,5 +1,5 @@
 #STAGE2-METHOD2 EXPT
-mainepoch=20
+mainepoch=5
 main_mode="non_causal"
 cbsize=1
 max_len=20
@@ -33,7 +33,7 @@ sample=10000
 #s1epoch 0 and eiil_disc_epoch 0 is pure IRM
 #13,14,15 with increased probabilty 0.99,0.30,0.70,0.01
 #10,11,12 with previou probabiltiy 0.9,0.4,0.6,0.1
-for irm_lambda in 1e15 #5e15  # 2 10
+for irm_lambda in 1e14 5e14  # 2 10
 do 
     for run_num in 0 1 2 #14 15 #10 11 12 #1 2
     do
