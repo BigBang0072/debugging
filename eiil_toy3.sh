@@ -10,7 +10,7 @@ max_len=20
 # batch_size=32
 batch_size=32
 lr=5e-3
-eiil_disc_lr=5e-3
+eiil_disc_lr=5
 hlayer=1
 
 
@@ -30,16 +30,16 @@ sample=1000
 
 
 
-
+#s1epoch 0 and eiil_disc_epoch 0 is pure IRM
 #13,14,15 with increased probabilty 0.99,0.30,0.70,0.01
 #10,11,12 with previou probabiltiy 0.9,0.4,0.6,0.1
-for irm_lambda in 1e15 5e15  # 2 10
+for irm_lambda in 1e15 #5e15  # 2 10
 do 
     for run_num in 0 1 2 #14 15 #10 11 12 #1 2
     do
-        for s1epoch in 0 #2 6
+        for s1epoch in 10 #2 6
         do  
-            for eiil_disc_epoch in 0 #5 10
+            for eiil_disc_epoch in 10 #5 10
             do
                 for dcf in 1.0
                 do 

@@ -2526,7 +2526,8 @@ class SimpleNBOW(keras.Model):
                 all_env_overall_loss = 0.0
                 for env_idx in [True,False]:
                     with tf.GradientTape(persistent=True) as tape2:
-                        curr_env_mask_train = (all_env_mask==env_idx)[0:valid_idx] 
+                        curr_env_mask_train = (all_env_mask==env_idx)[0:valid_idx]
+                        curr_env_mask_train = tf.stop_gradient(curr_env_mask_train) 
                         #Getting the sample for this environment using the mas
                         env_idx_train = idx_train[curr_env_mask_train]
                         env_attn_mask_train=None
@@ -2547,13 +2548,16 @@ class SimpleNBOW(keras.Model):
                                                     env_label_train,
                                                     main_task_prob
                         )
-                        env_main_xentropy_loss = tf.reshape(env_main_xentropy_loss,(-1,1))
                         # Getting the irm penalty loss
                         all_example_irm_penalty_list = []
                         for exidx in range(env_idx_train.shape[0]):
                             all_example_irm_penalty_list.append(
                                     tape2.gradient(env_main_xentropy_loss[exidx],[dummy_w])[0]
                             )
+                        # pdb.set_trace()
+                        # env_irm_penalty = tf.reduce_mean(
+                        #     tape2.jacobian(env_main_xentropy_loss,dummy_w)**2
+                        # )
                     env_irm_penalty = tf.reduce_mean(
                                 tf.stack(all_example_irm_penalty_list,axis=0)**2
                     )
@@ -6585,15 +6589,15 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
         ########################################################
         ## Step 2 of EIIL: Discover the environment based on IRM penalty
         ########################################################
-        # cat_dataset_list = _get_eiil_environment_labels(
-        #                     reference_classifier=classifier_main,
-        #                     cat_dataset_list=cat_dataset_list,
-        #                     model_args=model_args,
-        # )
-        cat_dataset_list = _add_smaj_min_mask_to_dataset(
-                                    classifier_main,
-                                    cat_dataset_list,
+        cat_dataset_list = _get_eiil_environment_labels(
+                            reference_classifier=classifier_main,
+                            cat_dataset_list=cat_dataset_list,
+                            model_args=model_args,
         )
+        # cat_dataset_list = _add_smaj_min_mask_to_dataset(
+        #                             classifier_main,
+        #                             cat_dataset_list,
+        # )
     else:
         raise NotImplementedError()
     
@@ -6710,6 +6714,11 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
     )
     optimizer = keras.optimizers.Adam(learning_rate=model_args["eiil_disc_lr"])
     
+    # def jacobian_calulation_tape2(env_prob,pred_prob,dummy_w,batch_dict,
+    #                       scxentropy_loss,):
+        
+    #     return env_a_grads,env_b_grads
+
     #Now we have to train these prob variables
     for eiidx in range(model_args["eiil_disc_epoch"]):
         #now we will go batch by batch and update the loss
@@ -6728,7 +6737,11 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
             
             #Now we will create the loss and update the env prob
             with tf.GradientTape() as tape1:
+                tape1.watch(env_prob)
                 with tf.GradientTape(persistent=True) as tape2:
+                    #Watching the variables for safety
+                    tape2.watch(env_prob)
+
                     #Getting the IRM loss
                     irm_pred = pred_prob*dummy_w
                     labels = batch_dict["batch"]["label"]
@@ -6737,17 +6750,31 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
                     #env added loss
                     env_a_loss = tf.sigmoid(env_prob)*main_xentropy_loss
                     env_b_loss = (1.0-tf.sigmoid(env_prob))*main_xentropy_loss
+                    assert env_a_loss.shape[0]==env_b_loss.shape[0],"dim mismatch"
                     
-                #Getting the gradient with respect to w for each env
-                #TODO: This aggregates the gradient automatically. Find ways not to agg
-                env_a_grads = tf.reduce_mean(tape2.gradient(env_a_loss,[dummy_w])[0]**2)
-                env_b_grads = tf.reduce_mean(tape2.gradient(env_b_loss,[dummy_w])[0]**2)
+                    #Getting the gradient with respect to w for each env
+                    #TODO: Find ways not to agg effciently
+                    env_a_grads_list = [] 
+                    env_b_grads_list = []
+                    for aidx in range(env_a_loss.shape[0]):
+                        env_a_grads_list.append(
+                            tape2.gradient(env_a_loss[aidx],[dummy_w])[0]
+                        )
+                        env_b_grads_list.append(
+                            tape2.gradient(env_b_loss[aidx],[dummy_w])[0]
+                        )
+                    # env_a_grads = tf.reduce_mean(tape2.jacobian(env_a_loss,dummy_w)**2)
+                    # env_b_grads = tf.reduce_mean(tape2.jacobian(env_b_loss,dummy_w)**2)
+                # pdb.set_trace()
+                env_a_grads = tf.reduce_mean(tf.stack(env_a_grads_list,axis=0)**2)
+                env_b_grads = tf.reduce_mean(tf.stack(env_b_grads_list,axis=0)**2)
                 del tape2
 
-                total_loss = -1*(env_a_grads+env_b_grads)
+                total_loss = -1*(env_a_grads+env_b_grads)*model_args["irm_lambda"]
                 all_batch_loss_list.append(total_loss)
             #Now we are ready to update the parameters of the batch
             env_prob_grads = tape1.gradient(total_loss,[env_prob])
+            # pdb.set_trace()
             optimizer.apply_gradients(zip(env_prob_grads,[env_prob]))
         
         print("eidx:{}\nloss:{}\n\n".format(eiidx,np.mean(all_batch_loss_list)))
