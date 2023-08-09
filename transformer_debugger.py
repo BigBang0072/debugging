@@ -1239,6 +1239,7 @@ class SimpleNBOW(keras.Model):
         
         #Adding the JTT realted params
         self.batch_oversample_flag_dict = {}
+        self.irm_penalty = keras.metrics.Mean(name="irm_penalty")
 
     def get_all_head_init_weights(self,):
         '''
@@ -2524,7 +2525,7 @@ class SimpleNBOW(keras.Model):
             with tf.GradientTape() as tape1:
                 all_env_overall_loss = 0.0
                 for env_idx in [True,False]:
-                    with tf.GradientTape() as tape2:
+                    with tf.GradientTape(persistent=True) as tape2:
                         curr_env_mask_train = (all_env_mask==env_idx)[0:valid_idx] 
                         #Getting the sample for this environment using the mas
                         env_idx_train = idx_train[curr_env_mask_train]
@@ -2546,10 +2547,19 @@ class SimpleNBOW(keras.Model):
                                                     env_label_train,
                                                     main_task_prob
                         )
-                    #Getting the irm penalty loss
+                        env_main_xentropy_loss = tf.reshape(env_main_xentropy_loss,(-1,1))
+                        # Getting the irm penalty loss
+                        all_example_irm_penalty_list = []
+                        for exidx in range(env_idx_train.shape[0]):
+                            all_example_irm_penalty_list.append(
+                                    tape2.gradient(env_main_xentropy_loss[exidx],[dummy_w])[0]
+                            )
                     env_irm_penalty = tf.reduce_mean(
-                                tape2.gradient(env_main_xentropy_loss,[dummy_w])[0]**2
+                                tf.stack(all_example_irm_penalty_list,axis=0)**2
                     )
+                    del tape2
+                    # pdb.set_trace()
+                    self.irm_penalty.update_state(env_irm_penalty)
                     env_main_xentropy_loss = tf.reduce_mean(env_main_xentropy_loss)
 
                     all_env_overall_loss += (self.model_args["irm_lambda"]*env_irm_penalty
@@ -6575,10 +6585,14 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
         ########################################################
         ## Step 2 of EIIL: Discover the environment based on IRM penalty
         ########################################################
-        cat_dataset_list = _get_eiil_environment_labels(
-                            reference_classifier=classifier_main,
-                            cat_dataset_list=cat_dataset_list,
-                            model_args=model_args,
+        # cat_dataset_list = _get_eiil_environment_labels(
+        #                     reference_classifier=classifier_main,
+        #                     cat_dataset_list=cat_dataset_list,
+        #                     model_args=model_args,
+        # )
+        cat_dataset_list = _add_smaj_min_mask_to_dataset(
+                                    classifier_main,
+                                    cat_dataset_list,
         )
     else:
         raise NotImplementedError()
@@ -6612,7 +6626,7 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
         print("==========================================")
         classifier_main.reset_all_metrics()
         tbar = tqdm(range(len(cat_dataset_list)))
-        print("Training the Stage2 for baseline: {}",model_args["stage_mode"])
+        print("Training the Stage2 for baseline: {}".format(model_args["stage_mode"]))
         for bidx,batch_dict in zip(tbar,cat_dataset_list):
             tbar.set_postfix_str("Batch:{}  bidx:{}".format(len(cat_dataset_list),bidx))
 
@@ -6650,6 +6664,7 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
         #Printing the logs for this training setp
         log_format="epoch:{:}\nxloss_sum:{:0.4f}\n"\
                         + "xloss:{:0.3f}\n"\
+                        + "irm_penalty:{}\n"\
                         + "vxloss:{:0.3f}\n"\
                         + "vacc:{:0.3f}\n"\
                         + "Acc(smin):{:0.3f}\n"\
@@ -6659,6 +6674,7 @@ def nbow_jtt_baseline_trainer(data_args,model_args):
                             seidx,
                             classifier_main.main_pred_xentropy_sum.result(),
                             classifier_main.main_pred_xentropy.result(),
+                            classifier_main.irm_penalty.result(),
                             classifier_main.main_valid_pred_xentropy.result(),
                             classifier_main.main_valid_accuracy.result(),
                             classifier_main.topic_smin_main_valid_accuracy_list[data_args["debug_tidx"]].result(),
@@ -6723,6 +6739,7 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
                     env_b_loss = (1.0-tf.sigmoid(env_prob))*main_xentropy_loss
                     
                 #Getting the gradient with respect to w for each env
+                #TODO: This aggregates the gradient automatically. Find ways not to agg
                 env_a_grads = tf.reduce_mean(tape2.gradient(env_a_loss,[dummy_w])[0]**2)
                 env_b_grads = tf.reduce_mean(tape2.gradient(env_b_loss,[dummy_w])[0]**2)
                 del tape2
@@ -6740,6 +6757,33 @@ def _get_eiil_environment_labels(reference_classifier,cat_dataset_list,model_arg
         env_prob = tf.sigmoid(batch_dict["env_prob"])
         env_mask = env_prob>=0.5
         batch_dict["env_mask"]=env_mask 
+
+        env_ratio = tf.reduce_mean(tf.cast(batch_dict["env_mask"],dtype=tf.float32))
+        print("env_ratio: {}".format(env_ratio))
+    
+    return cat_dataset_list
+
+def _add_smaj_min_mask_to_dataset(reference_classifier,cat_dataset_list):
+    '''
+    This will give the ground truth groups to compare our IRM implementation
+    with the groups given by the EIIL method.
+    '''
+    #Getting the final environment decision for each of the variable
+    for bidx,batch_dict in enumerate(cat_dataset_list):
+        label = batch_dict["batch"]["label_denoise"]
+        topic_label = batch_dict["batch"]["topic_label_denoise"][:,data_args["debug_tidx"]]
+
+        #Getting the Smin and Smaj group mask for this topic
+        subgroup_mask_dict = reference_classifier._generate_all_subgroup_mask_dict(
+                                    main_label_valid=label,
+                                    topic_label_valid=topic_label,
+        )
+        smaj_mask = subgroup_mask_dict["smaj"]
+        #We will use the smaj mask as the env mask. The compliment is other grp
+        batch_dict["env_mask"]=smaj_mask
+
+        env_ratio = tf.reduce_mean(tf.cast(batch_dict["env_mask"],dtype=tf.float32))
+        print("env_ratio: {}".format(env_ratio))
     
     return cat_dataset_list
 
