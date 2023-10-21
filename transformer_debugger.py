@@ -1554,11 +1554,18 @@ class SimpleNBOW(keras.Model):
             
             def call(self,input_idx,attn_mask):
                 #Getting the bert activation
-                bert_outputs=self.bert_model(
+                #Use this with new transformer library
+                # bert_outputs=self.bert_model(
+                #                         input_ids=input_idx,
+                #                         attention_mask=attn_mask
+                # )
+                #Use this for older BERT model from old transformers(3.0)
+                bert_outputs=self.bert_model(dict(
                                         input_ids=input_idx,
                                         attention_mask=attn_mask
-                )
-                cls_output = bert_outputs.pooler_output
+                ))
+                # cls_output = bert_outputs.pooler_output
+                cls_output = bert_outputs[1]#for older version
                 return cls_output
 
         #Creating the BERT Layer and returning it
